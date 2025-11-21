@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "ink": "^6.5.1",
+    "ink-text-input": "^6.0.0",
     "react": "^19.2.0"
   }
 }
