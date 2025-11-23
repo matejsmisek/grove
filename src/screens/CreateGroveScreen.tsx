@@ -48,18 +48,22 @@ export function CreateGroveScreen() {
 					return;
 				}
 
-				try {
-					setStep('creating');
-					const selectedRepoPaths = Array.from(selectedRepoIndices).map(
-						(index) => repositories[index].path,
-					);
-					createGrove(groveName, selectedRepoPaths);
-					setStep('done');
-					setTimeout(() => navigate('home', {}), 1500);
-				} catch (err) {
-					setError(err instanceof Error ? err.message : 'Failed to create grove');
-					setStep('error');
-				}
+				// Start async grove creation
+				setStep('creating');
+
+				// Get selected repositories
+				const selectedRepos = Array.from(selectedRepoIndices).map((index) => repositories[index]);
+
+				// Create grove asynchronously
+				createGrove(groveName, selectedRepos)
+					.then(() => {
+						setStep('done');
+						setTimeout(() => navigate('home', {}), 1500);
+					})
+					.catch((err) => {
+						setError(err instanceof Error ? err.message : 'Failed to create grove');
+						setStep('error');
+					});
 			} else if (key.escape) {
 				goBack();
 			}
@@ -165,6 +169,7 @@ export function CreateGroveScreen() {
 	}
 
 	if (step === 'creating') {
+		const selectedCount = selectedRepoIndices.size;
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
@@ -172,7 +177,10 @@ export function CreateGroveScreen() {
 						Creating Grove...
 					</Text>
 				</Box>
-				<Text>Setting up {groveName}...</Text>
+				<Text>Setting up "{groveName}"</Text>
+				<Box marginTop={1}>
+					<Text dimColor>Creating {selectedCount} worktree(s)...</Text>
+				</Box>
 			</Box>
 		);
 	}

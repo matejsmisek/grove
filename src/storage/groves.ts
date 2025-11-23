@@ -2,8 +2,9 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
+import { GitService } from '../services/GitService.js';
 import { getStorageConfig, readSettings } from './storage.js';
-import type { GroveMetadata, GroveReference, GrovesIndex, Worktree } from './types.js';
+import type { GroveMetadata, GroveReference, GrovesIndex, Repository, Worktree } from './types.js';
 
 /**
  * Get default groves index
@@ -70,10 +71,10 @@ function generateGroveId(): string {
 /**
  * Create a new grove
  * @param name - Name of the grove
- * @param repositoryPaths - Array of repository paths to include
+ * @param repositories - Array of repositories to include
  * @returns The created grove metadata
  */
-export function createGrove(name: string, repositoryPaths: string[]): GroveMetadata {
+export async function createGrove(name: string, repositories: Repository[]): Promise<GroveMetadata> {
 	const settings = readSettings();
 	const groveId = generateGroveId();
 	const grovePath = path.join(settings.workingFolder, name);
@@ -88,7 +89,7 @@ export function createGrove(name: string, repositoryPaths: string[]): GroveMetad
 
 	// Create CONTEXT.md file
 	const contextPath = path.join(grovePath, 'CONTEXT.md');
-	const contextContent = `# ${name}\n\nCreated: ${new Date().toISOString()}\n\n## Purpose\n\n[Add description of what you're working on in this grove]\n\n## Repositories\n\n${repositoryPaths.map((repoPath) => `- ${path.basename(repoPath)}: ${repoPath}`).join('\n')}\n\n## Notes\n\n[Add any additional notes or context here]\n`;
+	const contextContent = `# ${name}\n\nCreated: ${new Date().toISOString()}\n\n## Purpose\n\n[Add description of what you're working on in this grove]\n\n## Repositories\n\n${repositories.map((repo) => `- ${repo.name}: ${repo.path}`).join('\n')}\n\n## Notes\n\n[Add any additional notes or context here]\n`;
 	fs.writeFileSync(contextPath, contextContent, 'utf-8');
 
 	// Create grove metadata
@@ -100,6 +101,52 @@ export function createGrove(name: string, repositoryPaths: string[]): GroveMetad
 		createdAt: now,
 		updatedAt: now,
 	};
+
+	// Create worktrees for each repository
+	const worktrees: Worktree[] = [];
+	const errors: string[] = [];
+
+	for (const repo of repositories) {
+		try {
+			// Generate branch name for this grove
+			const branchName = `grove/${name.toLowerCase().replace(/\s+/g, '-')}`;
+
+			// Create worktree path
+			const worktreePath = path.join(grovePath, `${repo.name}.worktree`);
+
+			// Create GitService for the repository
+			const gitService = new GitService(repo.path);
+
+			// Add worktree (creates new branch from HEAD)
+			const result = await gitService.addWorktree(worktreePath, branchName, 'HEAD');
+
+			if (!result.success) {
+				throw new Error(result.stderr || 'Failed to create worktree');
+			}
+
+			// Create worktree entry
+			const worktree: Worktree = {
+				repositoryName: repo.name,
+				repositoryPath: repo.path,
+				worktreePath,
+				branch: branchName,
+			};
+
+			worktrees.push(worktree);
+		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+			errors.push(`${repo.name}: ${errorMsg}`);
+		}
+	}
+
+	// If no worktrees were created, clean up and throw error
+	if (worktrees.length === 0) {
+		fs.rmSync(grovePath, { recursive: true, force: true });
+		throw new Error(`Failed to create any worktrees:\n${errors.join('\n')}`);
+	}
+
+	// Update metadata with created worktrees
+	metadata.worktrees = worktrees;
 
 	// Save grove metadata to grove.json
 	const metadataPath = path.join(grovePath, 'grove.json');
@@ -116,6 +163,13 @@ export function createGrove(name: string, repositoryPaths: string[]): GroveMetad
 	};
 	index.groves.push(groveRef);
 	writeGrovesIndex(index);
+
+	// If there were partial errors, include them in the metadata
+	if (errors.length > 0) {
+		throw new Error(
+			`Grove created with ${worktrees.length} worktree(s), but ${errors.length} failed:\n${errors.join('\n')}`,
+		);
+	}
 
 	return metadata;
 }
