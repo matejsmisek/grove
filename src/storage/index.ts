@@ -27,9 +27,16 @@ export {
 	writeGroveMetadata,
 	writeGrovesIndex,
 } from './groves.js';
+export {
+	applyBranchNameTemplate,
+	getBranchNameForRepo,
+	readGroveRepoConfig,
+	validateBranchNameTemplate,
+} from './groveConfig.js';
 export type {
 	GroveMetadata,
 	GroveReference,
+	GroveRepoConfig,
 	GrovesIndex,
 	Repository,
 	RepositoriesData,

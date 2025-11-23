@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { GitService } from '../services/GitService.js';
+import { getBranchNameForRepo } from './groveConfig.js';
 import { getStorageConfig, readSettings } from './storage.js';
 import type { GroveMetadata, GroveReference, GrovesIndex, Repository, Worktree } from './types.js';
 
@@ -74,7 +75,10 @@ function generateGroveId(): string {
  * @param repositories - Array of repositories to include
  * @returns The created grove metadata
  */
-export async function createGrove(name: string, repositories: Repository[]): Promise<GroveMetadata> {
+export async function createGrove(
+	name: string,
+	repositories: Repository[]
+): Promise<GroveMetadata> {
 	const settings = readSettings();
 	const groveId = generateGroveId();
 	const grovePath = path.join(settings.workingFolder, name);
@@ -108,8 +112,8 @@ export async function createGrove(name: string, repositories: Repository[]): Pro
 
 	for (const repo of repositories) {
 		try {
-			// Generate branch name for this grove
-			const branchName = `grove/${name.toLowerCase().replace(/\s+/g, '-')}`;
+			// Generate branch name for this grove using repo config or default
+			const branchName = getBranchNameForRepo(repo.path, name);
 
 			// Create worktree path
 			const worktreePath = path.join(grovePath, `${repo.name}.worktree`);
@@ -167,7 +171,7 @@ export async function createGrove(name: string, repositories: Repository[]): Pro
 	// If there were partial errors, include them in the metadata
 	if (errors.length > 0) {
 		throw new Error(
-			`Grove created with ${worktrees.length} worktree(s), but ${errors.length} failed:\n${errors.join('\n')}`,
+			`Grove created with ${worktrees.length} worktree(s), but ${errors.length} failed:\n${errors.join('\n')}`
 		);
 	}
 
@@ -229,7 +233,7 @@ export function addWorktreeToGrove(
 	grovePath: string,
 	repositoryName: string,
 	repositoryPath: string,
-	branch: string,
+	branch: string
 ): Worktree {
 	const metadata = readGroveMetadata(grovePath);
 	if (!metadata) {
