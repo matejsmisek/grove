@@ -1,10 +1,12 @@
 import React, {useState} from 'react';
-import {Box} from 'ink';
+import {Box, Text, useInput} from 'ink';
 import {Message} from '../components/types.js';
 import {MessageList} from '../components/MessageList.js';
 import {InputPrompt} from '../components/InputPrompt.js';
+import {useNavigation} from '../navigation/useNavigation.js';
 
 export function ChatScreen() {
+	const {goBack, canGoBack} = useNavigation();
 	const [messages, setMessages] = useState<Message[]>([
 		{
 			role: 'system',
@@ -13,6 +15,12 @@ export function ChatScreen() {
 	]);
 	const [input, setInput] = useState('');
 	const [isProcessing, setIsProcessing] = useState(false);
+
+	useInput((_input, key) => {
+		if (key.escape && canGoBack && !isProcessing) {
+			goBack();
+		}
+	});
 
 	const handleSubmit = (value: string) => {
 		if (!value.trim() || isProcessing) return;
@@ -47,6 +55,13 @@ export function ChatScreen() {
 				onInputChange={setInput}
 				onSubmit={handleSubmit}
 			/>
+			{canGoBack && (
+				<Box paddingX={1} paddingBottom={1}>
+					<Text dimColor>
+						Press <Text color="cyan">ESC</Text> to go back
+					</Text>
+				</Box>
+			)}
 		</Box>
 	);
 }
