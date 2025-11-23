@@ -48,10 +48,19 @@ export function WorkingFolderScreen() {
 				</Box>
 
 				<Box marginBottom={1}>
-					<Box marginRight={1}>
-						<Text>New path: </Text>
-					</Box>
-					<TextInput value={value} onChange={setValue} onSubmit={handleSubmit} />
+					<Text dimColor>Edit path:</Text>
+				</Box>
+
+				<Box borderStyle="single" borderColor="blue" paddingX={1} marginBottom={1}>
+					<Text color="blue" bold>
+						→{' '}
+					</Text>
+					<TextInput
+						value={value}
+						onChange={setValue}
+						onSubmit={handleSubmit}
+						placeholder="Enter working folder path..."
+					/>
 				</Box>
 
 				{isSaved && (
