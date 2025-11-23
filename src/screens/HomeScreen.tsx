@@ -40,12 +40,23 @@ export function HomeScreen() {
 		} else {
 			// Main screen navigation
 			if (groves.length > 0) {
-				if (key.leftArrow || key.upArrow) {
+				if (key.leftArrow) {
 					setSelectedGroveIndex((prev) => (prev > 0 ? prev - 1 : groves.length - 1));
-				} else if (key.rightArrow || key.downArrow) {
+				} else if (key.rightArrow) {
 					setSelectedGroveIndex((prev) => (prev < groves.length - 1 ? prev + 1 : 0));
+				} else if (key.upArrow) {
+					setSelectedGroveIndex((prev) => {
+						const newIndex = prev - 4;
+						return newIndex >= 0 ? newIndex : prev;
+					});
+				} else if (key.downArrow) {
+					setSelectedGroveIndex((prev) => {
+						const newIndex = prev + 4;
+						return newIndex < groves.length ? newIndex : prev;
+					});
 				} else if (key.return) {
-					// TODO: Navigate to grove detail screen
+					// Navigate to chat screen for the selected grove
+					navigate('chat', {});
 				}
 			}
 
@@ -78,20 +89,30 @@ export function HomeScreen() {
 						<Text bold>Your Groves</Text>
 					</Box>
 
-					{/* Display groves in a grid (2 columns) */}
+					{/* Display groves in a grid (4 columns) */}
 					<Box flexDirection="column">
-						{Array.from({ length: Math.ceil(groves.length / 2) }).map((_, rowIndex) => {
-							const grove1 = groves[rowIndex * 2];
-							const grove2 = groves[rowIndex * 2 + 1];
-							const index1 = rowIndex * 2;
-							const index2 = rowIndex * 2 + 1;
+						{Array.from({ length: Math.ceil(groves.length / 4) }).map((_, rowIndex) => {
+							const grove1 = groves[rowIndex * 4];
+							const grove2 = groves[rowIndex * 4 + 1];
+							const grove3 = groves[rowIndex * 4 + 2];
+							const grove4 = groves[rowIndex * 4 + 3];
 
 							return (
 								<Box key={rowIndex} marginBottom={1}>
-									{grove1 && <GrovePanel grove={grove1} isSelected={selectedGroveIndex === index1} />}
+									{grove1 && <GrovePanel grove={grove1} isSelected={selectedGroveIndex === rowIndex * 4} />}
 									{grove2 && (
-										<Box marginLeft={2}>
-											<GrovePanel grove={grove2} isSelected={selectedGroveIndex === index2} />
+										<Box marginLeft={1}>
+											<GrovePanel grove={grove2} isSelected={selectedGroveIndex === rowIndex * 4 + 1} />
+										</Box>
+									)}
+									{grove3 && (
+										<Box marginLeft={1}>
+											<GrovePanel grove={grove3} isSelected={selectedGroveIndex === rowIndex * 4 + 2} />
+										</Box>
+									)}
+									{grove4 && (
+										<Box marginLeft={1}>
+											<GrovePanel grove={grove4} isSelected={selectedGroveIndex === rowIndex * 4 + 3} />
 										</Box>
 									)}
 								</Box>
@@ -161,9 +182,9 @@ function GrovePanel({ grove, isSelected }: { grove: GroveReference; isSelected: 
 		<Box
 			borderStyle="round"
 			borderColor={isSelected ? 'cyan' : 'gray'}
-			paddingX={2}
+			paddingX={1}
 			paddingY={1}
-			width={35}
+			width={24}
 			flexDirection="column"
 		>
 			{/* Grove name */}
