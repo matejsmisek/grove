@@ -19,6 +19,10 @@ export function SettingsScreen({ section }: SettingsScreenProps) {
 
 	const options: SettingOption[] = [
 		{
+			label: 'Registered Repositories',
+			action: () => navigate('repositories', {}),
+		},
+		{
 			label: 'Working Folder',
 			action: () => navigate('workingFolder', {}),
 		},
