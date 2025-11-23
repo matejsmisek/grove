@@ -1,12 +1,10 @@
 #!/usr/bin/env node
 import React, { useState } from 'react';
-import { render, Box, Text } from 'ink';
-import TextInput from 'ink-text-input';
-
-interface Message {
-	role: 'user' | 'assistant' | 'system';
-	content: string;
-}
+import { render, Box } from 'ink';
+import { Message } from './components/types.js';
+import { StatusBar } from './components/StatusBar.js';
+import { MessageList } from './components/MessageList.js';
+import { InputPrompt } from './components/InputPrompt.js';
 
 function App() {
 	const [messages, setMessages] = useState<Message[]>([
@@ -44,65 +42,14 @@ function App() {
 
 	return (
 		<Box flexDirection="column" height="100%">
-			{/* Status Bar */}
-			<Box borderStyle="single" borderColor="cyan" paddingX={1}>
-				<Text color="cyan" bold>
-					Grove
-				</Text>
-				<Text color="gray"> | </Text>
-				<Text color={isProcessing ? 'yellow' : 'green'}>
-					{isProcessing ? '●' : '○'} {isProcessing ? 'Processing...' : 'Ready'}
-				</Text>
-			</Box>
-
-			{/* Response Area */}
-			<Box
-				flexDirection="column"
-				flexGrow={1}
-				paddingX={1}
-				paddingY={1}
-				overflow="hidden"
-			>
-				{messages.map((message, index) => (
-					<Box key={index} flexDirection="column" marginBottom={1}>
-						<Text
-							bold
-							color={
-								message.role === 'user'
-									? 'blue'
-									: message.role === 'assistant'
-										? 'green'
-										: 'cyan'
-							}
-						>
-							{message.role === 'user'
-								? 'You'
-								: message.role === 'assistant'
-									? 'Assistant'
-									: 'System'}
-							:
-						</Text>
-						<Text>{message.content}</Text>
-					</Box>
-				))}
-			</Box>
-
-			{/* Input Prompt Bar */}
-			<Box borderStyle="single" borderColor="blue" paddingX={1}>
-				<Text color="blue" bold>
-					→{' '}
-				</Text>
-				{isProcessing ? (
-					<Text color="gray">Processing...</Text>
-				) : (
-					<TextInput
-						value={input}
-						onChange={setInput}
-						onSubmit={handleSubmit}
-						placeholder="Type your message..."
-					/>
-				)}
-			</Box>
+			<StatusBar isProcessing={isProcessing} />
+			<MessageList messages={messages} />
+			<InputPrompt
+				isProcessing={isProcessing}
+				input={input}
+				onInputChange={setInput}
+				onSubmit={handleSubmit}
+			/>
 		</Box>
 	);
 }
