@@ -8,10 +8,13 @@ This document provides comprehensive information about the Grove codebase for AI
 
 ### Key Features
 
-- Interactive CLI interface with real-time chat
-- Status bar showing processing state
-- Message history with role-based styling (user/assistant/system)
-- Text input for natural language commands
+- **Interactive CLI interface** with navigation-based UI
+- **Grove Management**: Create and manage collections of git worktrees (called "groves")
+- **Repository Tracking**: Register and track git repositories
+- **Persistent Storage**: JSON-based storage in `~/.grove` for settings, repositories, and groves
+- **Git Worktree Operations**: Create, list, and manage git worktrees via GitService
+- **Multi-Screen Navigation**: Home, Chat, Create Grove, Settings, Working Folder, Repositories screens
+- **Command-Line Interface**: Support for CLI commands like `grove --register`
 - Built on React and Ink for terminal-based UI
 
 ### Project Metadata
@@ -44,14 +47,40 @@ This document provides comprehensive information about the Grove codebase for AI
 
 ```
 grove/
-├── src/                    # Source files
+├── src/                    # Source files (~2075 lines total)
+│   ├── commands/          # Command handlers
+│   │   ├── index.ts       # Command exports
+│   │   └── register.ts    # Repository registration command
 │   ├── components/        # UI components
 │   │   ├── types.ts       # Shared TypeScript interfaces
 │   │   ├── App.tsx        # Main application component
 │   │   ├── StatusBar.tsx  # Status bar component
 │   │   ├── MessageList.tsx # Message list component
 │   │   └── InputPrompt.tsx # Input prompt component
-│   └── index.tsx          # Entry point - bootstraps and renders App
+│   ├── git/              # Git utilities
+│   │   ├── index.ts       # Git utility exports
+│   │   └── utils.ts       # Git helper functions (isGitRepo, getGitRoot, etc.)
+│   ├── navigation/        # Navigation system
+│   │   ├── NavigationContext.tsx  # Navigation context provider
+│   │   ├── Router.tsx     # Screen router component
+│   │   ├── types.ts       # Navigation type definitions
+│   │   └── useNavigation.ts # Navigation hook
+│   ├── screens/           # Screen components (6 screens)
+│   │   ├── HomeScreen.tsx        # Home/welcome screen
+│   │   ├── ChatScreen.tsx        # AI chat interface screen
+│   │   ├── CreateGroveScreen.tsx # Grove creation screen
+│   │   ├── SettingsScreen.tsx    # Settings management screen
+│   │   ├── WorkingFolderScreen.tsx # Working folder configuration
+│   │   └── RepositoriesScreen.tsx # Repository list screen
+│   ├── services/          # Service layer
+│   │   └── GitService.ts  # Git worktree operations service
+│   ├── storage/           # Persistent storage layer
+│   │   ├── index.ts       # Storage exports
+│   │   ├── storage.ts     # Settings storage (settings.json)
+│   │   ├── repositories.ts # Repository tracking (repositories.json)
+│   │   ├── groves.ts      # Grove management (groves.json, grove.json)
+│   │   └── types.ts       # Storage type definitions
+│   └── index.tsx          # Entry point - CLI arg parsing and app bootstrap
 ├── .github/
 │   └── workflows/
 │       └── ci.yml         # GitHub Actions CI workflow
@@ -71,100 +100,256 @@ grove/
 └── README.md             # User-facing documentation
 ```
 
-### Current File Count
+### Current Codebase Size
 
-The project now has a modular component structure:
-
-- **src/index.tsx** - Application entry point (6 lines)
-- **src/components/App.tsx** - Main application component (54 lines)
-- **src/components/types.ts** - Shared TypeScript interfaces (4 lines)
-- **src/components/StatusBar.tsx** - Status bar component (20 lines)
-- **src/components/MessageList.tsx** - Message list component (42 lines)
-- **src/components/InputPrompt.tsx** - Input prompt component (36 lines)
+- **Total Lines**: ~2,075 lines across TypeScript and TSX files
+- **Screens**: 6 screen components
+- **Modules**: 8 major modules (commands, components, git, navigation, screens, services, storage, index)
+- **Architecture**: Modular, feature-based organization with clear separation of concerns
 
 ## Key Files and Their Purposes
 
-### src/index.tsx
+### Entry Point
 
-**Purpose**: Application entry point and bootstrapping
+#### src/index.tsx
 
-**Key Responsibilities**:
-
-- Import and render the main App component
-- Minimal bootstrapping code only
-- Provides the shebang for CLI execution
-
-### src/components/App.tsx
-
-**Purpose**: Main application component and state management
+**Purpose**: Application entry point, CLI argument parsing, and bootstrapping
 
 **Key Responsibilities**:
-
-- **State Management**: Manages all application state:
-  - Message state (conversation history)
-  - Input state (current user input)
-  - Processing state (async operation indicator)
-- **Event Handlers**: Submit handler for processing user input
-- **Component Composition**: Renders the modular UI components (StatusBar, MessageList, InputPrompt)
-
-**Current Limitations**:
-
-- AI integration is placeholder-only (setTimeout mock response)
-- No actual Git operations implemented yet
-- No persistence of conversation history
-
-### src/components/types.ts
-
-**Purpose**: Shared TypeScript type definitions
-
-**Exports**:
-
-- **Message Interface**: Defines message structure with role (user/assistant/system) and content
-
-### src/components/StatusBar.tsx
-
-**Purpose**: Display application status and processing indicator
-
-**Props**:
-
-- `isProcessing: boolean` - Controls the status indicator and text
+- Initialize storage system (`initializeStorage()`)
+- Parse command-line arguments (e.g., `--register`)
+- Handle CLI commands before launching UI
+- Render the main App component for interactive mode
 
 **Features**:
+- Shebang for CLI execution (`#!/usr/bin/env node`)
+- Command-line flag handling (`grove --register`)
+- Storage initialization on startup
 
-- Shows "Grove" branding
-- Processing state indicator (● for active, ○ for ready)
-- Color-coded status (yellow during processing, green when ready)
+### Storage Layer (`src/storage/`)
 
-### src/components/MessageList.tsx
+The storage layer provides persistent JSON-based storage in `~/.grove` for all Grove data.
 
-**Purpose**: Render conversation message history
+#### src/storage/types.ts
 
-**Props**:
+**Purpose**: Type definitions for storage data structures
 
-- `messages: Message[]` - Array of messages to display
+**Key Types**:
+- `Settings` - User settings (workingFolder path)
+- `StorageConfig` - Storage paths configuration
+- `Repository` - Registered repository metadata
+- `RepositoriesData` - Repository list container
+- `Worktree` - Worktree metadata (path, branch, repository)
+- `GroveReference` - Global grove index entry
+- `GrovesIndex` - Global list of all groves
+- `GroveMetadata` - Grove-specific data (worktrees, timestamps)
+
+#### src/storage/storage.ts
+
+**Purpose**: Settings management in `~/.grove/settings.json`
+
+**Key Functions**:
+- `getStorageConfig()` - Get storage paths (~/.grove/settings.json, etc.)
+- `getDefaultSettings()` - Default settings (workingFolder: ~/grove-worktrees)
+- `initializeStorage()` - Create .grove folder structure
+- `readSettings()` / `writeSettings()` - Settings persistence
+- `updateSettings()` - Partial settings updates
+
+#### src/storage/repositories.ts
+
+**Purpose**: Repository tracking in `~/.grove/repositories.json`
+
+**Key Functions**:
+- `readRepositories()` / `writeRepositories()` - Repository list persistence
+- `addRepository()` - Register a new repository
+- `removeRepository()` - Unregister a repository
+- `isRepositoryRegistered()` - Check if repository exists
+- `getAllRepositories()` - Get all registered repositories
+
+#### src/storage/groves.ts
+
+**Purpose**: Grove management (groves.json index + per-grove grove.json files)
+
+**Key Functions**:
+- `readGrovesIndex()` / `writeGrovesIndex()` - Global grove list (~/.grove/groves.json)
+- `createGrove()` - Create new grove with worktrees and CONTEXT.md
+- `readGroveMetadata()` / `writeGroveMetadata()` - Per-grove metadata (grove-folder/grove.json)
+- `addWorktreeToGrove()` - Add worktree to existing grove
+- `getAllGroves()` - Get all grove references
+- `getGroveById()` - Find grove by ID
+- `deleteGrove()` - Remove grove from index (optionally delete folder)
 
 **Features**:
+- Creates CONTEXT.md for each grove with description and repo list
+- Generates unique grove IDs using crypto.randomBytes
+- Automatically creates worktrees for all selected repositories
+- Updates timestamps (createdAt, updatedAt)
 
-- Role-based message styling (blue for user, green for assistant, cyan for system)
-- Scrollable message history
-- Formatted message display with role labels
+### Git Layer (`src/git/`)
 
-### src/components/InputPrompt.tsx
+#### src/git/utils.ts
 
-**Purpose**: Handle user text input
+**Purpose**: Git repository validation and detection utilities
 
-**Props**:
+**Key Functions**:
+- `isGitRepository()` - Check if directory is inside a git repo
+- `isGitWorktree()` - Detect if directory is a worktree (not main repo)
+- `getGitRoot()` - Get repository root path
+- `verifyValidRepository()` - Validate repo is not a worktree (for registration)
 
-- `isProcessing: boolean` - Disables input during processing
-- `input: string` - Current input value
-- `onInputChange: (value: string) => void` - Input change handler
-- `onSubmit: (value: string) => void` - Submit handler
+**Uses**: `execSync` from child_process for git command execution
+
+### Services Layer (`src/services/`)
+
+#### src/services/GitService.ts
+
+**Purpose**: Git worktree operations via spawn
+
+**Key Features**:
+- Async git command execution using spawn
+- Structured result objects with stdout/stderr/exitCode
+- Comprehensive worktree management
+
+**Key Methods**:
+- `addWorktree(path, branch?, commitish?)` - Create new worktree
+- `listWorktrees(porcelain?)` - List all worktrees
+- `parseWorktreeList()` - Parse porcelain output into structured data
+- `removeWorktree(path, force?)` - Delete worktree
+- `pruneWorktrees()` - Clean up stale worktree metadata
+- `lockWorktree()` / `unlockWorktree()` - Lock management
+- `moveWorktree(worktree, newPath)` - Relocate worktree
+
+**Types**:
+- `GitCommandResult` - Command execution result
+- `WorktreeInfo` - Parsed worktree information
+
+### Commands Layer (`src/commands/`)
+
+#### src/commands/register.ts
+
+**Purpose**: Repository registration command handler
+
+**Key Function**:
+- `registerRepository(cwd?)` - Register current directory as repository
+  - Verifies it's a valid git repository (not worktree)
+  - Checks if already registered
+  - Adds to repository list
+  - Returns structured result
+
+**Result Type**: `RegisterResult` - success flag, message, optional path
+
+### Navigation Layer (`src/navigation/`)
+
+#### src/navigation/types.ts
+
+**Purpose**: Type-safe navigation definitions
+
+**Key Types**:
+- `Routes` - Map of screen names to their params
+- `NavigationState` - Current screen and params
+- `NavigationContextType` - Navigation context interface
+
+**Screens**:
+- `home` - Home screen (no params)
+- `chat` - Chat screen (no params)
+- `createGrove` - Grove creation (no params)
+- `settings` - Settings screen (optional section param)
+- `workingFolder` - Working folder config (no params)
+- `repositories` - Repository list (no params)
+
+#### src/navigation/NavigationContext.tsx
+
+**Purpose**: Navigation state management via React Context
+
+**Provides**:
+- Navigation state (current screen and params)
+- Navigation history stack
+- `navigate()` - Navigate to screen with params
+- `goBack()` - Navigate to previous screen
+- `canGoBack` - Check if history exists
+
+#### src/navigation/useNavigation.ts
+
+**Purpose**: Navigation hook for consuming navigation context
+
+**Usage**: `const { navigate, goBack, current } = useNavigation()`
+
+#### src/navigation/Router.tsx
+
+**Purpose**: Route screen components based on navigation state
+
+**Functionality**:
+- Renders appropriate screen component based on `current.screen`
+- Passes params to screens
+- Centralized screen routing logic
+
+### Components Layer (`src/components/`)
+
+#### src/components/App.tsx
+
+**Purpose**: Root application component
+
+**Key Responsibilities**:
+- Wraps app in NavigationProvider
+- Renders StatusBar and Router
+- Sets up main layout with flexbox column
+
+#### src/components/StatusBar.tsx
+
+**Purpose**: Application status bar
+
+**Props**: `isProcessing: boolean`
 
 **Features**:
+- Grove branding
+- Processing indicator (● active, ○ ready)
+- Color-coded status (yellow/green)
 
-- Text input with placeholder
-- Disabled state during processing
-- Submit on Enter key
+#### src/components/MessageList.tsx
+
+**Purpose**: Chat message history display
+
+**Props**: `messages: Message[]`
+
+**Features**:
+- Role-based styling (user/assistant/system)
+- Scrollable message list
+- Line-by-line message rendering
+
+#### src/components/InputPrompt.tsx
+
+**Purpose**: Text input component
+
+**Props**: `isProcessing`, `input`, `onInputChange`, `onSubmit`
+
+**Features**:
+- Disabled during processing
+- Submit on Enter
+- Placeholder text
+
+#### src/components/types.ts
+
+**Purpose**: Shared component types
+
+**Exports**: `Message` interface (role, content)
+
+### Screens Layer (`src/screens/`)
+
+The screens layer contains the 6 main screen components that make up the Grove UI. Each screen is a full-page view that users navigate between.
+
+**Screens**:
+- `HomeScreen.tsx` - Welcome/landing screen
+- `ChatScreen.tsx` - AI chat interface (uses MessageList, InputPrompt)
+- `CreateGroveScreen.tsx` - Grove creation wizard
+- `SettingsScreen.tsx` - Settings management
+- `WorkingFolderScreen.tsx` - Working folder configuration
+- `RepositoriesScreen.tsx` - Repository list and management
+
+**Common Patterns**:
+- Use `useNavigation()` hook for navigation
+- Full-screen Box layouts
+- Consistent keyboard shortcuts
+- Error handling and user feedback
 
 ### package.json
 
@@ -373,6 +558,11 @@ function ComponentName() {
 2. **PR #1** (8e9b4b3) - TypeScript and ESLint environment
 3. **PR #2** (638421f) - Claude-like Ink UI implementation
 4. **Component Refactoring** (b186b3f) - Modular component structure with separate files
+5. **PR #7** (d3d45ea) - Add persistent storage with JSON settings
+6. **PR #8** (767ad37) - Add GitService for git worktree operations
+7. **PR #9** (a0c86fd) - Add repository tracking to Grove storage
+8. **PR #10** (ce8a45f) - Update commit guidelines to prohibit amending commits
+9. **PR #11** (cbd3121) - Introduce grove core tracking system
 
 ## Testing and Quality Assurance
 
@@ -425,14 +615,41 @@ The pre-commit hook automatically runs:
 9. Commit changes (pre-commit hook will auto-format and run checks)
 10. Push changes
 
-### Modifying the UI
+### Modifying Different Parts of Grove
 
+**UI Components**:
 - **Status Bar**: Edit `src/components/StatusBar.tsx`
 - **Message List/Response Area**: Edit `src/components/MessageList.tsx`
 - **Input Prompt**: Edit `src/components/InputPrompt.tsx`
 - **Message Types**: Edit `src/components/types.ts`
-- **Main App/State Management**: Edit `src/components/App.tsx`
-- **Application Bootstrap**: Edit `src/index.tsx` (rarely needed)
+- **Main App Layout**: Edit `src/components/App.tsx`
+
+**Screens**:
+- **Home Screen**: Edit `src/screens/HomeScreen.tsx`
+- **Chat Screen**: Edit `src/screens/ChatScreen.tsx`
+- **Create Grove**: Edit `src/screens/CreateGroveScreen.tsx`
+- **Settings**: Edit `src/screens/SettingsScreen.tsx`
+- **Working Folder**: Edit `src/screens/WorkingFolderScreen.tsx`
+- **Repositories**: Edit `src/screens/RepositoriesScreen.tsx`
+
+**Storage & Data**:
+- **Settings**: Edit `src/storage/storage.ts`
+- **Repository Tracking**: Edit `src/storage/repositories.ts`
+- **Grove Management**: Edit `src/storage/groves.ts`
+- **Storage Types**: Edit `src/storage/types.ts`
+
+**Git Operations**:
+- **Git Service**: Edit `src/services/GitService.ts`
+- **Git Utilities**: Edit `src/git/utils.ts`
+
+**Navigation**:
+- **Navigation Context**: Edit `src/navigation/NavigationContext.tsx`
+- **Router**: Edit `src/navigation/Router.tsx`
+- **Navigation Types**: Edit `src/navigation/types.ts`
+
+**Commands & CLI**:
+- **Repository Registration**: Edit `src/commands/register.ts`
+- **CLI Entry Point**: Edit `src/index.tsx`
 
 ### Adding Dependencies
 
@@ -448,29 +665,44 @@ Always update package.json and commit package-lock.json.
 
 ### Code Organization Guidelines
 
-Current organization (as of component refactoring):
+Current organization follows a **modular, feature-based architecture**:
 
-- **Components**: Separated into individual files under `src/components/`
-- **Types**: Shared types in `src/components/types.ts`
-- **Main App**: `src/components/App.tsx` manages state and composition
-- **Entry Point**: `src/index.tsx` contains minimal bootstrapping code
+**Established Patterns**:
+- **Storage Layer** (`src/storage/`) - All persistence logic (settings, repos, groves)
+- **Services Layer** (`src/services/`) - Business logic (GitService)
+- **Commands Layer** (`src/commands/`) - CLI command handlers
+- **Git Layer** (`src/git/`) - Git utility functions
+- **Navigation Layer** (`src/navigation/`) - Screen routing and history
+- **Screens Layer** (`src/screens/`) - Full-page screen components
+- **Components Layer** (`src/components/`) - Reusable UI components
+- **Entry Point** (`src/index.tsx`) - CLI arg parsing and app bootstrap
 
-As the project continues to grow:
+**Architecture Principles**:
+- **Separation of Concerns**: Each layer has a specific responsibility
+- **Type Safety**: Each module exports its types from a `types.ts` file or inline
+- **Encapsulation**: Storage, git operations, and services are abstracted behind clean APIs
+- **Modularity**: Each file/module has a single, focused purpose
+- **Export Structure**: Use `index.ts` files to export public APIs from modules
 
-- Create utility functions in `src/utils/`
-- Add additional types to `src/components/types.ts` or create separate type files
-- Consider creating feature-specific folders under `src/` (e.g., `src/git/`, `src/ai/`)
-- Keep index.tsx minimal (just bootstrapping)
-- Keep App.tsx focused on top-level state and component composition
+**When Adding New Features**:
+- **New Storage**: Add to `src/storage/` (create new file + update index.ts)
+- **New Service**: Add to `src/services/`
+- **New Screen**: Add to `src/screens/` and update Router
+- **New Command**: Add to `src/commands/` and update CLI parsing in index.tsx
+- **Utility Functions**: Add to appropriate module or create new under `src/`
 
 ## Important Notes for AI Assistants
 
 ### Project Context
 
-- **Early Stage**: Project is in initial development (v0.0.1)
-- **Placeholder AI**: Current AI responses are mocked with setTimeout
-- **No Git Integration**: Despite being a Git management tool, no Git operations implemented yet
-- **Modular Architecture**: UI components split into separate files for better maintainability
+- **Development Stage**: Active development (v0.0.1) with core features implemented
+- **Git Integration**: ✅ Fully implemented via GitService (worktree operations)
+- **Storage System**: ✅ Complete JSON-based persistence in ~/.grove
+- **Repository Tracking**: ✅ Register and manage git repositories
+- **Grove Management**: ✅ Create and track collections of worktrees
+- **Navigation**: ✅ Multi-screen UI with type-safe routing
+- **AI Integration**: ⚠️ Chat screen exists but AI/LLM integration not yet connected
+- **Architecture**: Mature modular structure with 8 distinct layers (~2,075 lines)
 
 ### Development Priorities
 
@@ -534,24 +766,43 @@ grove
 
 ### Current Limitations to Be Aware Of
 
-1. No actual AI/LLM integration (placeholder responses)
-2. No Git command execution (core feature not implemented)
-3. No error handling for user inputs
-4. No command history or persistence
-5. No configuration file support
-6. No testing framework or tests
+1. **No AI/LLM Integration**: Chat screen UI exists but not connected to actual LLM
+2. **Limited CLI Commands**: Only `--register` flag implemented
+3. **No Testing Framework**: No unit tests or integration tests yet
+4. **Basic Error Handling**: Error handling exists but could be more comprehensive
+5. **No Worktree Cleanup**: No UI for removing worktrees or cleaning up groves
+6. **No Git Operations in Chat**: Chat doesn't execute git commands yet
+
+### Implemented Features (Recently Added)
+
+✅ **Persistent Storage System** - JSON-based storage in ~/.grove
+✅ **Repository Tracking** - Register and list repositories
+✅ **Grove Creation** - Create collections of worktrees
+✅ **Git Worktree Operations** - Full GitService with add/list/remove/prune
+✅ **Navigation System** - Type-safe multi-screen routing
+✅ **Settings Management** - Configure working folder
+✅ **CLI Commands** - `grove --register` for repository registration
 
 ### Future Expansion Areas
 
-- AI/LLM integration (OpenAI, Anthropic, or similar)
-- Git command execution via child processes
-- Command parsing and intent recognition
-- Error handling and validation
-- Configuration management
-- Testing framework (Jest, Vitest, or similar)
-- Advanced state management (if needed beyond useState)
+**High Priority**:
+- AI/LLM integration for chat functionality (Anthropic Claude API)
+- Connect chat to git operations (natural language git commands)
+- Grove deletion and worktree cleanup UI
+- More CLI commands (list repos, list groves, etc.)
+
+**Medium Priority**:
+- Testing framework (Jest or Vitest)
+- Enhanced error handling and validation
+- Command history in chat
+- Grove status display (show git status for all worktrees)
+- Git operations beyond worktrees (commit, push, pull, etc.)
+
+**Low Priority**:
 - Logging and debugging utilities
-- Command history and persistence
+- Advanced state management (if needed)
+- Configuration file support (beyond settings.json)
+- Plugin/extension system
 
 ## Architecture Decisions
 
@@ -577,6 +828,42 @@ grove
 - Native browser and Node.js support
 - Future-proof architecture
 
+### Why JSON-Based Storage?
+
+- **Simplicity**: Plain JSON files are easy to read, debug, and manually edit
+- **No Dependencies**: No database engine required
+- **Portability**: Files can be backed up, synced, or version controlled
+- **Human-Readable**: Users can inspect ~/.grove/settings.json directly
+- **Appropriate Scale**: Perfect for personal tool with limited data
+
+**Storage Structure**:
+- `~/.grove/settings.json` - User settings (working folder path)
+- `~/.grove/repositories.json` - List of registered repositories
+- `~/.grove/groves.json` - Global grove index
+- `<grove-folder>/grove.json` - Per-grove metadata (worktrees list)
+- `<grove-folder>/CONTEXT.md` - Human-readable grove description
+
+### Why Service Layer Pattern?
+
+**GitService Benefits**:
+- **Abstraction**: Hides git command complexity behind clean API
+- **Testability**: Easy to mock for testing
+- **Error Handling**: Centralized error handling for git operations
+- **Type Safety**: Structured return types (GitCommandResult, WorktreeInfo)
+- **Reusability**: Same service used across multiple screens/features
+
+**Pattern**: Each service class encapsulates related operations and maintains state (like cwd)
+
+### Why Navigation Context?
+
+- **Type Safety**: Routes type-checked at compile time
+- **Centralized State**: Single source of truth for current screen
+- **History Management**: Built-in back navigation support
+- **Params Support**: Type-safe screen parameters
+- **Testability**: Navigation can be mocked for testing
+
+**Alternative Considered**: Direct screen imports - rejected because it loses history and params
+
 ## Getting Help
 
 ### Resources
@@ -597,5 +884,7 @@ Refer to:
 ---
 
 **Last Updated**: 2025-11-23
-**Document Version**: 1.1.0
-**Codebase State**: Early development (v0.0.1) with CI/CD and code quality tools
+**Document Version**: 2.0.0
+**Codebase State**: Active development (v0.0.1) with core features implemented
+**Lines of Code**: ~2,075 lines
+**Key Milestones**: Storage ✅ | Git Operations ✅ | Navigation ✅ | Repository Tracking ✅ | Grove Management ✅
