@@ -11,10 +11,12 @@ export function getStorageConfig(): StorageConfig {
 	const homeDir = os.homedir();
 	const groveFolder = path.join(homeDir, '.grove');
 	const settingsPath = path.join(groveFolder, 'settings.json');
+	const repositoriesPath = path.join(groveFolder, 'repositories.json');
 
 	return {
 		groveFolder,
 		settingsPath,
+		repositoriesPath,
 	};
 }
 

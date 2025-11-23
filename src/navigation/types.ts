@@ -4,6 +4,7 @@ export type Routes = {
 	chat: Record<string, never>;
 	settings: { section?: string };
 	workingFolder: Record<string, never>;
+	repositories: Record<string, never>;
 };
 
 // Navigation state for current screen and params
