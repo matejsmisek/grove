@@ -1,5 +1,5 @@
 import React from 'react';
-import {Box, Text} from 'ink';
+import {Box, Text, useInput} from 'ink';
 import {useNavigation} from '../navigation/useNavigation.js';
 
 interface SettingsScreenProps {
@@ -7,7 +7,13 @@ interface SettingsScreenProps {
 }
 
 export function SettingsScreen({section}: SettingsScreenProps) {
-	const {goBack: _goBack, canGoBack} = useNavigation();
+	const {goBack, canGoBack} = useNavigation();
+
+	useInput((_input, key) => {
+		if (key.escape && canGoBack) {
+			goBack();
+		}
+	});
 
 	return (
 		<Box flexDirection="column" padding={1}>
