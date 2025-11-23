@@ -1,0 +1,21 @@
+// Navigation route definitions with type-safe params
+export type Routes = {
+	home: Record<string, never>;
+	chat: Record<string, never>;
+	settings: {section?: string};
+};
+
+// Navigation state for current screen and params
+export type NavigationState<T extends keyof Routes = keyof Routes> = {
+	screen: T;
+	params: Routes[T];
+};
+
+// Navigation context type
+export type NavigationContextType = {
+	current: NavigationState;
+	navigate: <T extends keyof Routes>(screen: T, params: Routes[T]) => void;
+	goBack: () => void;
+	canGoBack: boolean;
+	history: NavigationState[];
+};
