@@ -362,6 +362,10 @@ function ComponentName() {
 - Reference PR numbers in merge commits (see: #1, #2)
 - Group related changes together
 - Keep commits atomic and focused
+- **NEVER amend commits** - Always create new commits instead of using `git commit --amend`
+  - This ensures a complete and accurate history of all changes
+  - Amending commits can cause issues with collaboration and CI/CD pipelines
+  - If you need to fix or update a previous commit, create a new commit with the changes
 
 ### Recent Development History
 
