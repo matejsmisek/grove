@@ -1,12 +1,14 @@
-import React, {useState} from 'react';
-import {Box, Text, useInput} from 'ink';
-import {Message} from '../components/types.js';
-import {MessageList} from '../components/MessageList.js';
-import {InputPrompt} from '../components/InputPrompt.js';
-import {useNavigation} from '../navigation/useNavigation.js';
+import React, { useState } from 'react';
+
+import { Box, Text, useInput } from 'ink';
+
+import { InputPrompt } from '../components/InputPrompt.js';
+import { MessageList } from '../components/MessageList.js';
+import { Message } from '../components/types.js';
+import { useNavigation } from '../navigation/useNavigation.js';
 
 export function ChatScreen() {
-	const {goBack, canGoBack} = useNavigation();
+	const { goBack, canGoBack } = useNavigation();
 	const [messages, setMessages] = useState<Message[]>([
 		{
 			role: 'system',
@@ -31,7 +33,7 @@ export function ChatScreen() {
 			content: value,
 		};
 
-		setMessages(prev => [...prev, userMessage]);
+		setMessages((prev) => [...prev, userMessage]);
 		setInput('');
 		setIsProcessing(true);
 
@@ -41,7 +43,7 @@ export function ChatScreen() {
 				role: 'assistant',
 				content: `You said: "${value}". This is a placeholder response. AI integration coming soon!`,
 			};
-			setMessages(prev => [...prev, assistantMessage]);
+			setMessages((prev) => [...prev, assistantMessage]);
 			setIsProcessing(false);
 		}, 500);
 	};

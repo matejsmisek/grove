@@ -1,6 +1,8 @@
-import React, {useState} from 'react';
-import {Box, Text, useInput, useApp} from 'ink';
-import {useNavigation} from '../navigation/useNavigation.js';
+import React, { useState } from 'react';
+
+import { Box, Text, useApp, useInput } from 'ink';
+
+import { useNavigation } from '../navigation/useNavigation.js';
 
 type MenuOption = {
 	label: string;
@@ -8,8 +10,8 @@ type MenuOption = {
 };
 
 export function HomeScreen() {
-	const {navigate} = useNavigation();
-	const {exit} = useApp();
+	const { navigate } = useNavigation();
+	const { exit } = useApp();
 	const [selectedIndex, setSelectedIndex] = useState(0);
 
 	const options: MenuOption[] = [
@@ -29,9 +31,9 @@ export function HomeScreen() {
 
 	useInput((input, key) => {
 		if (key.upArrow) {
-			setSelectedIndex(prev => (prev > 0 ? prev - 1 : options.length - 1));
+			setSelectedIndex((prev) => (prev > 0 ? prev - 1 : options.length - 1));
 		} else if (key.downArrow) {
-			setSelectedIndex(prev => (prev < options.length - 1 ? prev + 1 : 0));
+			setSelectedIndex((prev) => (prev < options.length - 1 ? prev + 1 : 0));
 		} else if (key.return) {
 			options[selectedIndex].action();
 		} else if (input >= '1' && input <= '3') {

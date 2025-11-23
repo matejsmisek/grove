@@ -1,6 +1,7 @@
-import {useContext} from 'react';
-import {NavigationContext} from './NavigationContext.js';
-import type {NavigationContextType} from './types.js';
+import { useContext } from 'react';
+
+import { NavigationContext } from './NavigationContext.js';
+import type { NavigationContextType } from './types.js';
 
 /**
  * Hook to access navigation context
