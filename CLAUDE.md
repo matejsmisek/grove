@@ -38,6 +38,11 @@ This document provides comprehensive information about the Grove codebase for AI
 ```
 grove/
 ├── src/                    # Source files
+│   ├── components/        # UI components
+│   │   ├── types.ts       # Shared TypeScript interfaces
+│   │   ├── StatusBar.tsx  # Status bar component
+│   │   ├── MessageList.tsx # Message list component
+│   │   └── InputPrompt.tsx # Input prompt component
 │   └── index.tsx          # Main entry point - React-based CLI app
 ├── dist/                   # Compiled output (ignored by git)
 ├── node_modules/          # Dependencies (ignored by git)
@@ -46,34 +51,77 @@ grove/
 ├── tsconfig.json          # TypeScript configuration
 ├── eslint.config.js       # ESLint configuration
 ├── .gitignore            # Git ignore patterns
+├── CLAUDE.md             # AI assistant guide (this file)
 └── README.md             # User-facing documentation
 ```
 
 ### Current File Count
-The project is in early development with only one source file:
-- **src/index.tsx** - Contains the entire application (110 lines)
+The project now has a modular component structure:
+- **src/index.tsx** - Main application entry point (58 lines)
+- **src/components/types.ts** - Shared TypeScript interfaces (4 lines)
+- **src/components/StatusBar.tsx** - Status bar component (20 lines)
+- **src/components/MessageList.tsx** - Message list component (42 lines)
+- **src/components/InputPrompt.tsx** - Input prompt component (36 lines)
 
 ## Key Files and Their Purposes
 
 ### src/index.tsx
-**Purpose**: Main application entry point and UI implementation
+**Purpose**: Main application entry point and state management
 
-**Key Components**:
-- **Message Interface**: Defines message structure with role (user/assistant/system) and content
+**Key Responsibilities**:
 - **App Component**: Main React component managing:
   - Message state (conversation history)
   - Input state (current user input)
   - Processing state (async operation indicator)
   - Submit handler (processes user input)
-- **UI Layout**:
-  - Status bar (shows "Grove" branding and processing state)
-  - Response area (scrollable message history)
-  - Input prompt bar (text input for commands)
+- **Component Composition**: Renders the modular UI components (StatusBar, MessageList, InputPrompt)
 
 **Current Limitations**:
 - AI integration is placeholder-only (setTimeout mock response)
 - No actual Git operations implemented yet
 - No persistence of conversation history
+
+### src/components/types.ts
+**Purpose**: Shared TypeScript type definitions
+
+**Exports**:
+- **Message Interface**: Defines message structure with role (user/assistant/system) and content
+
+### src/components/StatusBar.tsx
+**Purpose**: Display application status and processing indicator
+
+**Props**:
+- `isProcessing: boolean` - Controls the status indicator and text
+
+**Features**:
+- Shows "Grove" branding
+- Processing state indicator (● for active, ○ for ready)
+- Color-coded status (yellow during processing, green when ready)
+
+### src/components/MessageList.tsx
+**Purpose**: Render conversation message history
+
+**Props**:
+- `messages: Message[]` - Array of messages to display
+
+**Features**:
+- Role-based message styling (blue for user, green for assistant, cyan for system)
+- Scrollable message history
+- Formatted message display with role labels
+
+### src/components/InputPrompt.tsx
+**Purpose**: Handle user text input
+
+**Props**:
+- `isProcessing: boolean` - Disables input during processing
+- `input: string` - Current input value
+- `onInputChange: (value: string) => void` - Input change handler
+- `onSubmit: (value: string) => void` - Submit handler
+
+**Features**:
+- Text input with placeholder
+- Disabled state during processing
+- Submit on Enter key
 
 ### package.json
 Defines project configuration, dependencies, and npm scripts.
@@ -187,6 +235,7 @@ function ComponentName() {
 1. **Initial commit** (0eb29ef) - Repository setup
 2. **PR #1** (8e9b4b3) - TypeScript and ESLint environment
 3. **PR #2** (638421f) - Claude-like Ink UI implementation
+4. **Component Refactoring** (b186b3f) - Modular component structure with separate files
 
 ## Testing and Quality Assurance
 
@@ -214,10 +263,11 @@ function ComponentName() {
 7. Commit and push changes
 
 ### Modifying the UI
-- **Status Bar**: Lines 47-56 in index.tsx
-- **Response Area**: Lines 58-88 in index.tsx
-- **Input Prompt**: Lines 90-105 in index.tsx
-- **Message Rendering**: Lines 66-87 in index.tsx
+- **Status Bar**: Edit `src/components/StatusBar.tsx`
+- **Message List/Response Area**: Edit `src/components/MessageList.tsx`
+- **Input Prompt**: Edit `src/components/InputPrompt.tsx`
+- **Message Types**: Edit `src/components/types.ts`
+- **Main Layout/State**: Edit `src/index.tsx`
 
 ### Adding Dependencies
 ```bash
@@ -231,11 +281,16 @@ npm install -D <package-name>
 Always update package.json and commit package-lock.json.
 
 ### Code Organization Guidelines
-As the project grows:
-- Consider splitting components into separate files under `src/components/`
+Current organization (as of component refactoring):
+- **Components**: Separated into individual files under `src/components/`
+- **Types**: Shared types in `src/components/types.ts`
+- **Entry Point**: `src/index.tsx` manages state and composition
+
+As the project continues to grow:
 - Create utility functions in `src/utils/`
-- Add type definitions in `src/types/`
-- Keep index.tsx as the entry point
+- Add additional types to `src/components/types.ts` or create separate type files
+- Consider creating feature-specific folders under `src/` (e.g., `src/git/`, `src/ai/`)
+- Keep index.tsx focused on application initialization and top-level state
 
 ## Important Notes for AI Assistants
 
@@ -243,7 +298,7 @@ As the project grows:
 - **Early Stage**: Project is in initial development (v0.0.1)
 - **Placeholder AI**: Current AI responses are mocked with setTimeout
 - **No Git Integration**: Despite being a Git management tool, no Git operations implemented yet
-- **Single File**: All code currently in one file (index.tsx)
+- **Modular Architecture**: UI components split into separate files for better maintainability
 
 ### Development Priorities
 1. Maintaining type safety (strict TypeScript)
@@ -257,7 +312,7 @@ As the project grows:
 - **Follow** the established naming conventions
 - **Test** changes by running the compiled CLI
 - **Run** typecheck and lint before committing
-- **Keep** the single-file structure until explicitly asked to refactor
+- **Maintain** the modular component structure (one component per file)
 
 ### Code Style Preferences
 - Use **tabs** for indentation (matching existing code)
@@ -292,7 +347,6 @@ grove
 4. No command history or persistence
 5. No configuration file support
 6. No testing framework or tests
-7. Single file architecture (will need refactoring as complexity grows)
 
 ### Future Expansion Areas
 - AI/LLM integration (OpenAI, Anthropic, or similar)
@@ -301,9 +355,9 @@ grove
 - Error handling and validation
 - Configuration management
 - Testing framework (Jest, Vitest, or similar)
-- Component modularity and separation
-- State management (if needed beyond useState)
+- Advanced state management (if needed beyond useState)
 - Logging and debugging utilities
+- Command history and persistence
 
 ## Architecture Decisions
 
