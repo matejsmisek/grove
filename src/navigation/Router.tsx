@@ -5,6 +5,7 @@ import { Box, Text } from 'ink';
 import { ChatScreen } from '../screens/ChatScreen.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
 import { SettingsScreen } from '../screens/SettingsScreen.js';
+import { WorkingFolderScreen } from '../screens/WorkingFolderScreen.js';
 import { useNavigation } from './useNavigation.js';
 
 /**
@@ -24,6 +25,8 @@ export function Router() {
 			return (
 				<SettingsScreen section={'section' in current.params ? current.params.section : undefined} />
 			);
+		case 'workingFolder':
+			return <WorkingFolderScreen />;
 		default:
 			return (
 				<Box padding={1}>
