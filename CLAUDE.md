@@ -40,10 +40,11 @@ grove/
 ├── src/                    # Source files
 │   ├── components/        # UI components
 │   │   ├── types.ts       # Shared TypeScript interfaces
+│   │   ├── App.tsx        # Main application component
 │   │   ├── StatusBar.tsx  # Status bar component
 │   │   ├── MessageList.tsx # Message list component
 │   │   └── InputPrompt.tsx # Input prompt component
-│   └── index.tsx          # Main entry point - React-based CLI app
+│   └── index.tsx          # Entry point - bootstraps and renders App
 ├── dist/                   # Compiled output (ignored by git)
 ├── node_modules/          # Dependencies (ignored by git)
 ├── package.json           # Project metadata and scripts
@@ -57,7 +58,8 @@ grove/
 
 ### Current File Count
 The project now has a modular component structure:
-- **src/index.tsx** - Main application entry point (58 lines)
+- **src/index.tsx** - Application entry point (6 lines)
+- **src/components/App.tsx** - Main application component (54 lines)
 - **src/components/types.ts** - Shared TypeScript interfaces (4 lines)
 - **src/components/StatusBar.tsx** - Status bar component (20 lines)
 - **src/components/MessageList.tsx** - Message list component (42 lines)
@@ -66,14 +68,22 @@ The project now has a modular component structure:
 ## Key Files and Their Purposes
 
 ### src/index.tsx
-**Purpose**: Main application entry point and state management
+**Purpose**: Application entry point and bootstrapping
 
 **Key Responsibilities**:
-- **App Component**: Main React component managing:
+- Import and render the main App component
+- Minimal bootstrapping code only
+- Provides the shebang for CLI execution
+
+### src/components/App.tsx
+**Purpose**: Main application component and state management
+
+**Key Responsibilities**:
+- **State Management**: Manages all application state:
   - Message state (conversation history)
   - Input state (current user input)
   - Processing state (async operation indicator)
-  - Submit handler (processes user input)
+- **Event Handlers**: Submit handler for processing user input
 - **Component Composition**: Renders the modular UI components (StatusBar, MessageList, InputPrompt)
 
 **Current Limitations**:
@@ -267,7 +277,8 @@ function ComponentName() {
 - **Message List/Response Area**: Edit `src/components/MessageList.tsx`
 - **Input Prompt**: Edit `src/components/InputPrompt.tsx`
 - **Message Types**: Edit `src/components/types.ts`
-- **Main Layout/State**: Edit `src/index.tsx`
+- **Main App/State Management**: Edit `src/components/App.tsx`
+- **Application Bootstrap**: Edit `src/index.tsx` (rarely needed)
 
 ### Adding Dependencies
 ```bash
@@ -284,13 +295,15 @@ Always update package.json and commit package-lock.json.
 Current organization (as of component refactoring):
 - **Components**: Separated into individual files under `src/components/`
 - **Types**: Shared types in `src/components/types.ts`
-- **Entry Point**: `src/index.tsx` manages state and composition
+- **Main App**: `src/components/App.tsx` manages state and composition
+- **Entry Point**: `src/index.tsx` contains minimal bootstrapping code
 
 As the project continues to grow:
 - Create utility functions in `src/utils/`
 - Add additional types to `src/components/types.ts` or create separate type files
 - Consider creating feature-specific folders under `src/` (e.g., `src/git/`, `src/ai/`)
-- Keep index.tsx focused on application initialization and top-level state
+- Keep index.tsx minimal (just bootstrapping)
+- Keep App.tsx focused on top-level state and component composition
 
 ## Important Notes for AI Assistants
 
