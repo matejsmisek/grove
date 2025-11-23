@@ -3,6 +3,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 
 import { ChatScreen } from '../screens/ChatScreen.js';
+import { CreateGroveScreen } from '../screens/CreateGroveScreen.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
 import { RepositoriesScreen } from '../screens/RepositoriesScreen.js';
 import { SettingsScreen } from '../screens/SettingsScreen.js';
@@ -21,6 +22,8 @@ export function Router() {
 			return <HomeScreen />;
 		case 'chat':
 			return <ChatScreen />;
+		case 'createGrove':
+			return <CreateGroveScreen />;
 		case 'settings':
 			// Type narrowing: we know params is { section?: string } here
 			return (
