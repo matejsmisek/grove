@@ -4,8 +4,8 @@ import { Box, Text } from 'ink';
 
 import TextInput from 'ink-text-input';
 
-import { hasUncommittedChanges, hasUnpushedCommits } from '../git/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
+import { GitService } from '../services/GitService.js';
 import { closeGrove, getGroveById, readGroveMetadata } from '../storage/index.js';
 
 interface WorktreeCheck {
@@ -54,8 +54,9 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 				let foundIssues = false;
 
 				for (const worktree of metadata.worktrees) {
-					const uncommitted = hasUncommittedChanges(worktree.worktreePath);
-					const unpushed = hasUnpushedCommits(worktree.worktreePath);
+					const gitService = new GitService(worktree.worktreePath);
+					const uncommitted = await gitService.hasUncommittedChanges();
+					const unpushed = await gitService.hasUnpushedCommits();
 
 					if (uncommitted || unpushed) {
 						foundIssues = true;

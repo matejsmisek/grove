@@ -1,8 +1,1 @@
-export {
-	getGitRoot,
-	hasUncommittedChanges,
-	hasUnpushedCommits,
-	isGitRepository,
-	isGitWorktree,
-	verifyValidRepository,
-} from './utils.js';
+export { getGitRoot, isGitRepository, isGitWorktree, verifyValidRepository } from './utils.js';
