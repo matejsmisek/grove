@@ -15,24 +15,31 @@ import { useNavigation } from './useNavigation.js';
  * based on the current navigation state
  */
 export function Router() {
-	const { current } = useNavigation();
+	const { current, history } = useNavigation();
+
+	// Use history length as key to force component remount on navigation
+	// This ensures selection state resets when navigating back
+	const navigationKey = history.length;
 
 	switch (current.screen) {
 		case 'home':
-			return <HomeScreen />;
+			return <HomeScreen key={navigationKey} />;
 		case 'chat':
-			return <ChatScreen />;
+			return <ChatScreen key={navigationKey} />;
 		case 'createGrove':
-			return <CreateGroveScreen />;
+			return <CreateGroveScreen key={navigationKey} />;
 		case 'settings':
 			// Type narrowing: we know params is { section?: string } here
 			return (
-				<SettingsScreen section={'section' in current.params ? current.params.section : undefined} />
+				<SettingsScreen
+					key={navigationKey}
+					section={'section' in current.params ? current.params.section : undefined}
+				/>
 			);
 		case 'workingFolder':
-			return <WorkingFolderScreen />;
+			return <WorkingFolderScreen key={navigationKey} />;
 		case 'repositories':
-			return <RepositoriesScreen />;
+			return <RepositoriesScreen key={navigationKey} />;
 		default:
 			return (
 				<Box padding={1}>
