@@ -1,8 +1,10 @@
 import React from 'react';
-import {Box} from 'ink';
-import {NavigationProvider} from '../navigation/NavigationContext.js';
-import {Router} from '../navigation/Router.js';
-import {StatusBar} from './StatusBar.js';
+
+import { Box } from 'ink';
+
+import { NavigationProvider } from '../navigation/NavigationContext.js';
+import { Router } from '../navigation/Router.js';
+import { StatusBar } from './StatusBar.js';
 
 export function App() {
 	return (

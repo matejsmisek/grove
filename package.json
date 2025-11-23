@@ -1,42 +1,50 @@
 {
-  "name": "grove",
-  "version": "0.0.1",
-  "description": "A CLI app using Ink and React to manage Git",
-  "type": "module",
-  "main": "./dist/index.js",
-  "bin": {
-    "grove": "./dist/index.js"
-  },
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "typecheck": "tsc --noEmit"
-  },
-  "keywords": [
-    "git",
-    "cli",
-    "ink",
-    "react"
-  ],
-  "author": "",
-  "license": "MIT",
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.39.1",
-    "@types/node": "^24.10.1",
-    "@types/react": "^19.2.6",
-    "eslint": "^9.39.1",
-    "tsx": "^4.20.6",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.47.0"
-  },
-  "dependencies": {
-    "ink": "^6.5.1",
-    "ink-text-input": "^6.0.0",
-    "react": "^19.2.0"
-  }
+	"name": "grove",
+	"version": "0.0.1",
+	"description": "A CLI app using Ink and React to manage Git",
+	"type": "module",
+	"main": "./dist/index.js",
+	"bin": {
+		"grove": "./dist/index.js"
+	},
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"typecheck": "tsc --noEmit --skipLibCheck",
+		"prepare": "husky"
+	},
+	"keywords": [
+		"git",
+		"cli",
+		"ink",
+		"react"
+	],
+	"author": "",
+	"license": "MIT",
+	"engines": {
+		"node": ">=18.0.0"
+	},
+	"devDependencies": {
+		"@eslint/js": "^9.39.1",
+		"@trivago/prettier-plugin-sort-imports": "^6.0.0",
+		"@types/node": "^24.10.1",
+		"@types/react": "^19.2.6",
+		"eslint": "^9.39.1",
+		"eslint-config-prettier": "^10.1.8",
+		"husky": "^9.1.7",
+		"lint-staged": "^16.2.7",
+		"prettier": "^3.6.2",
+		"tsx": "^4.20.6",
+		"typescript": "^5.9.3",
+		"typescript-eslint": "^8.47.0"
+	},
+	"dependencies": {
+		"ink": "^6.5.1",
+		"ink-text-input": "^6.0.0",
+		"react": "^19.2.0"
+	}
 }

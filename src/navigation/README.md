@@ -24,10 +24,10 @@ Routes are defined in `types.ts`:
 
 ```typescript
 export type Routes = {
-  home: Record<string, never>;           // No params
-  chat: Record<string, never>;           // No params
-  settings: { section?: string };        // Optional param
-  'git-log': { branch: string; limit?: number };  // Required + optional param
+	home: Record<string, never>; // No params
+	chat: Record<string, never>; // No params
+	settings: { section?: string }; // Optional param
+	'git-log': { branch: string; limit?: number }; // Required + optional param
 };
 ```
 
@@ -39,24 +39,24 @@ Use the `useNavigation` hook in any component:
 import { useNavigation } from '../navigation/useNavigation';
 
 function MyComponent() {
-  const { navigate, goBack, canGoBack } = useNavigation();
+	const { navigate, goBack, canGoBack } = useNavigation();
 
-  // Navigate to home (no params)
-  navigate('home', {});
+	// Navigate to home (no params)
+	navigate('home', {});
 
-  // Navigate to chat (no params)
-  navigate('chat', {});
+	// Navigate to chat (no params)
+	navigate('chat', {});
 
-  // Navigate to settings with optional param
-  navigate('settings', { section: 'git' });
+	// Navigate to settings with optional param
+	navigate('settings', { section: 'git' });
 
-  // Navigate with required params - TypeScript ensures you pass them!
-  navigate('git-log', { branch: 'main', limit: 10 });
+	// Navigate with required params - TypeScript ensures you pass them!
+	navigate('git-log', { branch: 'main', limit: 10 });
 
-  // Go back to previous screen
-  if (canGoBack) {
-    goBack();
-  }
+	// Go back to previous screen
+	if (canGoBack) {
+		goBack();
+	}
 }
 ```
 
@@ -135,11 +135,11 @@ const { history, canGoBack, goBack } = useNavigation();
 
 // Check if user can go back
 if (canGoBack) {
-  goBack();  // Returns to previous screen
+	goBack(); // Returns to previous screen
 }
 
 // Access full history
-console.log(history.length);  // Number of screens in history
+console.log(history.length); // Number of screens in history
 ```
 
 ### Current Screen State
@@ -149,8 +149,8 @@ Access the current screen and its params anywhere:
 ```typescript
 const { current } = useNavigation();
 
-console.log(current.screen);  // e.g., 'settings'
-console.log(current.params);  // e.g., { section: 'git' }
+console.log(current.screen); // e.g., 'settings'
+console.log(current.params); // e.g., { section: 'git' }
 ```
 
 ## Examples
@@ -216,21 +216,24 @@ function SettingsScreen() {
 ## Adding a New Route
 
 1. **Add route type** in `types.ts`:
+
    ```typescript
    export type Routes = {
-     // ... existing routes
-     'my-new-screen': { id: string; mode?: 'view' | 'edit' };
+   	// ... existing routes
+   	'my-new-screen': { id: string; mode?: 'view' | 'edit' };
    };
    ```
 
 2. **Create screen component** in `src/screens/`:
+
    ```typescript
    export function MyNewScreen({ id, mode = 'view' }: { id: string; mode?: 'view' | 'edit' }) {
-     // Component implementation
+   	// Component implementation
    }
    ```
 
 3. **Register in Router** (`navigation/Router.tsx`):
+
    ```typescript
    case 'my-new-screen':
      return <MyNewScreen
@@ -295,6 +298,7 @@ case 'settings':
 ### Screen not rendering
 
 Check that:
+
 1. Route is defined in `types.ts`
 2. Screen is imported in `Router.tsx`
 3. Case exists in Router's switch statement

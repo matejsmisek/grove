@@ -2,7 +2,7 @@
 export type Routes = {
 	home: Record<string, never>;
 	chat: Record<string, never>;
-	settings: {section?: string};
+	settings: { section?: string };
 };
 
 // Navigation state for current screen and params

@@ -1,5 +1,7 @@
 import React from 'react';
+
 import { Box, Text } from 'ink';
+
 import TextInput from 'ink-text-input';
 
 interface InputPromptProps {
@@ -9,12 +11,7 @@ interface InputPromptProps {
 	onSubmit: (value: string) => void;
 }
 
-export function InputPrompt({
-	isProcessing,
-	input,
-	onInputChange,
-	onSubmit,
-}: InputPromptProps) {
+export function InputPrompt({ isProcessing, input, onInputChange, onSubmit }: InputPromptProps) {
 	return (
 		<Box borderStyle="single" borderColor="blue" paddingX={1}>
 			<Text color="blue" bold>
