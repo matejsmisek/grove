@@ -15,4 +15,25 @@ export {
 	removeRepository,
 	writeRepositories,
 } from './repositories.js';
-export type { Repository, RepositoriesData, Settings, StorageConfig } from './types.js';
+export {
+	addWorktreeToGrove,
+	createGrove,
+	deleteGrove,
+	getAllGroves,
+	getDefaultGrovesIndex,
+	getGroveById,
+	readGroveMetadata,
+	readGrovesIndex,
+	writeGroveMetadata,
+	writeGrovesIndex,
+} from './groves.js';
+export type {
+	GroveMetadata,
+	GroveReference,
+	GrovesIndex,
+	Repository,
+	RepositoriesData,
+	Settings,
+	StorageConfig,
+	Worktree,
+} from './types.js';
