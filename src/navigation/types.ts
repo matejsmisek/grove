@@ -3,6 +3,7 @@ export type Routes = {
 	home: Record<string, never>;
 	chat: Record<string, never>;
 	createGrove: Record<string, never>;
+	closeGrove: { groveId: string };
 	settings: { section?: string };
 	workingFolder: Record<string, never>;
 	repositories: Record<string, never>;

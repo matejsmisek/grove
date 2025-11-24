@@ -300,3 +300,65 @@ export function deleteGrove(groveId: string, deleteFolder: boolean = false): boo
 
 	return true;
 }
+
+/**
+ * Close a grove - removes worktrees and deletes the grove folder
+ * @param groveId - ID of the grove to close
+ * @returns Success status and any error messages
+ */
+export async function closeGrove(
+	groveId: string
+): Promise<{ success: boolean; errors: string[]; message?: string }> {
+	const index = readGrovesIndex();
+	const groveRef = index.groves.find((ref) => ref.id === groveId);
+
+	if (!groveRef) {
+		return { success: false, errors: [], message: 'Grove not found' };
+	}
+
+	// Read grove metadata to get worktree info
+	const metadata = readGroveMetadata(groveRef.path);
+	const errors: string[] = [];
+
+	// Remove all worktrees using GitService
+	if (metadata && metadata.worktrees.length > 0) {
+		for (const worktree of metadata.worktrees) {
+			try {
+				const gitService = new GitService(worktree.repositoryPath);
+				const result = await gitService.removeWorktree(worktree.worktreePath, true);
+
+				if (!result.success) {
+					errors.push(`Failed to remove worktree ${worktree.repositoryName}: ${result.stderr}`);
+				}
+			} catch (error) {
+				const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+				errors.push(`Error removing worktree ${worktree.repositoryName}: ${errorMsg}`);
+			}
+		}
+	}
+
+	// Remove from groves index
+	index.groves = index.groves.filter((ref) => ref.id !== groveId);
+	writeGrovesIndex(index);
+
+	// Delete the grove folder
+	if (fs.existsSync(groveRef.path)) {
+		try {
+			fs.rmSync(groveRef.path, { recursive: true, force: true });
+		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+			errors.push(`Failed to delete grove folder: ${errorMsg}`);
+			return { success: false, errors };
+		}
+	}
+
+	if (errors.length > 0) {
+		return {
+			success: false,
+			errors,
+			message: 'Grove closed with some errors',
+		};
+	}
+
+	return { success: true, errors: [], message: 'Grove closed successfully' };
+}

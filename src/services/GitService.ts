@@ -196,4 +196,81 @@ export class GitService {
 	async moveWorktree(worktree: string, newPath: string): Promise<GitCommandResult> {
 		return this.executeGitCommand(['worktree', 'move', worktree, newPath]);
 	}
+
+	/**
+	 * Check if a git repository has uncommitted changes (modified, staged, or untracked files)
+	 * @param cwd - Optional working directory (defaults to service's cwd)
+	 */
+	async hasUncommittedChanges(cwd?: string): Promise<boolean> {
+		const service = cwd ? new GitService(cwd) : this;
+		const result = await service.executeGitCommand(['status', '--porcelain']);
+
+		if (!result.success) {
+			return false;
+		}
+
+		// If git status --porcelain returns any output, there are uncommitted changes
+		return result.stdout.length > 0;
+	}
+
+	/**
+	 * Check if a git repository has unpushed commits on the current branch
+	 * @param cwd - Optional working directory (defaults to service's cwd)
+	 */
+	async hasUnpushedCommits(cwd?: string): Promise<boolean> {
+		const service = cwd ? new GitService(cwd) : this;
+
+		// First, check if the current branch has an upstream
+		const upstreamResult = await service.executeGitCommand([
+			'rev-parse',
+			'--abbrev-ref',
+			'@{upstream}',
+		]);
+
+		if (upstreamResult.success && upstreamResult.stdout) {
+			// Branch has upstream - check if there are commits ahead
+			const upstream = upstreamResult.stdout.trim();
+
+			const aheadResult = await service.executeGitCommand([
+				'rev-list',
+				'--count',
+				`${upstream}..HEAD`,
+			]);
+
+			if (!aheadResult.success) {
+				// If there's an error, treat as unpushed
+				return true;
+			}
+
+			const ahead = parseInt(aheadResult.stdout.trim(), 10);
+			return ahead > 0;
+		}
+
+		// No upstream configured - check if current HEAD exists on any remote branch
+		const headResult = await service.executeGitCommand(['rev-parse', 'HEAD']);
+
+		if (!headResult.success) {
+			// Can't determine HEAD, treat as unpushed
+			return true;
+		}
+
+		const currentCommit = headResult.stdout.trim();
+
+		// Check if this commit exists on any remote branch
+		const remoteBranchesResult = await service.executeGitCommand([
+			'branch',
+			'-r',
+			'--contains',
+			currentCommit,
+		]);
+
+		if (!remoteBranchesResult.success) {
+			// Error checking remote branches, treat as unpushed
+			return true;
+		}
+
+		// If the output is empty, no remote branch contains this commit
+		// If the output has content, at least one remote branch has this commit
+		return remoteBranchesResult.stdout.trim().length === 0;
+	}
 }
