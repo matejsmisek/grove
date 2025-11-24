@@ -123,26 +123,17 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 		{ isActive: awaitingConfirmation && hasIssues && !isProcessing }
 	);
 
-	// Handle key press for Y/N confirmation
-	useEffect(() => {
-		if (!awaitingConfirmation || hasIssues || isProcessing) {
-			return;
-		}
-
-		const handleKeyPress = (input: string) => {
+	// Handle Y/N key press for confirmation (when all checks pass)
+	useInput(
+		(input, _key) => {
 			if (input.toLowerCase() === 'y') {
 				handleConfirm();
 			} else if (input.toLowerCase() === 'n') {
 				goBack();
 			}
-		};
-
-		process.stdin.on('data', handleKeyPress);
-
-		return () => {
-			process.stdin.off('data', handleKeyPress);
-		};
-	}, [awaitingConfirmation, hasIssues, isProcessing]);
+		},
+		{ isActive: awaitingConfirmation && !hasIssues && !isProcessing }
+	);
 
 	if (loading) {
 		return (
