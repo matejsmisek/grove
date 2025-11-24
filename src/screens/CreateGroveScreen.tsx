@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
+
 import TextInput from 'ink-text-input';
 
 import { useNavigation } from '../navigation/useNavigation.js';
-import { createGrove, getAllRepositories, initializeStorage } from '../storage/index.js';
+import { GroveService } from '../services/GroveService.js';
+import { getAllRepositories, initializeStorage } from '../storage/index.js';
 
 type CreateStep = 'name' | 'repositories' | 'creating' | 'done' | 'error';
 
@@ -55,7 +57,9 @@ export function CreateGroveScreen() {
 				const selectedRepos = Array.from(selectedRepoIndices).map((index) => repositories[index]);
 
 				// Create grove asynchronously
-				createGrove(groveName, selectedRepos)
+				const groveService = new GroveService();
+				groveService
+					.createGrove(groveName, selectedRepos)
 					.then(() => {
 						setStep('done');
 						setTimeout(() => navigate('home', {}), 1500);
@@ -68,7 +72,7 @@ export function CreateGroveScreen() {
 				goBack();
 			}
 		},
-		{ isActive: step === 'repositories' },
+		{ isActive: step === 'repositories' }
 	);
 
 	// Handle escape key for other steps
@@ -78,7 +82,7 @@ export function CreateGroveScreen() {
 				goBack();
 			}
 		},
-		{ isActive: step === 'name' || step === 'error' || step === 'done' },
+		{ isActive: step === 'name' || step === 'error' || step === 'done' }
 	);
 
 	const handleNameSubmit = (value: string) => {
@@ -144,8 +148,7 @@ export function CreateGroveScreen() {
 						return (
 							<Box key={index}>
 								<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
-									{isCursor ? '❯ ' : '  '}
-									[{isSelected ? '✓' : ' '}] {repo.name}
+									{isCursor ? '❯ ' : '  '}[{isSelected ? '✓' : ' '}] {repo.name}
 								</Text>
 							</Box>
 						);
