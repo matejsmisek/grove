@@ -43,6 +43,12 @@ export interface Repository {
 	 * When the repository was registered
 	 */
 	registeredAt: string;
+
+	/**
+	 * Glob patterns for files to copy from repository to worktrees
+	 * Example: ['.gitignore', '.env.example', '*.config.js']
+	 */
+	copyFiles?: string[];
 }
 
 export interface RepositoriesData {

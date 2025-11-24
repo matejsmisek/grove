@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { GitService } from '../services/GitService.js';
+import { copyFilesFromPatterns } from './fileCopy.js';
 import { getBranchNameForRepo } from './groveConfig.js';
 import { getStorageConfig, readSettings } from './storage.js';
 import type { GroveMetadata, GroveReference, GrovesIndex, Repository, Worktree } from './types.js';
@@ -126,6 +127,17 @@ export async function createGrove(
 
 			if (!result.success) {
 				throw new Error(result.stderr || 'Failed to create worktree');
+			}
+
+			// Copy files matching patterns from repository to worktree
+			if (repo.copyFiles && repo.copyFiles.length > 0) {
+				try {
+					await copyFilesFromPatterns(repo.path, worktreePath, repo.copyFiles);
+				} catch (error) {
+					// Log warning but don't fail the worktree creation
+					const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+					console.warn(`Warning: Failed to copy some files for ${repo.name}: ${errorMsg}`);
+				}
 			}
 
 			// Create worktree entry

@@ -34,6 +34,7 @@ export {
 	readGroveRepoConfig,
 	validateBranchNameTemplate,
 } from './groveConfig.js';
+export { copyFilesFromPatterns } from './fileCopy.js';
 export type {
 	GroveMetadata,
 	GroveReference,
