@@ -105,3 +105,24 @@ export interface GroveMetadata {
 	/** Timestamp when the grove was last updated */
 	updatedAt: string;
 }
+
+/**
+ * Grove repository configuration stored in .grove.json and .grove.local.json
+ * within individual repositories
+ */
+export interface GroveRepoConfig {
+	/**
+	 * Branch name template for creating worktrees in this repository
+	 * Must contain ${GROVE_NAME} placeholder which will be replaced with normalized grove name
+	 * Example: "grove/${GROVE_NAME}" or "feature/${GROVE_NAME}-work"
+	 */
+	branchNameTemplate?: string;
+	/**
+	 * File patterns to copy when creating worktrees (not implemented yet)
+	 */
+	fileCopyPatterns?: string[];
+	/**
+	 * Actions to run after creating worktrees (not implemented yet)
+	 */
+	initActions?: string[];
+}

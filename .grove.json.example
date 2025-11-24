@@ -1,0 +1,5 @@
+{
+	"branchNameTemplate": "grove/${GROVE_NAME}",
+	"fileCopyPatterns": [],
+	"initActions": []
+}
