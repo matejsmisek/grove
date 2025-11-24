@@ -227,22 +227,50 @@ export class GitService {
 			'@{upstream}',
 		]);
 
-		if (!upstreamResult.success || !upstreamResult.stdout) {
-			// No upstream configured - treat as unpushed
+		if (upstreamResult.success && upstreamResult.stdout) {
+			// Branch has upstream - check if there are commits ahead
+			const upstream = upstreamResult.stdout.trim();
+
+			const aheadResult = await service.executeGitCommand([
+				'rev-list',
+				'--count',
+				`${upstream}..HEAD`,
+			]);
+
+			if (!aheadResult.success) {
+				// If there's an error, treat as unpushed
+				return true;
+			}
+
+			const ahead = parseInt(aheadResult.stdout.trim(), 10);
+			return ahead > 0;
+		}
+
+		// No upstream configured - check if current HEAD exists on any remote branch
+		const headResult = await service.executeGitCommand(['rev-parse', 'HEAD']);
+
+		if (!headResult.success) {
+			// Can't determine HEAD, treat as unpushed
 			return true;
 		}
 
-		const upstream = upstreamResult.stdout.trim();
+		const currentCommit = headResult.stdout.trim();
 
-		// Check if there are commits ahead of upstream
-		const aheadResult = await service.executeGitCommand(['rev-list', '--count', `${upstream}..HEAD`]);
+		// Check if this commit exists on any remote branch
+		const remoteBranchesResult = await service.executeGitCommand([
+			'branch',
+			'-r',
+			'--contains',
+			currentCommit,
+		]);
 
-		if (!aheadResult.success) {
-			// If there's an error, treat as unpushed
+		if (!remoteBranchesResult.success) {
+			// Error checking remote branches, treat as unpushed
 			return true;
 		}
 
-		const ahead = parseInt(aheadResult.stdout.trim(), 10);
-		return ahead > 0;
+		// If the output is empty, no remote branch contains this commit
+		// If the output has content, at least one remote branch has this commit
+		return remoteBranchesResult.stdout.trim().length === 0;
 	}
 }
