@@ -16,15 +16,15 @@ export {
 	writeRepositories,
 } from './repositories.js';
 export {
+	addGroveToIndex,
 	addWorktreeToGrove,
 	deleteGrove,
 	getAllGroves,
-	getDefaultGrovesIndex,
 	getGroveById,
 	readGroveMetadata,
-	readGrovesIndex,
+	removeGroveFromIndex,
+	updateGroveInIndex,
 	writeGroveMetadata,
-	writeGrovesIndex,
 } from './groves.js';
 export {
 	applyBranchNameTemplate,

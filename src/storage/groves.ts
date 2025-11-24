@@ -7,16 +7,16 @@ import type { GroveMetadata, GroveReference, GrovesIndex, Worktree } from './typ
 /**
  * Get default groves index
  */
-export function getDefaultGrovesIndex(): GrovesIndex {
+function getDefaultGrovesIndex(): GrovesIndex {
 	return {
 		groves: [],
 	};
 }
 
 /**
- * Read groves index from groves.json
+ * Read groves index from groves.json (internal)
  */
-export function readGrovesIndex(): GrovesIndex {
+function readGrovesIndex(): GrovesIndex {
 	const config = getStorageConfig();
 
 	try {
@@ -39,9 +39,9 @@ export function readGrovesIndex(): GrovesIndex {
 }
 
 /**
- * Write groves index to groves.json
+ * Write groves index to groves.json (internal)
  */
-export function writeGrovesIndex(index: GrovesIndex): void {
+function writeGrovesIndex(index: GrovesIndex): void {
 	const config = getStorageConfig();
 
 	try {
@@ -57,6 +57,63 @@ export function writeGrovesIndex(index: GrovesIndex): void {
 		console.error('Error writing groves index:', error);
 		throw error;
 	}
+}
+
+/**
+ * Add a grove reference to the index
+ * @param groveRef - The grove reference to add
+ */
+export function addGroveToIndex(groveRef: GroveReference): void {
+	const index = readGrovesIndex();
+	index.groves.push(groveRef);
+	writeGrovesIndex(index);
+}
+
+/**
+ * Remove a grove from the index by ID
+ * @param groveId - ID of the grove to remove
+ * @returns The removed grove reference, or null if not found
+ */
+export function removeGroveFromIndex(groveId: string): GroveReference | null {
+	const index = readGrovesIndex();
+	const groveRef = index.groves.find((ref) => ref.id === groveId);
+
+	if (!groveRef) {
+		return null;
+	}
+
+	index.groves = index.groves.filter((ref) => ref.id !== groveId);
+	writeGrovesIndex(index);
+
+	return groveRef;
+}
+
+/**
+ * Update a grove reference in the index
+ * @param groveId - ID of the grove to update
+ * @param updates - Partial updates to apply (name, updatedAt)
+ * @returns True if the grove was found and updated
+ */
+export function updateGroveInIndex(
+	groveId: string,
+	updates: Partial<Pick<GroveReference, 'name' | 'updatedAt'>>
+): boolean {
+	const index = readGrovesIndex();
+	const groveRef = index.groves.find((ref) => ref.id === groveId);
+
+	if (!groveRef) {
+		return false;
+	}
+
+	if (updates.name !== undefined) {
+		groveRef.name = updates.name;
+	}
+	if (updates.updatedAt !== undefined) {
+		groveRef.updatedAt = updates.updatedAt;
+	}
+
+	writeGrovesIndex(index);
+	return true;
 }
 
 /**
@@ -94,13 +151,10 @@ export function writeGroveMetadata(grovePath: string, metadata: GroveMetadata): 
 		fs.writeFileSync(metadataPath, jsonData, 'utf-8');
 
 		// Also update the groves index
-		const index = readGrovesIndex();
-		const groveRef = index.groves.find((ref) => ref.id === metadata.id);
-		if (groveRef) {
-			groveRef.updatedAt = metadata.updatedAt;
-			groveRef.name = metadata.name;
-			writeGrovesIndex(index);
-		}
+		updateGroveInIndex(metadata.id, {
+			name: metadata.name,
+			updatedAt: metadata.updatedAt,
+		});
 	} catch (error) {
 		console.error('Error writing grove metadata:', error);
 		throw error;
@@ -163,16 +217,11 @@ export function getGroveById(id: string): GroveReference | null {
  * @param deleteFolder - Whether to delete the grove folder (default: false)
  */
 export function deleteGrove(groveId: string, deleteFolder: boolean = false): boolean {
-	const index = readGrovesIndex();
-	const groveRef = index.groves.find((ref) => ref.id === groveId);
+	const groveRef = removeGroveFromIndex(groveId);
 
 	if (!groveRef) {
 		return false;
 	}
-
-	// Remove from index
-	index.groves = index.groves.filter((ref) => ref.id !== groveId);
-	writeGrovesIndex(index);
 
 	// Optionally delete the folder
 	if (deleteFolder && fs.existsSync(groveRef.path)) {

@@ -4,13 +4,13 @@ import path from 'path';
 
 import { getBranchNameForRepo, readGroveRepoConfig } from '../storage/groveConfig.js';
 import {
+	addGroveToIndex,
 	readGroveMetadata,
-	readGrovesIndex,
+	removeGroveFromIndex,
 	writeGroveMetadata,
-	writeGrovesIndex,
 } from '../storage/groves.js';
 import { readSettings } from '../storage/storage.js';
-import type { GroveMetadata, GroveReference, Repository, Worktree } from '../storage/types.js';
+import type { GroveMetadata, Repository, Worktree } from '../storage/types.js';
 import { ContextService } from './ContextService.js';
 import { FileService } from './FileService.js';
 import { GitService } from './GitService.js';
@@ -153,16 +153,13 @@ export class GroveService {
 		writeGroveMetadata(grovePath, metadata);
 
 		// Add to groves index
-		const index = readGrovesIndex();
-		const groveRef: GroveReference = {
+		addGroveToIndex({
 			id: groveId,
 			name,
 			path: grovePath,
 			createdAt: now,
 			updatedAt: now,
-		};
-		index.groves.push(groveRef);
-		writeGrovesIndex(index);
+		});
 
 		// If there were partial errors, include them in the error message
 		if (errors.length > 0) {
@@ -180,8 +177,8 @@ export class GroveService {
 	 * @returns Success status and any error messages
 	 */
 	async closeGrove(groveId: string): Promise<CloseGroveResult> {
-		const index = readGrovesIndex();
-		const groveRef = index.groves.find((ref) => ref.id === groveId);
+		// Remove from groves index first to get the grove reference
+		const groveRef = removeGroveFromIndex(groveId);
 
 		if (!groveRef) {
 			return { success: false, errors: [], message: 'Grove not found' };
@@ -207,10 +204,6 @@ export class GroveService {
 				}
 			}
 		}
-
-		// Remove from groves index
-		index.groves = index.groves.filter((ref) => ref.id !== groveId);
-		writeGrovesIndex(index);
 
 		// Delete the grove folder
 		if (fs.existsSync(groveRef.path)) {
