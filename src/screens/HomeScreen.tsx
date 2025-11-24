@@ -122,78 +122,9 @@ export function HomeScreen() {
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			{/* Header */}
-			<Box marginBottom={1}>
-				<Text bold color="green">
-					🌳 Grove
-				</Text>
-			</Box>
-
-			<Box marginBottom={1}>
-				<Text dimColor>AI-powered Git worktree management</Text>
-			</Box>
-
-			{/* Groves Grid */}
-			{groves.length > 0 ? (
-				<Box flexDirection="column" marginTop={1}>
-					<Box marginBottom={1}>
-						<Text bold>Your Groves</Text>
-					</Box>
-
-					{/* Display groves in a grid (4 columns) */}
-					<Box flexDirection="column">
-						{Array.from({ length: Math.ceil(groves.length / 4) }).map((_, rowIndex) => {
-							const grove1 = groves[rowIndex * 4];
-							const grove2 = groves[rowIndex * 4 + 1];
-							const grove3 = groves[rowIndex * 4 + 2];
-							const grove4 = groves[rowIndex * 4 + 3];
-
-							return (
-								<Box key={rowIndex} marginBottom={1}>
-									{grove1 && <GrovePanel grove={grove1} isSelected={selectedGroveIndex === rowIndex * 4} />}
-									{grove2 && (
-										<Box marginLeft={1}>
-											<GrovePanel grove={grove2} isSelected={selectedGroveIndex === rowIndex * 4 + 1} />
-										</Box>
-									)}
-									{grove3 && (
-										<Box marginLeft={1}>
-											<GrovePanel grove={grove3} isSelected={selectedGroveIndex === rowIndex * 4 + 2} />
-										</Box>
-									)}
-									{grove4 && (
-										<Box marginLeft={1}>
-											<GrovePanel grove={grove4} isSelected={selectedGroveIndex === rowIndex * 4 + 3} />
-										</Box>
-									)}
-								</Box>
-							);
-						})}
-					</Box>
-				</Box>
-			) : (
-				<Box marginTop={1} marginBottom={1}>
-					<Text dimColor>No active groves. Press 'c' to create one!</Text>
-				</Box>
-			)}
-
-			{/* Help text */}
-			<Box marginTop={1} flexDirection="column">
-				<Text dimColor>
-					{groves.length > 0 ? '↑↓←→ Navigate' : ''} {groves.length > 0 && '• '}
-					<Text bold>c</Text> Create {groves.length > 0 && '• Enter Open'} • <Text bold>m</Text> Menu
-				</Text>
-			</Box>
-
-			{/* Menu Modal */}
-			{showMenu && (
-				<Box
-					position="absolute"
-					borderStyle="round"
-					borderColor="cyan"
-					padding={1}
-					flexDirection="column"
-				>
+			{/* Show Menu Modal */}
+			{showMenu ? (
+				<Box flexDirection="column">
 					<Box marginBottom={1}>
 						<Text bold>Menu</Text>
 					</Box>
@@ -208,20 +139,12 @@ export function HomeScreen() {
 					))}
 
 					<Box marginTop={1}>
-						<Text dimColor>Press ESC to close</Text>
+						<Text dimColor>Press ESC or 'm' to close</Text>
 					</Box>
 				</Box>
-			)}
-
-			{/* Grove Actions Modal */}
-			{selectedGrove && (
-				<Box
-					position="absolute"
-					borderStyle="round"
-					borderColor="cyan"
-					padding={1}
-					flexDirection="column"
-				>
+			) : selectedGrove ? (
+				/* Show Grove Actions Modal */
+				<Box flexDirection="column">
 					<Box marginBottom={1}>
 						<Text bold>Grove: {selectedGrove.name}</Text>
 					</Box>
@@ -239,6 +162,74 @@ export function HomeScreen() {
 						<Text dimColor>Press ESC to close</Text>
 					</Box>
 				</Box>
+			) : (
+				/* Show Main Screen */
+				<>
+					{/* Header */}
+					<Box marginBottom={1}>
+						<Text bold color="green">
+							🌳 Grove
+						</Text>
+					</Box>
+
+					<Box marginBottom={1}>
+						<Text dimColor>AI-powered Git worktree management</Text>
+					</Box>
+
+					{/* Groves Grid */}
+					{groves.length > 0 ? (
+						<Box flexDirection="column" marginTop={1}>
+							<Box marginBottom={1}>
+								<Text bold>Your Groves</Text>
+							</Box>
+
+							{/* Display groves in a grid (4 columns) */}
+							<Box flexDirection="column">
+								{Array.from({ length: Math.ceil(groves.length / 4) }).map((_, rowIndex) => {
+									const grove1 = groves[rowIndex * 4];
+									const grove2 = groves[rowIndex * 4 + 1];
+									const grove3 = groves[rowIndex * 4 + 2];
+									const grove4 = groves[rowIndex * 4 + 3];
+
+									return (
+										<Box key={rowIndex} marginBottom={1}>
+											{grove1 && (
+												<GrovePanel grove={grove1} isSelected={selectedGroveIndex === rowIndex * 4} />
+											)}
+											{grove2 && (
+												<Box marginLeft={1}>
+													<GrovePanel grove={grove2} isSelected={selectedGroveIndex === rowIndex * 4 + 1} />
+												</Box>
+											)}
+											{grove3 && (
+												<Box marginLeft={1}>
+													<GrovePanel grove={grove3} isSelected={selectedGroveIndex === rowIndex * 4 + 2} />
+												</Box>
+											)}
+											{grove4 && (
+												<Box marginLeft={1}>
+													<GrovePanel grove={grove4} isSelected={selectedGroveIndex === rowIndex * 4 + 3} />
+												</Box>
+											)}
+										</Box>
+									);
+								})}
+							</Box>
+						</Box>
+					) : (
+						<Box marginTop={1} marginBottom={1}>
+							<Text dimColor>No active groves. Press 'c' to create one!</Text>
+						</Box>
+					)}
+
+					{/* Help text */}
+					<Box marginTop={1} flexDirection="column">
+						<Text dimColor>
+							{groves.length > 0 ? '↑↓←→ Navigate' : ''} {groves.length > 0 && '• '}
+							<Text bold>c</Text> Create {groves.length > 0 && '• Enter Open'} • <Text bold>m</Text> Menu
+						</Text>
+					</Box>
+				</>
 			)}
 		</Box>
 	);
