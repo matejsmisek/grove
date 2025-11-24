@@ -1,23 +1,16 @@
 import fs from 'fs';
+import { glob } from 'glob';
 import path from 'path';
 
-import { glob } from 'glob';
+import type { FileCopyResult, FileMatchResult, IFileService } from './interfaces.js';
 
-export interface FileCopyResult {
-	success: boolean;
-	copiedFiles: string[];
-	errors: string[];
-}
-
-export interface FileMatchResult {
-	pattern: string;
-	matches: string[];
-}
+// Re-export types for backward compatibility
+export type { FileCopyResult, FileMatchResult } from './interfaces.js';
 
 /**
  * Service for file operations including pattern matching and copying
  */
-export class FileService {
+export class FileService implements IFileService {
 	/**
 	 * Find files matching a glob pattern in a directory
 	 * @param sourceDir - Directory to search in
