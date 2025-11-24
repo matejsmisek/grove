@@ -11,6 +11,7 @@ import {
 } from '../storage/groves.js';
 import { readSettings } from '../storage/storage.js';
 import type { GroveMetadata, GroveReference, Repository, Worktree } from '../storage/types.js';
+import { ContextService } from './ContextService.js';
 import { FileService } from './FileService.js';
 import { GitService } from './GitService.js';
 
@@ -33,9 +34,11 @@ export interface CloseGroveResult {
  */
 export class GroveService {
 	private fileService: FileService;
+	private contextService: ContextService;
 
 	constructor() {
 		this.fileService = new FileService();
+		this.contextService = new ContextService();
 	}
 
 	/**
@@ -43,29 +46,6 @@ export class GroveService {
 	 */
 	private generateGroveId(): string {
 		return crypto.randomBytes(16).toString('hex');
-	}
-
-	/**
-	 * Create CONTEXT.md file content for a grove
-	 */
-	private createContextContent(name: string, repositories: Repository[]): string {
-		const repoList = repositories.map((repo) => `- ${repo.name}: ${repo.path}`).join('\n');
-		return `# ${name}
-
-Created: ${new Date().toISOString()}
-
-## Purpose
-
-[Add description of what you're working on in this grove]
-
-## Repositories
-
-${repoList}
-
-## Notes
-
-[Add any additional notes or context here]
-`;
 	}
 
 	/**
@@ -87,13 +67,16 @@ ${repoList}
 		// Create grove folder
 		fs.mkdirSync(grovePath, { recursive: true });
 
-		// Create CONTEXT.md file
-		const contextPath = path.join(grovePath, 'CONTEXT.md');
-		const contextContent = this.createContextContent(name, repositories);
-		fs.writeFileSync(contextPath, contextContent, 'utf-8');
-
 		// Create grove metadata
 		const now = new Date().toISOString();
+
+		// Create CONTEXT.md file
+		this.contextService.createContextFile(grovePath, {
+			name,
+			createdAt: now,
+			repositories,
+		});
+
 		const metadata: GroveMetadata = {
 			id: groveId,
 			name,
