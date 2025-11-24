@@ -2,20 +2,14 @@ import React, { useState } from 'react';
 
 import { Box, Text, useApp, useInput } from 'ink';
 
+import type { GroveAction } from '../components/home/GroveActionsModal.js';
+import { GroveActionsModal } from '../components/home/GroveActionsModal.js';
+import { GroveGrid } from '../components/home/GroveGrid.js';
+import type { MenuOption } from '../components/home/MenuModal.js';
+import { MenuModal } from '../components/home/MenuModal.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { getAllGroves, initializeStorage, readGroveMetadata } from '../storage/index.js';
+import { getAllGroves, initializeStorage } from '../storage/index.js';
 import type { GroveReference } from '../storage/index.js';
-import { formatTimeAgo } from '../utils/time.js';
-
-type MenuOption = {
-	label: string;
-	action: () => void;
-};
-
-type GroveAction = {
-	label: string;
-	action: () => void;
-};
 
 export function HomeScreen() {
 	const { navigate } = useNavigation();
@@ -124,44 +118,20 @@ export function HomeScreen() {
 		<Box flexDirection="column" padding={1}>
 			{/* Show Menu Modal */}
 			{showMenu ? (
-				<Box flexDirection="column">
-					<Box marginBottom={1}>
-						<Text bold>Menu</Text>
-					</Box>
-
-					{menuOptions.map((option, index) => (
-						<Box key={index}>
-							<Text color={selectedMenuIndex === index ? 'cyan' : undefined}>
-								{selectedMenuIndex === index ? '❯ ' : '  '}
-								{option.label}
-							</Text>
-						</Box>
-					))}
-
-					<Box marginTop={1}>
-						<Text dimColor>Press ESC or 'm' to close</Text>
-					</Box>
-				</Box>
+				<MenuModal
+					title="Menu"
+					options={menuOptions}
+					selectedIndex={selectedMenuIndex}
+					helpText="Press ESC or 'm' to close"
+				/>
 			) : selectedGrove ? (
 				/* Show Grove Actions Modal */
-				<Box flexDirection="column">
-					<Box marginBottom={1}>
-						<Text bold>Grove: {selectedGrove.name}</Text>
-					</Box>
-
-					{groveActions.map((action, index) => (
-						<Box key={index}>
-							<Text color={selectedGroveActionIndex === index ? 'cyan' : undefined}>
-								{selectedGroveActionIndex === index ? '❯ ' : '  '}
-								{action.label}
-							</Text>
-						</Box>
-					))}
-
-					<Box marginTop={1}>
-						<Text dimColor>Press ESC to close</Text>
-					</Box>
-				</Box>
+				<GroveActionsModal
+					grove={selectedGrove}
+					actions={groveActions}
+					selectedIndex={selectedGroveActionIndex}
+					helpText="Press ESC to close"
+				/>
 			) : (
 				/* Show Main Screen */
 				<>
@@ -183,38 +153,7 @@ export function HomeScreen() {
 								<Text bold>Your Groves</Text>
 							</Box>
 
-							{/* Display groves in a grid (4 columns) */}
-							<Box flexDirection="column">
-								{Array.from({ length: Math.ceil(groves.length / 4) }).map((_, rowIndex) => {
-									const grove1 = groves[rowIndex * 4];
-									const grove2 = groves[rowIndex * 4 + 1];
-									const grove3 = groves[rowIndex * 4 + 2];
-									const grove4 = groves[rowIndex * 4 + 3];
-
-									return (
-										<Box key={rowIndex} marginBottom={1}>
-											{grove1 && (
-												<GrovePanel grove={grove1} isSelected={selectedGroveIndex === rowIndex * 4} />
-											)}
-											{grove2 && (
-												<Box marginLeft={1}>
-													<GrovePanel grove={grove2} isSelected={selectedGroveIndex === rowIndex * 4 + 1} />
-												</Box>
-											)}
-											{grove3 && (
-												<Box marginLeft={1}>
-													<GrovePanel grove={grove3} isSelected={selectedGroveIndex === rowIndex * 4 + 2} />
-												</Box>
-											)}
-											{grove4 && (
-												<Box marginLeft={1}>
-													<GrovePanel grove={grove4} isSelected={selectedGroveIndex === rowIndex * 4 + 3} />
-												</Box>
-											)}
-										</Box>
-									);
-								})}
-							</Box>
+							<GroveGrid groves={groves} selectedIndex={selectedGroveIndex} />
 						</Box>
 					) : (
 						<Box marginTop={1} marginBottom={1}>
@@ -231,50 +170,6 @@ export function HomeScreen() {
 					</Box>
 				</>
 			)}
-		</Box>
-	);
-}
-
-// Grove panel component
-function GrovePanel({ grove, isSelected }: { grove: GroveReference; isSelected: boolean }) {
-	// Get grove metadata to count worktrees
-	let worktreeCount = 0;
-	try {
-		const metadata = readGroveMetadata(grove.path);
-		if (metadata) {
-			worktreeCount = metadata.worktrees.length;
-		}
-	} catch {
-		// If we can't read metadata, just show 0
-	}
-
-	return (
-		<Box
-			borderStyle="round"
-			borderColor={isSelected ? 'cyan' : 'gray'}
-			paddingX={1}
-			paddingY={1}
-			width={24}
-			flexDirection="column"
-		>
-			{/* Grove name */}
-			<Box>
-				<Text bold color={isSelected ? 'cyan' : 'white'}>
-					{grove.name}
-				</Text>
-			</Box>
-
-			{/* Time ago */}
-			<Box marginTop={1}>
-				<Text dimColor>Created {formatTimeAgo(grove.createdAt)}</Text>
-			</Box>
-
-			{/* Worktree count */}
-			<Box marginTop={1}>
-				<Text color="green">
-					{worktreeCount} worktree{worktreeCount !== 1 ? 's' : ''}
-				</Text>
-			</Box>
 		</Box>
 	);
 }
