@@ -1,21 +1,16 @@
 import fs from 'fs';
 import path from 'path';
 
-import type { Repository } from '../storage/types.js';
+import type { ContextData, IContextService } from './interfaces.js';
 
-export interface ContextData {
-	name: string;
-	createdAt: string;
-	purpose?: string;
-	repositories: Repository[];
-	notes?: string;
-}
+// Re-export types for backward compatibility
+export type { ContextData } from './interfaces.js';
 
 /**
  * Service for managing grove context files (CONTEXT.md)
  * Handles creation, reading, and updating of context documentation
  */
-export class ContextService {
+export class ContextService implements IContextService {
 	private static readonly CONTEXT_FILENAME = 'CONTEXT.md';
 
 	/**

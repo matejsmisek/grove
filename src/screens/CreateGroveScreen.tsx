@@ -4,14 +4,16 @@ import { Box, Text, useInput } from 'ink';
 
 import TextInput from 'ink-text-input';
 
+import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { GroveService } from '../services/GroveService.js';
+import { GroveServiceToken } from '../services/tokens.js';
 import { getAllRepositories, initializeStorage } from '../storage/index.js';
 
 type CreateStep = 'name' | 'repositories' | 'creating' | 'done' | 'error';
 
 export function CreateGroveScreen() {
 	const { navigate, goBack } = useNavigation();
+	const groveService = useService(GroveServiceToken);
 	const [step, setStep] = useState<CreateStep>('name');
 	const [groveName, setGroveName] = useState('');
 	const [repositories] = useState(() => {
@@ -57,7 +59,6 @@ export function CreateGroveScreen() {
 				const selectedRepos = Array.from(selectedRepoIndices).map((index) => repositories[index]);
 
 				// Create grove asynchronously
-				const groveService = new GroveService();
 				groveService
 					.createGrove(groveName, selectedRepos)
 					.then(() => {

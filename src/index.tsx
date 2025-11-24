@@ -5,10 +5,14 @@ import { render } from 'ink';
 
 import { registerRepository } from './commands/index.js';
 import { App } from './components/App.js';
+import { initializeServices } from './services/index.js';
 import { initializeStorage } from './storage/index.js';
 
 // Initialize storage before rendering the app
 initializeStorage();
+
+// Initialize DI services
+initializeServices();
 
 // Parse command-line arguments
 const args = process.argv.slice(2);
