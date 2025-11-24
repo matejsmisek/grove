@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 
 import TextInput from 'ink-text-input';
 
@@ -113,6 +113,16 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 		}
 	};
 
+	// Handle ESC key press to cancel deletion (when typing "delete")
+	useInput(
+		(input, key) => {
+			if (key.escape && awaitingConfirmation && hasIssues && !isProcessing) {
+				goBack();
+			}
+		},
+		{ isActive: awaitingConfirmation && hasIssues && !isProcessing }
+	);
+
 	// Handle key press for Y/N confirmation
 	useEffect(() => {
 		if (!awaitingConfirmation || hasIssues || isProcessing) {
@@ -214,7 +224,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 							onSubmit={handleConfirm}
 						/>
 					</Box>
-					<Text dimColor>Press Ctrl+C to cancel</Text>
+					<Text dimColor>Press ESC to cancel</Text>
 				</Box>
 			) : (
 				<Box flexDirection="column" marginTop={1}>
