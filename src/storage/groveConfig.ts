@@ -7,6 +7,7 @@ import type { GroveRepoConfig } from './types.js';
  * Read and merge .grove.json and .grove.local.json from a repository
  * @param repositoryPath - Absolute path to the repository root
  * @returns Merged configuration with .grove.local.json overriding .grove.json
+ * Note: fileCopyPatterns arrays are merged (not overridden) with duplicates removed
  */
 export function readGroveRepoConfig(repositoryPath: string): GroveRepoConfig {
 	const groveConfigPath = path.join(repositoryPath, '.grove.json');
@@ -30,7 +31,25 @@ export function readGroveRepoConfig(repositoryPath: string): GroveRepoConfig {
 		try {
 			const data = fs.readFileSync(groveLocalConfigPath, 'utf-8');
 			const parsed = JSON.parse(data) as GroveRepoConfig;
-			config = { ...config, ...parsed };
+
+			// Merge fileCopyPatterns arrays (don't override)
+			if (parsed.fileCopyPatterns) {
+				const basePatterns = config.fileCopyPatterns || [];
+				const localPatterns = parsed.fileCopyPatterns;
+
+				// Combine arrays and remove duplicates
+				const mergedPatterns = [...basePatterns, ...localPatterns];
+				const uniquePatterns = Array.from(new Set(mergedPatterns));
+
+				config = {
+					...config,
+					...parsed,
+					fileCopyPatterns: uniquePatterns,
+				};
+			} else {
+				// Normal override for other fields
+				config = { ...config, ...parsed };
+			}
 		} catch (error) {
 			console.error(`Error reading .grove.local.json from ${repositoryPath}:`, error);
 		}

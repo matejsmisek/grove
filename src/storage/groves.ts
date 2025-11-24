@@ -2,8 +2,9 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
+import { FileService } from '../services/FileService.js';
 import { GitService } from '../services/GitService.js';
-import { getBranchNameForRepo } from './groveConfig.js';
+import { getBranchNameForRepo, readGroveRepoConfig } from './groveConfig.js';
 import { getStorageConfig, readSettings } from './storage.js';
 import type { GroveMetadata, GroveReference, GrovesIndex, Repository, Worktree } from './types.js';
 
@@ -109,9 +110,13 @@ export async function createGrove(
 	// Create worktrees for each repository
 	const worktrees: Worktree[] = [];
 	const errors: string[] = [];
+	const fileService = new FileService();
 
 	for (const repo of repositories) {
 		try {
+			// Read repository grove configuration
+			const repoConfig = readGroveRepoConfig(repo.path);
+
 			// Generate branch name for this grove using repo config or default
 			const branchName = getBranchNameForRepo(repo.path, name);
 
@@ -126,6 +131,21 @@ export async function createGrove(
 
 			if (!result.success) {
 				throw new Error(result.stderr || 'Failed to create worktree');
+			}
+
+			// Copy files matching patterns from repository to worktree
+			if (repoConfig.fileCopyPatterns && repoConfig.fileCopyPatterns.length > 0) {
+				const copyResult = await fileService.copyFilesFromPatterns(
+					repo.path,
+					worktreePath,
+					repoConfig.fileCopyPatterns
+				);
+
+				if (!copyResult.success && copyResult.errors.length > 0) {
+					console.warn(
+						`Warning: Failed to copy some files for ${repo.name}:\n${copyResult.errors.join('\n')}`
+					);
+				}
 			}
 
 			// Create worktree entry

@@ -118,7 +118,8 @@ export interface GroveRepoConfig {
 	 */
 	branchNameTemplate?: string;
 	/**
-	 * File patterns to copy when creating worktrees (not implemented yet)
+	 * File patterns (glob) to copy from repository to worktrees when creating groves
+	 * Example: ['.gitignore', '.env.example', '*.config.js']
 	 */
 	fileCopyPatterns?: string[];
 	/**
