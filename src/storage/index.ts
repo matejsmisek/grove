@@ -43,3 +43,9 @@ export type {
 	StorageConfig,
 	Worktree,
 } from './types.js';
+
+// Service class exports (for DI)
+export { SettingsService } from './SettingsService.js';
+export { RepositoryService } from './RepositoryService.js';
+export { GrovesService } from './GrovesService.js';
+export { GroveConfigService } from './GroveConfigService.js';

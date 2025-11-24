@@ -1,21 +1,24 @@
 import { spawn } from 'child_process';
 
-import type { GitCommandResult, WorktreeInfo } from './types.js';
+import type { GitCommandResult, IGitService, WorktreeInfo } from './interfaces.js';
 
-export class GitService {
-	private cwd: string;
+// Re-export types for backward compatibility
+export type { GitCommandResult, WorktreeInfo } from './interfaces.js';
 
-	constructor(cwd: string = process.cwd()) {
-		this.cwd = cwd;
-	}
-
+/**
+ * Stateless Git Service implementation
+ * All methods accept repoPath as first argument for flexibility and testability
+ */
+export class GitService implements IGitService {
 	/**
 	 * Execute a git command using spawn
+	 * @param repoPath - Repository root path (cwd for the command)
+	 * @param args - Git command arguments
 	 */
-	private async executeGitCommand(args: string[]): Promise<GitCommandResult> {
+	private async executeGitCommand(repoPath: string, args: string[]): Promise<GitCommandResult> {
 		return new Promise((resolve) => {
 			const gitProcess = spawn('git', args, {
-				cwd: this.cwd,
+				cwd: repoPath,
 				stdio: ['pipe', 'pipe', 'pipe'],
 			});
 
@@ -52,38 +55,45 @@ export class GitService {
 
 	/**
 	 * Add a new worktree
-	 * @param path - Path where the worktree will be created
+	 * @param repoPath - Repository root path
+	 * @param worktreePath - Path where the worktree will be created
 	 * @param branch - Branch name for the worktree (optional, creates new branch if provided)
 	 * @param commitish - Commit/branch to check out (optional)
 	 */
-	async addWorktree(path: string, branch?: string, commitish?: string): Promise<GitCommandResult> {
+	async addWorktree(
+		repoPath: string,
+		worktreePath: string,
+		branch?: string,
+		commitish?: string
+	): Promise<GitCommandResult> {
 		const args = ['worktree', 'add'];
 
 		if (branch) {
 			args.push('-b', branch);
 		}
 
-		args.push(path);
+		args.push(worktreePath);
 
 		if (commitish) {
 			args.push(commitish);
 		}
 
-		return this.executeGitCommand(args);
+		return this.executeGitCommand(repoPath, args);
 	}
 
 	/**
 	 * List all worktrees
+	 * @param repoPath - Repository root path
 	 * @param porcelain - Use porcelain format for easier parsing
 	 */
-	async listWorktrees(porcelain: boolean = true): Promise<GitCommandResult> {
+	async listWorktrees(repoPath: string, porcelain: boolean = true): Promise<GitCommandResult> {
 		const args = ['worktree', 'list'];
 
 		if (porcelain) {
 			args.push('--porcelain');
 		}
 
-		return this.executeGitCommand(args);
+		return this.executeGitCommand(repoPath, args);
 	}
 
 	/**
@@ -129,70 +139,86 @@ export class GitService {
 
 	/**
 	 * Remove a worktree
-	 * @param path - Path of the worktree to remove
+	 * @param repoPath - Repository root path
+	 * @param worktreePath - Path of the worktree to remove
 	 * @param force - Force removal even if worktree is dirty
 	 */
-	async removeWorktree(path: string, force: boolean = false): Promise<GitCommandResult> {
+	async removeWorktree(
+		repoPath: string,
+		worktreePath: string,
+		force: boolean = false
+	): Promise<GitCommandResult> {
 		const args = ['worktree', 'remove'];
 
 		if (force) {
 			args.push('--force');
 		}
 
-		args.push(path);
+		args.push(worktreePath);
 
-		return this.executeGitCommand(args);
+		return this.executeGitCommand(repoPath, args);
 	}
 
 	/**
 	 * Prune worktree information
 	 * Removes worktree information for worktrees that no longer exist
+	 * @param repoPath - Repository root path
 	 */
-	async pruneWorktrees(): Promise<GitCommandResult> {
-		return this.executeGitCommand(['worktree', 'prune']);
+	async pruneWorktrees(repoPath: string): Promise<GitCommandResult> {
+		return this.executeGitCommand(repoPath, ['worktree', 'prune']);
 	}
 
 	/**
 	 * Lock a worktree to prevent it from being pruned
-	 * @param path - Path of the worktree to lock
+	 * @param repoPath - Repository root path
+	 * @param worktreePath - Path of the worktree to lock
 	 * @param reason - Optional reason for locking
 	 */
-	async lockWorktree(path: string, reason?: string): Promise<GitCommandResult> {
+	async lockWorktree(
+		repoPath: string,
+		worktreePath: string,
+		reason?: string
+	): Promise<GitCommandResult> {
 		const args = ['worktree', 'lock'];
 
 		if (reason) {
 			args.push('--reason', reason);
 		}
 
-		args.push(path);
+		args.push(worktreePath);
 
-		return this.executeGitCommand(args);
+		return this.executeGitCommand(repoPath, args);
 	}
 
 	/**
 	 * Unlock a worktree
-	 * @param path - Path of the worktree to unlock
+	 * @param repoPath - Repository root path
+	 * @param worktreePath - Path of the worktree to unlock
 	 */
-	async unlockWorktree(path: string): Promise<GitCommandResult> {
-		return this.executeGitCommand(['worktree', 'unlock', path]);
+	async unlockWorktree(repoPath: string, worktreePath: string): Promise<GitCommandResult> {
+		return this.executeGitCommand(repoPath, ['worktree', 'unlock', worktreePath]);
 	}
 
 	/**
 	 * Move a worktree to a new location
-	 * @param worktree - Path of the worktree to move
+	 * @param repoPath - Repository root path
+	 * @param worktreePath - Current path of the worktree
 	 * @param newPath - New location for the worktree
 	 */
-	async moveWorktree(worktree: string, newPath: string): Promise<GitCommandResult> {
-		return this.executeGitCommand(['worktree', 'move', worktree, newPath]);
+	async moveWorktree(
+		repoPath: string,
+		worktreePath: string,
+		newPath: string
+	): Promise<GitCommandResult> {
+		return this.executeGitCommand(repoPath, ['worktree', 'move', worktreePath, newPath]);
 	}
 
 	/**
 	 * Check if a git repository has uncommitted changes (modified, staged, or untracked files)
-	 * @param cwd - Optional working directory (defaults to service's cwd)
+	 * @param repoPath - Repository root path
 	 */
-	async hasUncommittedChanges(cwd?: string): Promise<boolean> {
-		const service = cwd ? new GitService(cwd) : this;
-		const result = await service.executeGitCommand(['status', '--porcelain']);
+	async hasUncommittedChanges(repoPath: string): Promise<boolean> {
+		const result = await this.executeGitCommand(repoPath, ['status', '--porcelain']);
 
 		if (!result.success) {
 			return false;
@@ -204,13 +230,11 @@ export class GitService {
 
 	/**
 	 * Check if a git repository has unpushed commits on the current branch
-	 * @param cwd - Optional working directory (defaults to service's cwd)
+	 * @param repoPath - Repository root path
 	 */
-	async hasUnpushedCommits(cwd?: string): Promise<boolean> {
-		const service = cwd ? new GitService(cwd) : this;
-
+	async hasUnpushedCommits(repoPath: string): Promise<boolean> {
 		// First, check if the current branch has an upstream
-		const upstreamResult = await service.executeGitCommand([
+		const upstreamResult = await this.executeGitCommand(repoPath, [
 			'rev-parse',
 			'--abbrev-ref',
 			'@{upstream}',
@@ -220,7 +244,7 @@ export class GitService {
 			// Branch has upstream - check if there are commits ahead
 			const upstream = upstreamResult.stdout.trim();
 
-			const aheadResult = await service.executeGitCommand([
+			const aheadResult = await this.executeGitCommand(repoPath, [
 				'rev-list',
 				'--count',
 				`${upstream}..HEAD`,
@@ -236,7 +260,7 @@ export class GitService {
 		}
 
 		// No upstream configured - check if current HEAD exists on any remote branch
-		const headResult = await service.executeGitCommand(['rev-parse', 'HEAD']);
+		const headResult = await this.executeGitCommand(repoPath, ['rev-parse', 'HEAD']);
 
 		if (!headResult.success) {
 			// Can't determine HEAD, treat as unpushed
@@ -246,7 +270,7 @@ export class GitService {
 		const currentCommit = headResult.stdout.trim();
 
 		// Check if this commit exists on any remote branch
-		const remoteBranchesResult = await service.executeGitCommand([
+		const remoteBranchesResult = await this.executeGitCommand(repoPath, [
 			'branch',
 			'-r',
 			'--contains',
