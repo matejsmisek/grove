@@ -4,7 +4,7 @@ import path from 'path';
 
 import { FileService } from '../services/FileService.js';
 import { GitService } from '../services/GitService.js';
-import { getBranchNameForRepo } from './groveConfig.js';
+import { getBranchNameForRepo, readGroveRepoConfig } from './groveConfig.js';
 import { getStorageConfig, readSettings } from './storage.js';
 import type { GroveMetadata, GroveReference, GrovesIndex, Repository, Worktree } from './types.js';
 
@@ -114,6 +114,9 @@ export async function createGrove(
 
 	for (const repo of repositories) {
 		try {
+			// Read repository grove configuration
+			const repoConfig = readGroveRepoConfig(repo.path);
+
 			// Generate branch name for this grove using repo config or default
 			const branchName = getBranchNameForRepo(repo.path, name);
 
@@ -131,11 +134,11 @@ export async function createGrove(
 			}
 
 			// Copy files matching patterns from repository to worktree
-			if (repo.copyFiles && repo.copyFiles.length > 0) {
+			if (repoConfig.fileCopyPatterns && repoConfig.fileCopyPatterns.length > 0) {
 				const copyResult = await fileService.copyFilesFromPatterns(
 					repo.path,
 					worktreePath,
-					repo.copyFiles
+					repoConfig.fileCopyPatterns
 				);
 
 				if (!copyResult.success && copyResult.errors.length > 0) {
