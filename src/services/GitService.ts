@@ -2,8 +2,6 @@ import { spawn } from 'child_process';
 
 import type { GitCommandResult, WorktreeInfo } from './types.js';
 
-export type { GitCommandResult, WorktreeInfo } from './types.js';
-
 export class GitService {
 	private cwd: string;
 

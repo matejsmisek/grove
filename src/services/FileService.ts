@@ -4,8 +4,6 @@ import path from 'path';
 
 import type { FileCopyResult, FileMatchResult } from './types.js';
 
-export type { FileCopyResult, FileMatchResult } from './types.js';
-
 /**
  * Service for file operations including pattern matching and copying
  */

@@ -16,8 +16,6 @@ import { FileService } from './FileService.js';
 import { GitService } from './GitService.js';
 import type { CloseGroveResult } from './types.js';
 
-export type { CloseGroveResult, CreateGroveResult } from './types.js';
-
 /**
  * Service for grove lifecycle operations (create, close)
  * Handles the business logic of grove management while delegating

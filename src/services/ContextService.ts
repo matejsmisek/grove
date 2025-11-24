@@ -3,8 +3,6 @@ import path from 'path';
 
 import type { ContextData } from './types.js';
 
-export type { ContextData } from './types.js';
-
 /**
  * Service for managing grove context files (CONTEXT.md)
  * Handles creation, reading, and updating of context documentation
