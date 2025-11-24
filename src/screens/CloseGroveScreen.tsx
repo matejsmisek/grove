@@ -6,7 +6,8 @@ import TextInput from 'ink-text-input';
 
 import { useNavigation } from '../navigation/useNavigation.js';
 import { GitService } from '../services/GitService.js';
-import { closeGrove, getGroveById, readGroveMetadata } from '../storage/index.js';
+import { GroveService } from '../services/GroveService.js';
+import { getGroveById, readGroveMetadata } from '../storage/index.js';
 
 interface WorktreeCheck {
 	repositoryName: string;
@@ -97,7 +98,8 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 		setAwaitingConfirmation(false);
 
 		try {
-			const result = await closeGrove(groveId);
+			const groveService = new GroveService();
+			const result = await groveService.closeGrove(groveId);
 
 			if (result.success) {
 				// Success - go back to home

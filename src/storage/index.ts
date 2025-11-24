@@ -17,8 +17,6 @@ export {
 } from './repositories.js';
 export {
 	addWorktreeToGrove,
-	closeGrove,
-	createGrove,
 	deleteGrove,
 	getAllGroves,
 	getDefaultGrovesIndex,
