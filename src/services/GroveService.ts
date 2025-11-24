@@ -14,18 +14,9 @@ import type { GroveMetadata, Repository, Worktree } from '../storage/types.js';
 import { ContextService } from './ContextService.js';
 import { FileService } from './FileService.js';
 import { GitService } from './GitService.js';
+import type { CloseGroveResult } from './types.js';
 
-export interface CreateGroveResult {
-	success: boolean;
-	metadata?: GroveMetadata;
-	errors: string[];
-}
-
-export interface CloseGroveResult {
-	success: boolean;
-	errors: string[];
-	message?: string;
-}
+export type { CloseGroveResult, CreateGroveResult } from './types.js';
 
 /**
  * Service for grove lifecycle operations (create, close)

@@ -1,17 +1,8 @@
 import { spawn } from 'child_process';
 
-export interface GitCommandResult {
-	success: boolean;
-	stdout: string;
-	stderr: string;
-	exitCode: number | null;
-}
+import type { GitCommandResult, WorktreeInfo } from './types.js';
 
-export interface WorktreeInfo {
-	path: string;
-	branch: string;
-	commit: string;
-}
+export type { GitCommandResult, WorktreeInfo } from './types.js';
 
 export class GitService {
 	private cwd: string;

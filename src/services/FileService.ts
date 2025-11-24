@@ -1,18 +1,10 @@
 import fs from 'fs';
+import { glob } from 'glob';
 import path from 'path';
 
-import { glob } from 'glob';
+import type { FileCopyResult, FileMatchResult } from './types.js';
 
-export interface FileCopyResult {
-	success: boolean;
-	copiedFiles: string[];
-	errors: string[];
-}
-
-export interface FileMatchResult {
-	pattern: string;
-	matches: string[];
-}
+export type { FileCopyResult, FileMatchResult } from './types.js';
 
 /**
  * Service for file operations including pattern matching and copying

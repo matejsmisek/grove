@@ -1,15 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 
-import type { Repository } from '../storage/types.js';
+import type { ContextData } from './types.js';
 
-export interface ContextData {
-	name: string;
-	createdAt: string;
-	purpose?: string;
-	repositories: Repository[];
-	notes?: string;
-}
+export type { ContextData } from './types.js';
 
 /**
  * Service for managing grove context files (CONTEXT.md)

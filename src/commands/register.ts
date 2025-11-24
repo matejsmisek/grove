@@ -1,11 +1,8 @@
 import { verifyValidRepository } from '../git/index.js';
 import { addRepository, isRepositoryRegistered } from '../storage/index.js';
+import type { RegisterResult } from './types.js';
 
-export interface RegisterResult {
-	success: boolean;
-	message: string;
-	path?: string;
-}
+export type { RegisterResult } from './types.js';
 
 /**
  * Register the current directory as a repository
