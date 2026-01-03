@@ -4,9 +4,9 @@ import { Box, Text, useInput } from 'ink';
 
 import TextInput from 'ink-text-input';
 
+import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { GitService } from '../services/GitService.js';
-import { GroveService } from '../services/GroveService.js';
+import { GitServiceToken, GroveServiceToken } from '../services/tokens.js';
 import { getGroveById, readGroveMetadata } from '../storage/index.js';
 
 interface WorktreeCheck {
@@ -22,6 +22,8 @@ interface CloseGroveScreenProps {
 
 export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 	const { goBack } = useNavigation();
+	const gitService = useService(GitServiceToken);
+	const groveService = useService(GroveServiceToken);
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
 	const [checks, setChecks] = useState<WorktreeCheck[]>([]);
@@ -55,9 +57,8 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 				let foundIssues = false;
 
 				for (const worktree of metadata.worktrees) {
-					const gitService = new GitService(worktree.worktreePath);
-					const uncommitted = await gitService.hasUncommittedChanges();
-					const unpushed = await gitService.hasUnpushedCommits();
+					const uncommitted = await gitService.hasUncommittedChanges(worktree.worktreePath);
+					const unpushed = await gitService.hasUnpushedCommits(worktree.worktreePath);
 
 					if (uncommitted || unpushed) {
 						foundIssues = true;
@@ -98,7 +99,6 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 		setAwaitingConfirmation(false);
 
 		try {
-			const groveService = new GroveService();
 			const result = await groveService.closeGrove(groveId);
 
 			if (result.success) {

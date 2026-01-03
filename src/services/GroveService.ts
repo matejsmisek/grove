@@ -2,33 +2,37 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-import { getBranchNameForRepo, readGroveRepoConfig } from '../storage/groveConfig.js';
-import {
-	addGroveToIndex,
-	readGroveMetadata,
-	removeGroveFromIndex,
-	writeGroveMetadata,
-} from '../storage/groves.js';
-import { readSettings } from '../storage/storage.js';
 import type { GroveMetadata, Repository, Worktree } from '../storage/types.js';
-import { ContextService } from './ContextService.js';
-import { FileService } from './FileService.js';
-import { GitService } from './GitService.js';
-import type { CloseGroveResult } from './types.js';
+import type {
+	CloseGroveResult,
+	IContextService,
+	IFileService,
+	IGitService,
+	IGroveConfigService,
+	IGroveService,
+	IGrovesService,
+	ISettingsService,
+} from './interfaces.js';
+
+// Re-export types for backward compatibility
+export type { CloseGroveResult, CreateGroveResult } from './interfaces.js';
 
 /**
  * Service for grove lifecycle operations (create, close)
  * Handles the business logic of grove management while delegating
  * storage operations to the storage layer
+ *
+ * Uses dependency injection for all dependencies
  */
-export class GroveService {
-	private fileService: FileService;
-	private contextService: ContextService;
-
-	constructor() {
-		this.fileService = new FileService();
-		this.contextService = new ContextService();
-	}
+export class GroveService implements IGroveService {
+	constructor(
+		private readonly settingsService: ISettingsService,
+		private readonly grovesService: IGrovesService,
+		private readonly groveConfigService: IGroveConfigService,
+		private readonly gitService: IGitService,
+		private readonly contextService: IContextService,
+		private readonly fileService: IFileService
+	) {}
 
 	/**
 	 * Generate a unique ID for a grove
@@ -44,7 +48,7 @@ export class GroveService {
 	 * @returns The created grove metadata
 	 */
 	async createGrove(name: string, repositories: Repository[]): Promise<GroveMetadata> {
-		const settings = readSettings();
+		const settings = this.settingsService.readSettings();
 		const groveId = this.generateGroveId();
 		const grovePath = path.join(settings.workingFolder, name);
 
@@ -81,19 +85,16 @@ export class GroveService {
 		for (const repo of repositories) {
 			try {
 				// Read repository grove configuration
-				const repoConfig = readGroveRepoConfig(repo.path);
+				const repoConfig = this.groveConfigService.readGroveRepoConfig(repo.path);
 
 				// Generate branch name for this grove using repo config or default
-				const branchName = getBranchNameForRepo(repo.path, name);
+				const branchName = this.groveConfigService.getBranchNameForRepo(repo.path, name);
 
 				// Create worktree path
 				const worktreePath = path.join(grovePath, `${repo.name}.worktree`);
 
-				// Create GitService for the repository
-				const gitService = new GitService(repo.path);
-
 				// Add worktree (creates new branch from HEAD)
-				const result = await gitService.addWorktree(worktreePath, branchName, 'HEAD');
+				const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, 'HEAD');
 
 				if (!result.success) {
 					throw new Error(result.stderr || 'Failed to create worktree');
@@ -139,10 +140,10 @@ export class GroveService {
 		metadata.worktrees = worktrees;
 
 		// Save grove metadata to grove.json
-		writeGroveMetadata(grovePath, metadata);
+		this.grovesService.writeGroveMetadata(grovePath, metadata);
 
 		// Add to groves index
-		addGroveToIndex({
+		this.grovesService.addGroveToIndex({
 			id: groveId,
 			name,
 			path: grovePath,
@@ -167,22 +168,25 @@ export class GroveService {
 	 */
 	async closeGrove(groveId: string): Promise<CloseGroveResult> {
 		// Remove from groves index first to get the grove reference
-		const groveRef = removeGroveFromIndex(groveId);
+		const groveRef = this.grovesService.removeGroveFromIndex(groveId);
 
 		if (!groveRef) {
 			return { success: false, errors: [], message: 'Grove not found' };
 		}
 
 		// Read grove metadata to get worktree info
-		const metadata = readGroveMetadata(groveRef.path);
+		const metadata = this.grovesService.readGroveMetadata(groveRef.path);
 		const errors: string[] = [];
 
 		// Remove all worktrees using GitService
 		if (metadata && metadata.worktrees.length > 0) {
 			for (const worktree of metadata.worktrees) {
 				try {
-					const gitService = new GitService(worktree.repositoryPath);
-					const result = await gitService.removeWorktree(worktree.worktreePath, true);
+					const result = await this.gitService.removeWorktree(
+						worktree.repositoryPath,
+						worktree.worktreePath,
+						true
+					);
 
 					if (!result.success) {
 						errors.push(`Failed to remove worktree ${worktree.repositoryName}: ${result.stderr}`);
