@@ -21,7 +21,11 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
 
 	useEffect(() => {
+		console.error(`[OpenTerminalScreen] Starting with groveId: ${groveId}`);
+
 		const groveRef = getGroveById(groveId);
+		console.error(`[OpenTerminalScreen] groveRef: ${JSON.stringify(groveRef)}`);
+
 		if (!groveRef) {
 			setError('Grove not found');
 			setLoading(false);
@@ -31,11 +35,15 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 		setGroveName(groveRef.name);
 
 		const metadata = readGroveMetadata(groveRef.path);
+		console.error(`[OpenTerminalScreen] metadata: ${JSON.stringify(metadata)}`);
+
 		if (!metadata) {
 			setError('Grove metadata not found');
 			setLoading(false);
 			return;
 		}
+
+		console.error(`[OpenTerminalScreen] worktrees count: ${metadata.worktrees.length}`);
 
 		if (metadata.worktrees.length === 0) {
 			setError('No worktrees found in this grove');
@@ -45,7 +53,11 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 
 		// If only one worktree, open terminal directly
 		if (metadata.worktrees.length === 1) {
+			console.error(
+				`[OpenTerminalScreen] Single worktree, opening: ${metadata.worktrees[0].worktreePath}`
+			);
 			const result = openTerminalInPath(metadata.worktrees[0].worktreePath);
+			console.error(`[OpenTerminalScreen] openTerminalInPath result: ${JSON.stringify(result)}`);
 			if (result.success) {
 				goBack();
 			} else {
@@ -56,6 +68,7 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 		}
 
 		// Multiple worktrees - show selection
+		console.error('[OpenTerminalScreen] Multiple worktrees, showing selection');
 		setWorktrees(metadata.worktrees);
 		setLoading(false);
 	}, [groveId, goBack]);
