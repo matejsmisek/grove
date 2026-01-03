@@ -100,3 +100,62 @@ export function verifyValidRepository(cwd?: string): string {
 
 	return root;
 }
+
+/**
+ * Directories that are typically not project folders in a monorepo
+ */
+const IGNORED_DIRECTORIES = new Set([
+	'.git',
+	'.github',
+	'.vscode',
+	'.idea',
+	'node_modules',
+	'dist',
+	'build',
+	'out',
+	'coverage',
+	'.cache',
+	'.turbo',
+	'.next',
+	'.nuxt',
+	'__pycache__',
+	'.pytest_cache',
+	'vendor',
+	'target',
+]);
+
+/**
+ * Get a list of project folders in a monorepo
+ * Returns directories in the repository root that could be project folders
+ */
+export function getMonorepoProjects(repoPath: string): string[] {
+	try {
+		const entries = fs.readdirSync(repoPath, { withFileTypes: true });
+
+		const projects = entries
+			.filter((entry) => {
+				// Must be a directory
+				if (!entry.isDirectory()) {
+					return false;
+				}
+
+				// Skip hidden directories (except explicitly ignored ones which are already hidden)
+				if (entry.name.startsWith('.') && !IGNORED_DIRECTORIES.has(entry.name)) {
+					return false;
+				}
+
+				// Skip explicitly ignored directories
+				if (IGNORED_DIRECTORIES.has(entry.name)) {
+					return false;
+				}
+
+				return true;
+			})
+			.map((entry) => entry.name)
+			.sort();
+
+		return projects;
+	} catch {
+		return [];
+	}
+}

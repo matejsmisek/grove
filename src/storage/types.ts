@@ -43,6 +43,12 @@ export interface Repository {
 	 * When the repository was registered
 	 */
 	registeredAt: string;
+
+	/**
+	 * Whether this repository is a monorepo with multiple projects
+	 * When true, grove creation will allow selecting specific project folders
+	 */
+	isMonorepo?: boolean;
 }
 
 export interface RepositoriesData {
@@ -50,6 +56,20 @@ export interface RepositoriesData {
 	 * List of registered repositories
 	 */
 	repositories: Repository[];
+}
+
+/**
+ * Represents a repository selection for grove creation
+ * Used to pass repository + optional project path to GroveService
+ */
+export interface RepositorySelection {
+	/** The repository being selected */
+	repository: Repository;
+	/**
+	 * Project folder path relative to repository root (for monorepos)
+	 * When undefined, the entire repository is selected
+	 */
+	projectPath?: string;
 }
 
 /**
@@ -64,6 +84,11 @@ export interface Worktree {
 	worktreePath: string;
 	/** Branch name for this worktree */
 	branch: string;
+	/**
+	 * Project folder path relative to repository root (for monorepos)
+	 * When set, indicates this worktree is for a specific project within a monorepo
+	 */
+	projectPath?: string;
 }
 
 /**

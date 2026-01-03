@@ -8,6 +8,7 @@ import type {
 	GroveRepoConfig,
 	RepositoriesData,
 	Repository,
+	RepositorySelection,
 	Settings,
 	StorageConfig,
 	Worktree,
@@ -94,6 +95,15 @@ export interface IRepositoryService {
 	 * Get all registered repositories
 	 */
 	getAllRepositories(): Repository[];
+
+	/**
+	 * Update a repository's properties
+	 * @returns The updated repository, or null if not found
+	 */
+	updateRepository(
+		repoPath: string,
+		updates: Partial<Pick<Repository, 'isMonorepo'>>
+	): Repository | null;
 }
 
 /**
@@ -421,8 +431,10 @@ export interface CloseGroveResult {
 export interface IGroveService {
 	/**
 	 * Create a new grove with worktrees for selected repositories
+	 * @param name - Name of the grove
+	 * @param selections - Array of repository selections, each optionally with a project path
 	 */
-	createGrove(name: string, repositories: Repository[]): Promise<GroveMetadata>;
+	createGrove(name: string, selections: RepositorySelection[]): Promise<GroveMetadata>;
 
 	/**
 	 * Close a grove - removes worktrees and deletes folder

@@ -131,4 +131,33 @@ export class RepositoryService implements IRepositoryService {
 		const data = this.readRepositories();
 		return data.repositories;
 	}
+
+	/**
+	 * Update a repository's properties
+	 * @param repoPath - Path to the repository to update
+	 * @param updates - Partial repository properties to update
+	 * @returns The updated repository, or null if not found
+	 */
+	updateRepository(
+		repoPath: string,
+		updates: Partial<Pick<Repository, 'isMonorepo'>>
+	): Repository | null {
+		const data = this.readRepositories();
+
+		const repoIndex = data.repositories.findIndex((repo) => repo.path === repoPath);
+		if (repoIndex === -1) {
+			return null;
+		}
+
+		// Apply updates
+		data.repositories[repoIndex] = {
+			...data.repositories[repoIndex],
+			...updates,
+		};
+
+		// Save to file
+		this.writeRepositories(data);
+
+		return data.repositories[repoIndex];
+	}
 }

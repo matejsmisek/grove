@@ -13,6 +13,7 @@ export {
 	isRepositoryRegistered,
 	readRepositories,
 	removeRepository,
+	updateRepository,
 	writeRepositories,
 } from './repositories.js';
 export {
@@ -39,6 +40,7 @@ export type {
 	GrovesIndex,
 	Repository,
 	RepositoriesData,
+	RepositorySelection,
 	Settings,
 	StorageConfig,
 	Worktree,
