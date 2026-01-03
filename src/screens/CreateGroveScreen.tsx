@@ -8,10 +8,30 @@ import { useService } from '../di/index.js';
 import { getMonorepoProjects } from '../git/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { GroveServiceToken } from '../services/tokens.js';
-import { getAllRepositories, initializeStorage } from '../storage/index.js';
-import type { Repository, RepositorySelection } from '../storage/index.js';
+import {
+	addRecentSelections,
+	getAllRepositories,
+	getRecentSelectionDisplayName,
+	getRecentSelections,
+	initializeStorage,
+} from '../storage/index.js';
+import type { RecentSelection, Repository, RepositorySelection } from '../storage/index.js';
 
 type CreateStep = 'name' | 'repositories' | 'projects' | 'creating' | 'done' | 'error';
+
+/**
+ * Represents an item in the combined list (recent or repository)
+ */
+interface ListItem {
+	type: 'recent' | 'repo';
+	/** For 'recent' type */
+	recent?: RecentSelection;
+	/** For 'repo' type */
+	repo?: Repository;
+	repoIndex?: number;
+	/** Display name for the item */
+	displayName: string;
+}
 
 export function CreateGroveScreen() {
 	const { navigate, goBack } = useNavigation();
@@ -29,6 +49,49 @@ export function CreateGroveScreen() {
 	// Project selection state for monorepos
 	const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
 	const [projectCursor, setProjectCursor] = useState(0);
+
+	// Recent selections state
+	const [selectedRecentKeys, setSelectedRecentKeys] = useState<Set<string>>(new Set());
+
+	// Get recent selections (filtered to registered repos)
+	const recentSelections = useMemo(() => {
+		const registeredPaths = new Set(repositories.map((r) => r.path));
+		return getRecentSelections(registeredPaths);
+	}, [repositories]);
+
+	// Build combined list of recent items + repositories
+	const listItems = useMemo((): ListItem[] => {
+		const items: ListItem[] = [];
+
+		// Add recent selections first
+		for (const recent of recentSelections) {
+			items.push({
+				type: 'recent',
+				recent,
+				displayName: getRecentSelectionDisplayName(recent),
+			});
+		}
+
+		// Add all repositories
+		for (let i = 0; i < repositories.length; i++) {
+			const repo = repositories[i];
+			items.push({
+				type: 'repo',
+				repo,
+				repoIndex: i,
+				displayName: repo.name,
+			});
+		}
+
+		return items;
+	}, [recentSelections, repositories]);
+
+	// Generate key for recent selection
+	const getRecentKey = (recent: RecentSelection): string => {
+		return recent.projectPath
+			? `${recent.repositoryPath}::${recent.projectPath}`
+			: recent.repositoryPath;
+	};
 
 	// Get selected repositories
 	const selectedRepos = useMemo(
@@ -65,16 +128,39 @@ export function CreateGroveScreen() {
 		return `${repoPath}::${projectPath}`;
 	};
 
-	// Check if any monorepos are selected
+	// Check if any monorepos are selected (excluding those covered by recent selections)
 	const hasMonorepos = selectedMonorepos.length > 0;
 
 	// Build RepositorySelection[] from user selections
 	const buildSelections = (): RepositorySelection[] => {
 		const selections: RepositorySelection[] = [];
+		const addedKeys = new Set<string>();
+
+		// Add selected recent items first
+		for (const recent of recentSelections) {
+			const key = getRecentKey(recent);
+			if (selectedRecentKeys.has(key)) {
+				// Find the repository
+				const repo = repositories.find((r) => r.path === recent.repositoryPath);
+				if (repo) {
+					const selectionKey = recent.projectPath ? `${repo.path}::${recent.projectPath}` : repo.path;
+					if (!addedKeys.has(selectionKey)) {
+						selections.push({
+							repository: repo,
+							projectPath: recent.projectPath,
+						});
+						addedKeys.add(selectionKey);
+					}
+				}
+			}
+		}
 
 		// Add non-monorepo selections (whole repo)
 		for (const repo of nonMonorepoRepos) {
-			selections.push({ repository: repo });
+			if (!addedKeys.has(repo.path)) {
+				selections.push({ repository: repo });
+				addedKeys.add(repo.path);
+			}
 		}
 
 		// Add monorepo project selections
@@ -86,11 +172,18 @@ export function CreateGroveScreen() {
 
 			if (selectedProjectPaths.length === 0) {
 				// If no projects selected, include the whole monorepo
-				selections.push({ repository: repo });
+				if (!addedKeys.has(repo.path)) {
+					selections.push({ repository: repo });
+					addedKeys.add(repo.path);
+				}
 			} else {
 				// Add each selected project as a separate selection
 				for (const projectPath of selectedProjectPaths) {
-					selections.push({ repository: repo, projectPath });
+					const key = `${repo.path}::${projectPath}`;
+					if (!addedKeys.has(key)) {
+						selections.push({ repository: repo, projectPath });
+						addedKeys.add(key);
+					}
 				}
 			}
 		}
@@ -98,35 +191,52 @@ export function CreateGroveScreen() {
 		return selections;
 	};
 
+	// Check if we have any selections
+	const hasAnySelection = selectedRepoIndices.size > 0 || selectedRecentKeys.size > 0;
+
 	// Handle input for repository selection
 	useInput(
 		(input, key) => {
 			if (step !== 'repositories') return;
 
 			if (key.upArrow) {
-				setCursorIndex((prev) => (prev > 0 ? prev - 1 : repositories.length - 1));
+				setCursorIndex((prev) => (prev > 0 ? prev - 1 : listItems.length - 1));
 			} else if (key.downArrow) {
-				setCursorIndex((prev) => (prev < repositories.length - 1 ? prev + 1 : 0));
+				setCursorIndex((prev) => (prev < listItems.length - 1 ? prev + 1 : 0));
 			} else if (input === ' ') {
 				// Toggle selection with spacebar
-				setSelectedRepoIndices((prev) => {
-					const newSet = new Set(prev);
-					if (newSet.has(cursorIndex)) {
-						newSet.delete(cursorIndex);
-					} else {
-						newSet.add(cursorIndex);
-					}
-					return newSet;
-				});
+				const item = listItems[cursorIndex];
+				if (item.type === 'recent' && item.recent) {
+					const key = getRecentKey(item.recent);
+					setSelectedRecentKeys((prev) => {
+						const newSet = new Set(prev);
+						if (newSet.has(key)) {
+							newSet.delete(key);
+						} else {
+							newSet.add(key);
+						}
+						return newSet;
+					});
+				} else if (item.type === 'repo' && item.repoIndex !== undefined) {
+					setSelectedRepoIndices((prev) => {
+						const newSet = new Set(prev);
+						if (newSet.has(item.repoIndex!)) {
+							newSet.delete(item.repoIndex!);
+						} else {
+							newSet.add(item.repoIndex!);
+						}
+						return newSet;
+					});
+				}
 			} else if (key.return) {
 				// Proceed to next step
-				if (selectedRepoIndices.size === 0) {
+				if (!hasAnySelection) {
 					setError('Please select at least one repository');
 					setStep('error');
 					return;
 				}
 
-				// If any monorepos are selected, go to project selection step
+				// If any monorepos are selected (not via recent), go to project selection step
 				if (hasMonorepos && allProjects.length > 0) {
 					setProjectCursor(0);
 					setStep('projects');
@@ -192,6 +302,8 @@ export function CreateGroveScreen() {
 		groveService
 			.createGrove(groveName, selections)
 			.then(() => {
+				// Save selections to recent history
+				addRecentSelections(selections);
 				setStep('done');
 				setTimeout(() => navigate('home', {}), 1500);
 			})
@@ -245,6 +357,9 @@ export function CreateGroveScreen() {
 	}
 
 	if (step === 'repositories') {
+		const hasRecent = recentSelections.length > 0;
+		const totalSelected = selectedRepoIndices.size + selectedRecentKeys.size;
+
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
@@ -258,18 +373,50 @@ export function CreateGroveScreen() {
 				</Box>
 
 				<Box flexDirection="column" marginLeft={2}>
-					{repositories.map((repo, index) => {
-						const isSelected = selectedRepoIndices.has(index);
+					{listItems.map((item, index) => {
 						const isCursor = index === cursorIndex;
-						const monorepoIndicator = repo.isMonorepo ? ' [monorepo]' : '';
-						return (
-							<Box key={index}>
-								<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
-									{isCursor ? '❯ ' : '  '}[{isSelected ? '✓' : ' '}] {repo.name}
-									<Text dimColor>{monorepoIndicator}</Text>
-								</Text>
-							</Box>
-						);
+
+						// Add separator before repositories if we have recent items
+						const showSeparator = hasRecent && item.type === 'repo' && index === recentSelections.length;
+
+						if (item.type === 'recent' && item.recent) {
+							const key = getRecentKey(item.recent);
+							const isSelected = selectedRecentKeys.has(key);
+							return (
+								<Box key={`recent-${key}`} flexDirection="column">
+									{index === 0 && (
+										<Box marginBottom={0}>
+											<Text dimColor>Recently used:</Text>
+										</Box>
+									)}
+									<Box>
+										<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
+											{isCursor ? '❯ ' : '  '}[{isSelected ? '✓' : ' '}] <Text color="yellow">★</Text>{' '}
+											{item.displayName}
+										</Text>
+									</Box>
+								</Box>
+							);
+						} else if (item.type === 'repo' && item.repo && item.repoIndex !== undefined) {
+							const isSelected = selectedRepoIndices.has(item.repoIndex);
+							const monorepoIndicator = item.repo.isMonorepo ? ' [monorepo]' : '';
+							return (
+								<Box key={`repo-${item.repoIndex}`} flexDirection="column">
+									{showSeparator && (
+										<Box marginTop={1} marginBottom={0}>
+											<Text dimColor>All repositories:</Text>
+										</Box>
+									)}
+									<Box>
+										<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
+											{isCursor ? '❯ ' : '  '}[{isSelected ? '✓' : ' '}] {item.displayName}
+											<Text dimColor>{monorepoIndicator}</Text>
+										</Text>
+									</Box>
+								</Box>
+							);
+						}
+						return null;
 					})}
 				</Box>
 
@@ -282,7 +429,7 @@ export function CreateGroveScreen() {
 
 				<Box marginTop={1}>
 					<Text color="yellow">
-						Selected: {selectedRepoIndices.size} / {repositories.length}
+						Selected: {totalSelected} / {listItems.length}
 					</Text>
 				</Box>
 			</Box>

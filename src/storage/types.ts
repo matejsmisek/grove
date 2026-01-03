@@ -26,6 +26,11 @@ export interface StorageConfig {
 	 * The path to the groves index file
 	 */
 	grovesIndexPath: string;
+
+	/**
+	 * The path to the recent selections file
+	 */
+	recentSelectionsPath: string;
 }
 
 export interface Repository {
@@ -129,6 +134,31 @@ export interface GroveMetadata {
 	createdAt: string;
 	/** Timestamp when the grove was last updated */
 	updatedAt: string;
+}
+
+/**
+ * Represents a recently used repository/project selection
+ * Stored in ~/.grove/recent.json
+ */
+export interface RecentSelection {
+	/** Repository path */
+	repositoryPath: string;
+	/** Repository name */
+	repositoryName: string;
+	/**
+	 * Project folder path for monorepos (undefined for whole repo)
+	 */
+	projectPath?: string;
+	/** When this selection was last used */
+	lastUsedAt: string;
+}
+
+/**
+ * Container for recent selections
+ */
+export interface RecentSelectionsData {
+	/** List of recent selections, ordered by most recent first */
+	selections: RecentSelection[];
 }
 
 /**
