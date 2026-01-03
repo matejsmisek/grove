@@ -10,11 +10,13 @@ import {
 	RepositoryService,
 	SettingsService,
 } from '../storage/index.js';
+import { ClaudeService } from './ClaudeService.js';
 import { ContextService } from './ContextService.js';
 import { FileService } from './FileService.js';
 import { GitService } from './GitService.js';
 import { GroveService } from './GroveService.js';
 import {
+	ClaudeServiceToken,
 	ContextServiceToken,
 	FileServiceToken,
 	GitServiceToken,
@@ -37,6 +39,7 @@ import {
  * - GitService: no dependencies
  * - ContextService: no dependencies
  * - FileService: no dependencies
+ * - ClaudeService: no dependencies
  * - GroveService: depends on SettingsService, GrovesService, GroveConfigService, GitService, ContextService, FileService
  *
  * @param container - Container to register services in (defaults to global container)
@@ -67,6 +70,7 @@ export function registerServices(container?: IMutableContainer): void {
 	c.registerSingleton(GitServiceToken, () => new GitService());
 	c.registerSingleton(ContextServiceToken, () => new ContextService());
 	c.registerSingleton(FileServiceToken, () => new FileService());
+	c.registerSingleton(ClaudeServiceToken, () => new ClaudeService());
 
 	// Register GroveService with all its dependencies
 	c.registerSingleton(

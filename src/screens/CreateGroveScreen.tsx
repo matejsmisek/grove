@@ -1,3 +1,4 @@
+import path from 'path';
 import React, { useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
@@ -6,14 +7,16 @@ import TextInput from 'ink-text-input';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { GroveServiceToken } from '../services/tokens.js';
+import { GroveServiceToken, SettingsServiceToken } from '../services/tokens.js';
 import { getAllRepositories, initializeStorage } from '../storage/index.js';
+import type { GroveMetadata, Repository } from '../storage/types.js';
 
 type CreateStep = 'name' | 'repositories' | 'creating' | 'done' | 'error';
 
 export function CreateGroveScreen() {
 	const { navigate, goBack } = useNavigation();
 	const groveService = useService(GroveServiceToken);
+	const settingsService = useService(SettingsServiceToken);
 	const [step, setStep] = useState<CreateStep>('name');
 	const [groveName, setGroveName] = useState('');
 	const [repositories] = useState(() => {
@@ -21,6 +24,8 @@ export function CreateGroveScreen() {
 		return getAllRepositories();
 	});
 	const [selectedRepoIndices, setSelectedRepoIndices] = useState<Set<number>>(new Set());
+	const [selectedRepos, setSelectedRepos] = useState<Repository[]>([]);
+	const [createdMetadata, setCreatedMetadata] = useState<GroveMetadata | null>(null);
 	const [cursorIndex, setCursorIndex] = useState(0);
 	const [error, setError] = useState<string>('');
 
@@ -56,14 +61,15 @@ export function CreateGroveScreen() {
 				setStep('creating');
 
 				// Get selected repositories
-				const selectedRepos = Array.from(selectedRepoIndices).map((index) => repositories[index]);
+				const repos = Array.from(selectedRepoIndices).map((index) => repositories[index]);
+				setSelectedRepos(repos);
 
 				// Create grove asynchronously
 				groveService
-					.createGrove(groveName, selectedRepos)
-					.then(() => {
+					.createGrove(groveName, repos)
+					.then((metadata) => {
+						setCreatedMetadata(metadata);
 						setStep('done');
-						setTimeout(() => navigate('home', {}), 1500);
 					})
 					.catch((err) => {
 						setError(err instanceof Error ? err.message : 'Failed to create grove');
@@ -190,16 +196,30 @@ export function CreateGroveScreen() {
 	}
 
 	if (step === 'done') {
+		// Navigate to context builder after a brief delay
+		const settings = settingsService.readSettings();
+		const grovePath = path.join(settings.workingFolder, groveName);
+
+		// Navigate to context builder with the grove info
+		setTimeout(() => {
+			navigate('contextBuilder', {
+				grovePath,
+				groveName,
+				repositories: selectedRepos,
+				worktrees: createdMetadata?.worktrees ?? [],
+			});
+		}, 500);
+
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
 					<Text bold color="green">
-						✓ Grove Created Successfully!
+						Grove Created Successfully!
 					</Text>
 				</Box>
-				<Text>Grove "{groveName}" has been created.</Text>
+				<Text>Grove "{groveName}" has been created with {createdMetadata?.worktrees.length ?? 0} worktree(s).</Text>
 				<Box marginTop={1}>
-					<Text dimColor>Returning to home...</Text>
+					<Text dimColor>Opening Context Builder...</Text>
 				</Box>
 			</Box>
 		);

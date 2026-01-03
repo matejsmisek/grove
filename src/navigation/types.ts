@@ -1,9 +1,17 @@
+import type { Repository, Worktree } from '../storage/types.js';
+
 // Navigation route definitions with type-safe params
 export type Routes = {
 	home: Record<string, never>;
 	chat: Record<string, never>;
 	createGrove: Record<string, never>;
 	closeGrove: { groveId: string };
+	contextBuilder: {
+		grovePath: string;
+		groveName: string;
+		repositories: Repository[];
+		worktrees: Worktree[];
+	};
 	settings: { section?: string };
 	workingFolder: Record<string, never>;
 	repositories: Record<string, never>;

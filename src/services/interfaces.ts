@@ -2,6 +2,8 @@
  * Service Interfaces for Dependency Injection
  * All service interfaces are defined here for clean separation of concerns
  */
+import type Anthropic from '@anthropic-ai/sdk';
+
 import type {
 	GroveMetadata,
 	GroveReference,
@@ -428,4 +430,53 @@ export interface IGroveService {
 	 * Close a grove - removes worktrees and deletes folder
 	 */
 	closeGrove(groveId: string): Promise<CloseGroveResult>;
+}
+
+// ============================================================================
+// Claude AI Service Interfaces
+// ============================================================================
+
+/**
+ * Message in the context builder conversation
+ */
+export interface ContextBuilderMessage {
+	role: 'user' | 'assistant';
+	content: string;
+}
+
+/**
+ * Draft of the CONTEXT.md file
+ */
+export interface ContextDraft {
+	content: string;
+	isApproved: boolean;
+}
+
+/**
+ * Claude service interface
+ * Provides AI-powered context generation for groves
+ */
+export interface IClaudeService {
+	/**
+	 * Send a message to Claude and get a response
+	 * Handles tool use for file reading automatically
+	 * @param messages - Conversation history in Anthropic format
+	 * @param groveName - Name of the grove being created
+	 * @param repositories - Repositories in the grove
+	 * @param worktrees - Worktrees in the grove (for file reading)
+	 * @returns Response text and updated message history
+	 */
+	chat(
+		messages: Anthropic.MessageParam[],
+		groveName: string,
+		repositories: Repository[],
+		worktrees: Worktree[]
+	): Promise<{ response: string; updatedMessages: Anthropic.MessageParam[] }>;
+
+	/**
+	 * Extract CONTEXT.md content from Claude's response
+	 * @param response - Claude's response text
+	 * @returns Extracted markdown content or null if not found
+	 */
+	extractContextDraft(response: string): string | null;
 }
