@@ -42,6 +42,13 @@ export function HomeScreen() {
 					},
 				},
 				{
+					label: 'Open in Terminal',
+					action: () => {
+						navigate('openTerminal', { groveId: selectedGrove.id });
+						setSelectedGrove(null);
+					},
+				},
+				{
 					label: 'Close Grove',
 					action: () => {
 						navigate('closeGrove', { groveId: selectedGrove.id });
