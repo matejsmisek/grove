@@ -31,23 +31,36 @@ import {
  *
  * Dependency graph:
  * - SettingsService: no dependencies
- * - RepositoryService: no dependencies
- * - GrovesService: no dependencies
+ * - RepositoryService: depends on SettingsService
+ * - GrovesService: depends on SettingsService
  * - GroveConfigService: no dependencies
  * - GitService: no dependencies
  * - ContextService: no dependencies
  * - FileService: no dependencies
- * - GroveService: depends on all of the above
+ * - GroveService: depends on SettingsService, GrovesService, GroveConfigService, GitService, ContextService, FileService
  *
  * @param container - Container to register services in (defaults to global container)
  */
 export function registerServices(container?: IMutableContainer): void {
 	const c = container ?? getContainer();
 
-	// Register storage services (no dependencies)
+	// Register storage services
+	// SettingsService has no dependencies
 	c.registerSingleton(SettingsServiceToken, () => new SettingsService());
-	c.registerSingleton(RepositoryServiceToken, () => new RepositoryService());
-	c.registerSingleton(GrovesServiceToken, () => new GrovesService());
+
+	// RepositoryService depends on SettingsService
+	c.registerSingleton(
+		RepositoryServiceToken,
+		(cont) => new RepositoryService(cont.resolve(SettingsServiceToken))
+	);
+
+	// GrovesService depends on SettingsService
+	c.registerSingleton(
+		GrovesServiceToken,
+		(cont) => new GrovesService(cont.resolve(SettingsServiceToken))
+	);
+
+	// GroveConfigService has no dependencies
 	c.registerSingleton(GroveConfigServiceToken, () => new GroveConfigService());
 
 	// Register utility services (no dependencies)
