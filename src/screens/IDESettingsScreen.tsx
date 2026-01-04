@@ -26,6 +26,7 @@ export function IDESettingsScreen() {
 
 	// For configure mode
 	const [configuringIDE, setConfiguringIDE] = useState<IDEType | null>(null);
+	const [configFieldIndex, setConfigFieldIndex] = useState(0); // 0 = command, 1 = args
 	const [editingField, setEditingField] = useState<'command' | 'args' | null>(null);
 	const [tempCommand, setTempCommand] = useState('');
 	const [tempArgs, setTempArgs] = useState('');
@@ -52,10 +53,11 @@ export function IDESettingsScreen() {
 		setTempCommand(config.command);
 		setTempArgs(config.args.join(' '));
 		setViewMode('configure');
+		setConfigFieldIndex(0);
 		setEditingField(null);
 	};
 
-	// Save custom configuration
+	// Save custom configuration (called automatically after editing a field)
 	const saveConfiguration = () => {
 		if (!configuringIDE) return;
 
@@ -72,11 +74,8 @@ export function IDESettingsScreen() {
 			},
 		});
 
-		setSavedMessage(`Saved configuration for ${getIDEDisplayName(configuringIDE)}`);
-		setTimeout(() => setSavedMessage(null), 2000);
-		setViewMode('select');
-		setConfiguringIDE(null);
-		setEditingField(null);
+		setSavedMessage('Saved');
+		setTimeout(() => setSavedMessage(null), 1500);
 	};
 
 	// Reset to default configuration
@@ -115,12 +114,12 @@ export function IDESettingsScreen() {
 				if (key.escape) {
 					setViewMode('select');
 					setConfiguringIDE(null);
-				} else if (input === '1') {
-					setEditingField('command');
-				} else if (input === '2') {
-					setEditingField('args');
-				} else if (input === 's') {
-					saveConfiguration();
+				} else if (key.upArrow) {
+					setConfigFieldIndex((prev) => (prev > 0 ? prev - 1 : 1));
+				} else if (key.downArrow) {
+					setConfigFieldIndex((prev) => (prev < 1 ? prev + 1 : 0));
+				} else if (key.return) {
+					setEditingField(configFieldIndex === 0 ? 'command' : 'args');
 				} else if (input === 'r') {
 					resetToDefault();
 				}
@@ -129,13 +128,15 @@ export function IDESettingsScreen() {
 		{ isActive: editingField === null }
 	);
 
-	// Handle text input submission
+	// Handle text input submission - auto-save after editing
 	const handleSubmitCommand = () => {
 		setEditingField(null);
+		saveConfiguration();
 	};
 
 	const handleSubmitArgs = () => {
 		setEditingField(null);
+		saveConfiguration();
 	};
 
 	if (viewMode === 'configure' && configuringIDE) {
@@ -155,8 +156,10 @@ export function IDESettingsScreen() {
 
 				<Box flexDirection="column" marginBottom={1}>
 					<Box>
-						<Text dimColor>1. </Text>
-						<Text bold={editingField === 'command'}>Command: </Text>
+						<Text color={configFieldIndex === 0 ? 'cyan' : undefined}>
+							{configFieldIndex === 0 ? '> ' : '  '}
+						</Text>
+						<Text bold={configFieldIndex === 0}>Command: </Text>
 						{editingField === 'command' ? (
 							<TextInput value={tempCommand} onChange={setTempCommand} onSubmit={handleSubmitCommand} />
 						) : (
@@ -164,8 +167,10 @@ export function IDESettingsScreen() {
 						)}
 					</Box>
 					<Box marginTop={1}>
-						<Text dimColor>2. </Text>
-						<Text bold={editingField === 'args'}>Arguments: </Text>
+						<Text color={configFieldIndex === 1 ? 'cyan' : undefined}>
+							{configFieldIndex === 1 ? '> ' : '  '}
+						</Text>
+						<Text bold={configFieldIndex === 1}>Arguments: </Text>
 						{editingField === 'args' ? (
 							<TextInput value={tempArgs} onChange={setTempArgs} onSubmit={handleSubmitArgs} />
 						) : (
@@ -185,10 +190,8 @@ export function IDESettingsScreen() {
 
 				<Box marginTop={1} flexDirection="column">
 					<Text dimColor>
-						Press <Text color="cyan">1</Text> to edit command, <Text color="cyan">2</Text> to edit args
-					</Text>
-					<Text dimColor>
-						Press <Text color="cyan">s</Text> to save, <Text color="cyan">r</Text> to reset to default
+						<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Edit -{' '}
+						<Text color="cyan">r</Text> Reset to default
 					</Text>
 					<Text dimColor>
 						Press <Text color="cyan">ESC</Text> to go back
