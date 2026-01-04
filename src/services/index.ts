@@ -10,6 +10,15 @@ export { GitService } from './GitService.js';
 export { GroveService } from './GroveService.js';
 export { detectTerminal, openTerminalInPath } from './TerminalService.js';
 export type { TerminalResult } from './TerminalService.js';
+export {
+	ALL_IDE_TYPES,
+	detectAvailableIDEs,
+	getDefaultIDEConfig,
+	getEffectiveIDEConfig,
+	getIDEDisplayName,
+	openIDEInPath,
+} from './IDEService.js';
+export type { IDEResult } from './IDEService.js';
 
 // Service interfaces
 export type {

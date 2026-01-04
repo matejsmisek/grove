@@ -27,6 +27,10 @@ export function SettingsScreen({ section }: SettingsScreenProps) {
 			action: () => navigate('workingFolder', {}),
 		},
 		{
+			label: 'IDE Settings',
+			action: () => navigate('ideSettings', {}),
+		},
+		{
 			label: 'AI Provider Configuration (coming soon)',
 			action: () => {}, // Placeholder
 		},

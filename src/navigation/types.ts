@@ -6,9 +6,11 @@ export type Routes = {
 	groveDetail: { groveId: string };
 	closeGrove: { groveId: string };
 	openTerminal: { groveId: string };
+	openIDE: { groveId: string };
 	settings: { section?: string };
 	workingFolder: Record<string, never>;
 	repositories: Record<string, never>;
+	ideSettings: Record<string, never>;
 };
 
 // Navigation state for current screen and params

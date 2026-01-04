@@ -8,6 +8,26 @@ export interface TerminalConfig {
 	args: string[];
 }
 
+/**
+ * Supported IDE types for "Open in IDE" feature
+ */
+export type IDEType = 'vscode' | 'phpstorm' | 'webstorm' | 'idea' | 'vim';
+
+/**
+ * Configuration for a specific IDE
+ */
+export interface IDEConfig {
+	/** The IDE command to use (e.g., 'code', 'phpstorm') */
+	command: string;
+	/** Arguments to pass to the IDE, use {path} as placeholder for the directory */
+	args: string[];
+}
+
+/**
+ * Map of IDE types to their configurations
+ */
+export type IDEConfigs = Partial<Record<IDEType, IDEConfig>>;
+
 export interface Settings {
 	/**
 	 * The working folder path where worktrees are created.
@@ -19,6 +39,16 @@ export interface Settings {
 	 * If not set, terminal opening will not work.
 	 */
 	terminal?: TerminalConfig;
+	/**
+	 * Currently selected IDE type for "Open in IDE" feature.
+	 * If not set, IDE opening will not work.
+	 */
+	selectedIDE?: IDEType;
+	/**
+	 * Custom IDE configurations.
+	 * If not set for an IDE type, default configuration will be used.
+	 */
+	ideConfigs?: IDEConfigs;
 }
 
 export interface StorageConfig {
