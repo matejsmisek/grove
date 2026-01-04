@@ -5,9 +5,19 @@ import { Box, Text, useInput } from 'ink';
 import path from 'path';
 
 import { useNavigation } from '../navigation/useNavigation.js';
-import { getIDEDisplayName, openIDEInPath, resolveIDEForPath } from '../services/index.js';
-import { getGroveById, readGroveMetadata, readSettings } from '../storage/index.js';
-import type { IDEConfigs, IDEType, Worktree } from '../storage/index.js';
+import {
+	getEffectiveIDEConfig,
+	getIDEDisplayName,
+	openIDEInPath,
+	resolveIDEForPath,
+} from '../services/index.js';
+import {
+	GroveConfigService,
+	getGroveById,
+	readGroveMetadata,
+	readSettings,
+} from '../storage/index.js';
+import type { IDEConfig, IDEType, Settings, Worktree } from '../storage/index.js';
 
 interface OpenIDEScreenProps {
 	groveId: string;
@@ -15,13 +25,68 @@ interface OpenIDEScreenProps {
 
 type SelectionOption = { type: 'all' } | { type: 'worktree'; worktree: Worktree };
 
+// Singleton instance for GroveConfigService
+const groveConfigService = new GroveConfigService();
+
+/**
+ * Result of resolving IDE config for a worktree
+ */
+interface ResolvedWorktreeIDE {
+	config: IDEConfig | undefined;
+	resolvedType?: IDEType;
+}
+
+/**
+ * Get the effective IDE config for a worktree
+ * Checks .grove.json first (project overrides root), falls back to settings
+ * Uses resolveIDEForPath for JetBrains autodetect support when using settings
+ * @param worktree - The worktree to get IDE config for
+ * @param settings - The user settings (for fallback and IDE configs lookup)
+ * @param targetPath - The path to open in IDE (for JetBrains autodetect)
+ * @returns The IDE config and resolved type
+ */
+function getIDEConfigForWorktree(
+	worktree: Worktree,
+	settings: Settings,
+	targetPath: string
+): ResolvedWorktreeIDE {
+	// Check if the worktree's repository has an IDE config in .grove.json
+	const repoIDEConfig = groveConfigService.getIDEConfigForSelection(
+		worktree.repositoryPath,
+		worktree.projectPath
+	);
+
+	if (repoIDEConfig) {
+		// If it's a reference to a global IDE type (e.g., "@phpstorm")
+		if ('ideType' in repoIDEConfig) {
+			const ideType: IDEType = repoIDEConfig.ideType;
+			// Use resolveIDEForPath for JetBrains autodetect support
+			const { resolvedType, config } = resolveIDEForPath(ideType, targetPath, settings.ideConfigs);
+			return { config, resolvedType };
+		}
+		// If it's a custom IDE config
+		return { config: repoIDEConfig.ideConfig };
+	}
+
+	// Fall back to the default IDE from settings
+	if (!settings.selectedIDE) {
+		return { config: undefined };
+	}
+	// Use resolveIDEForPath for JetBrains autodetect support
+	const { resolvedType, config } = resolveIDEForPath(
+		settings.selectedIDE,
+		targetPath,
+		settings.ideConfigs
+	);
+	return { config, resolvedType };
+}
+
 export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 	const { goBack } = useNavigation();
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
 	const [worktrees, setWorktrees] = useState<Worktree[]>([]);
-	const [selectedIDEType, setSelectedIDEType] = useState<IDEType | undefined>(undefined);
-	const [ideConfigs, setIdeConfigs] = useState<IDEConfigs | undefined>(undefined);
+	const [settings, setSettings] = useState<Settings | null>(null);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [error, setError] = useState<string | null>(null);
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
@@ -36,18 +101,9 @@ export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 			: worktrees.map((wt) => ({ type: 'worktree' as const, worktree: wt }));
 
 	useEffect(() => {
-		// Read settings once on mount
-		const settings = readSettings();
-
-		// Check if IDE is configured
-		if (!settings.selectedIDE) {
-			setError('No IDE configured. Please configure an IDE in Settings.');
-			setLoading(false);
-			return;
-		}
-
-		setSelectedIDEType(settings.selectedIDE);
-		setIdeConfigs(settings.ideConfigs);
+		// Read settings
+		const currentSettings = readSettings();
+		setSettings(currentSettings);
 
 		const groveRef = getGroveById(groveId);
 		if (!groveRef) {
@@ -75,7 +131,13 @@ export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 		if (metadata.worktrees.length === 1) {
 			const worktree = metadata.worktrees[0];
 			const targetPath = getWorktreePath(worktree);
-			const { config } = resolveIDEForPath(settings.selectedIDE, targetPath, settings.ideConfigs);
+			// Get the IDE config for this specific worktree (may be from .grove.json)
+			const { config } = getIDEConfigForWorktree(worktree, currentSettings, targetPath);
+			if (!config) {
+				setError('No IDE configured. Please configure an IDE in Settings or .grove.json.');
+				setLoading(false);
+				return;
+			}
 			const result = openIDEInPath(targetPath, config);
 			if (result.success) {
 				goBack();
@@ -103,14 +165,22 @@ export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 	};
 
 	const handleSelectAll = () => {
-		if (!selectedIDEType) return;
+		if (!settings) {
+			setError('Settings not loaded');
+			return;
+		}
 
 		let successCount = 0;
 		let failedCount = 0;
 
 		for (const worktree of worktrees) {
 			const targetPath = getWorktreePath(worktree);
-			const { config } = resolveIDEForPath(selectedIDEType, targetPath, ideConfigs);
+			// Get the IDE config for each worktree (may differ based on .grove.json)
+			const { config } = getIDEConfigForWorktree(worktree, settings, targetPath);
+			if (!config) {
+				failedCount++;
+				continue;
+			}
 			const result = openIDEInPath(targetPath, config);
 			if (result.success) {
 				successCount++;
@@ -129,13 +199,21 @@ export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 	};
 
 	const handleSelectWorktree = (worktree: Worktree) => {
-		if (!selectedIDEType) return;
+		if (!settings) {
+			setError('Settings not loaded');
+			return;
+		}
 
 		const targetPath = getWorktreePath(worktree);
-		const { resolvedType, config } = resolveIDEForPath(selectedIDEType, targetPath, ideConfigs);
+		// Get the IDE config for this worktree (may be from .grove.json)
+		const { config, resolvedType } = getIDEConfigForWorktree(worktree, settings, targetPath);
+		if (!config) {
+			setError('No IDE configured. Please configure an IDE in Settings or .grove.json.');
+			return;
+		}
 		const result = openIDEInPath(targetPath, config);
 		if (result.success) {
-			const ideName = getIDEDisplayName(resolvedType);
+			const ideName = resolvedType ? getIDEDisplayName(resolvedType) : 'IDE';
 			setResultMessage(`Opened ${ideName} in ${worktree.repositoryName}`);
 			// Go back after a short delay to show the message
 			setTimeout(() => goBack(), 500);

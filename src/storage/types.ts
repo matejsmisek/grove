@@ -215,6 +215,14 @@ export interface RecentSelectionsData {
 }
 
 /**
+ * IDE configuration for grove repo config
+ * Can be either a reference to a global IDE (e.g., "@phpstorm") or a custom config
+ */
+export type GroveIDEConfig =
+	| `@${IDEType}` // Reference to global IDE config (e.g., "@phpstorm", "@vscode")
+	| IDEConfig; // Custom IDE config with command and args
+
+/**
  * Grove repository configuration stored in .grove.json and .grove.local.json
  * within individual repositories
  */
@@ -234,4 +242,12 @@ export interface GroveRepoConfig {
 	 * Actions to run after creating worktrees (not implemented yet)
 	 */
 	initActions?: string[];
+	/**
+	 * IDE configuration for this repository/project
+	 * Can be either:
+	 * - A reference to a global IDE: "@vscode", "@phpstorm", "@webstorm", "@idea", "@vim"
+	 * - A custom IDE config: { command: "code", args: ["{path}"] }
+	 * When set, this IDE will be used instead of the default IDE from settings
+	 */
+	ide?: GroveIDEConfig;
 }

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 import type { IGroveConfigService, MergedGroveConfig } from '../services/interfaces.js';
-import type { GroveRepoConfig } from './types.js';
+import type { GroveIDEConfig, GroveRepoConfig, IDEConfig, IDEType } from './types.js';
 
 /**
  * Grove repository configuration service implementation
@@ -133,6 +133,7 @@ export class GroveConfigService implements IGroveConfigService {
 			projectFileCopyPatterns: [],
 			rootInitActions: rootConfig.initActions || [],
 			projectInitActions: [],
+			ide: rootConfig.ide,
 		};
 
 		// If no project path, return root config only
@@ -196,6 +197,11 @@ export class GroveConfigService implements IGroveConfigService {
 			mergedConfig.projectInitActions = projectConfig.initActions;
 		}
 
+		// ide: project overrides root if present
+		if (projectConfig.ide !== undefined) {
+			mergedConfig.ide = projectConfig.ide;
+		}
+
 		return mergedConfig;
 	}
 
@@ -229,5 +235,48 @@ export class GroveConfigService implements IGroveConfigService {
 		}
 
 		return defaultBranch;
+	}
+
+	/**
+	 * Check if an IDE config is a reference (starts with @)
+	 * @param config - The IDE config to check
+	 * @returns true if the config is a reference like "@phpstorm"
+	 */
+	isIDEReference(config: GroveIDEConfig): config is `@${IDEType}` {
+		return typeof config === 'string' && config.startsWith('@');
+	}
+
+	/**
+	 * Parse an IDE reference to get the IDE type
+	 * @param reference - The IDE reference (e.g., "@phpstorm")
+	 * @returns The IDE type (e.g., "phpstorm")
+	 */
+	parseIDEReference(reference: `@${IDEType}`): IDEType {
+		return reference.slice(1) as IDEType;
+	}
+
+	/**
+	 * Get the resolved IDE config for a repository selection
+	 * Returns the IDE config from .grove.json (project overrides root)
+	 * If it's a reference, returns the type; if it's a custom config, returns the config
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 * @returns Object with either ideType or ideConfig, or undefined if not configured
+	 */
+	getIDEConfigForSelection(
+		repositoryPath: string,
+		projectPath?: string
+	): { ideType: IDEType } | { ideConfig: IDEConfig } | undefined {
+		const mergedConfig = this.readMergedConfig(repositoryPath, projectPath);
+
+		if (!mergedConfig.ide) {
+			return undefined;
+		}
+
+		if (this.isIDEReference(mergedConfig.ide)) {
+			return { ideType: this.parseIDEReference(mergedConfig.ide) };
+		}
+
+		return { ideConfig: mergedConfig.ide };
 	}
 }
