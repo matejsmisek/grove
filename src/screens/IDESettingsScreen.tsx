@@ -7,9 +7,9 @@ import TextInput from 'ink-text-input';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
 	ALL_IDE_TYPES,
-	detectAvailableIDEs,
 	getDefaultIDEConfig,
 	getIDEDisplayName,
+	isCommandAvailable,
 } from '../services/index.js';
 import { readSettings, updateSettings } from '../storage/index.js';
 import type { IDEConfig, IDEType } from '../storage/index.js';
@@ -29,8 +29,6 @@ export function IDESettingsScreen() {
 	const [editingField, setEditingField] = useState<'command' | 'args' | null>(null);
 	const [tempCommand, setTempCommand] = useState('');
 	const [tempArgs, setTempArgs] = useState('');
-
-	const availableIDEs = detectAvailableIDEs();
 
 	// Get the current config for an IDE
 	const getIDEConfig = (ideType: IDEType): IDEConfig => {
@@ -221,7 +219,8 @@ export function IDESettingsScreen() {
 			{ALL_IDE_TYPES.map((ideType, index) => {
 				const isSelected = index === selectedIndex;
 				const isCurrent = settings.selectedIDE === ideType;
-				const isAvailable = availableIDEs.includes(ideType);
+				const config = getIDEConfig(ideType);
+				const isAvailable = isCommandAvailable(config.command);
 				const hasCustomConfig = settings.ideConfigs && settings.ideConfigs[ideType];
 
 				return (

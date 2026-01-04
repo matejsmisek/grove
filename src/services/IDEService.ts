@@ -70,7 +70,7 @@ export function getIDEDisplayName(ideType: IDEType): string {
 /**
  * Check if a command exists in the system PATH
  */
-function commandExists(command: string): boolean {
+export function isCommandAvailable(command: string): boolean {
 	try {
 		const checkCmd = os.platform() === 'win32' ? `where ${command}` : `which ${command}`;
 		execSync(checkCmd, { stdio: 'ignore' });
@@ -102,7 +102,7 @@ export function detectAvailableIDEs(): IDEType[] {
 		const definition = IDE_DEFINITIONS[ideType];
 
 		// Check main command
-		if (commandExists(definition.command)) {
+		if (isCommandAvailable(definition.command)) {
 			available.push(ideType);
 			continue;
 		}
@@ -110,7 +110,7 @@ export function detectAvailableIDEs(): IDEType[] {
 		// Check alternative commands
 		if (definition.alternativeCommands) {
 			for (const altCmd of definition.alternativeCommands) {
-				if (commandExists(altCmd)) {
+				if (isCommandAvailable(altCmd)) {
 					available.push(ideType);
 					break;
 				}
@@ -138,7 +138,7 @@ export function getEffectiveIDEConfig(
 	const definition = IDE_DEFINITIONS[ideType];
 
 	// Check if default command exists, otherwise try alternatives
-	if (commandExists(definition.command)) {
+	if (isCommandAvailable(definition.command)) {
 		return {
 			command: definition.command,
 			args: definition.args,
@@ -148,7 +148,7 @@ export function getEffectiveIDEConfig(
 	// Try alternative commands
 	if (definition.alternativeCommands) {
 		for (const altCmd of definition.alternativeCommands) {
-			if (commandExists(altCmd)) {
+			if (isCommandAvailable(altCmd)) {
 				return {
 					command: altCmd,
 					args: definition.args,

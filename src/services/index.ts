@@ -16,6 +16,7 @@ export {
 	getDefaultIDEConfig,
 	getEffectiveIDEConfig,
 	getIDEDisplayName,
+	isCommandAvailable,
 	openIDEInPath,
 } from './IDEService.js';
 export type { IDEResult } from './IDEService.js';
