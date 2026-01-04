@@ -116,6 +116,13 @@ export function HomeScreen() {
 					},
 				},
 				{
+					label: 'Open in IDE',
+					action: () => {
+						navigate('openIDE', { groveId: selectedGrove.id });
+						setSelectedGrove(null);
+					},
+				},
+				{
 					label: 'Close Grove',
 					action: () => {
 						navigate('closeGrove', { groveId: selectedGrove.id });

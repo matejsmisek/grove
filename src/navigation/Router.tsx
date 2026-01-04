@@ -7,6 +7,8 @@ import { CloseGroveScreen } from '../screens/CloseGroveScreen.js';
 import { CreateGroveScreen } from '../screens/CreateGroveScreen.js';
 import { GroveDetailScreen } from '../screens/GroveDetailScreen.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
+import { IDESettingsScreen } from '../screens/IDESettingsScreen.js';
+import { OpenIDEScreen } from '../screens/OpenIDEScreen.js';
 import { OpenTerminalScreen } from '../screens/OpenTerminalScreen.js';
 import { RepositoriesScreen } from '../screens/RepositoriesScreen.js';
 import { SettingsScreen } from '../screens/SettingsScreen.js';
@@ -38,6 +40,11 @@ export function Router() {
 			return (
 				<OpenTerminalScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />
 			);
+		case 'openIDE':
+			// Type narrowing: we know params is { groveId: string } here
+			return <OpenIDEScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
+		case 'ideSettings':
+			return <IDESettingsScreen />;
 		case 'settings':
 			// Type narrowing: we know params is { section?: string } here
 			return (
