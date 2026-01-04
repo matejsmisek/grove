@@ -131,6 +131,9 @@ export function HomeScreen() {
 			]
 		: [];
 
+	// Total items in the grid = 1 (create button) + groves.length
+	const totalItems = 1 + groves.length;
+
 	useInput((input, key) => {
 		if (selectedGrove) {
 			// Grove action menu navigation
@@ -156,31 +159,30 @@ export function HomeScreen() {
 				setShowMenu(false);
 			}
 		} else {
-			// Main screen navigation
-			if (groves.length > 0) {
-				if (key.leftArrow) {
-					setSelectedGroveIndex((prev) => (prev > 0 ? prev - 1 : groves.length - 1));
-				} else if (key.rightArrow) {
-					setSelectedGroveIndex((prev) => (prev < groves.length - 1 ? prev + 1 : 0));
-				} else if (key.upArrow) {
-					setSelectedGroveIndex((prev) => {
-						const newIndex = prev - 4;
-						return newIndex >= 0 ? newIndex : prev;
-					});
-				} else if (key.downArrow) {
-					setSelectedGroveIndex((prev) => {
-						const newIndex = prev + 4;
-						return newIndex < groves.length ? newIndex : prev;
-					});
-				} else if (key.return) {
-					// Show grove action menu for the selected grove
-					setSelectedGrove(groves[selectedGroveIndex]);
+			// Main screen navigation (grid always has at least 1 item - the create button)
+			if (key.leftArrow) {
+				setSelectedGroveIndex((prev) => (prev > 0 ? prev - 1 : totalItems - 1));
+			} else if (key.rightArrow) {
+				setSelectedGroveIndex((prev) => (prev < totalItems - 1 ? prev + 1 : 0));
+			} else if (key.upArrow) {
+				setSelectedGroveIndex((prev) => {
+					const newIndex = prev - 4;
+					return newIndex >= 0 ? newIndex : prev;
+				});
+			} else if (key.downArrow) {
+				setSelectedGroveIndex((prev) => {
+					const newIndex = prev + 4;
+					return newIndex < totalItems ? newIndex : prev;
+				});
+			} else if (key.return) {
+				if (selectedGroveIndex === 0) {
+					// First item is the "Create Grove" button
+					navigate('createGrove', {});
+				} else {
+					// Show grove action menu for the selected grove (offset by 1)
+					setSelectedGrove(groves[selectedGroveIndex - 1]);
 					setSelectedGroveActionIndex(0);
 				}
-			}
-
-			if (input === 'c' || input === '+') {
-				navigate('createGrove', {});
 			} else if (input === 'm') {
 				setShowMenu(true);
 				setSelectedMenuIndex(0);
@@ -274,25 +276,18 @@ export function HomeScreen() {
 					</Box>
 
 					{/* Groves Grid */}
-					{groves.length > 0 ? (
-						<Box flexDirection="column" marginTop={1}>
-							<Box marginBottom={1}>
-								<Text bold>Your Groves</Text>
-							</Box>
+					<Box flexDirection="column" marginTop={1}>
+						<Box marginBottom={1}>
+							<Text bold>Your Groves</Text>
+						</Box>
 
-							<GroveGrid groves={groves} selectedIndex={selectedGroveIndex} />
-						</Box>
-					) : (
-						<Box marginTop={1} marginBottom={1}>
-							<Text dimColor>No active groves. Press 'c' to create one!</Text>
-						</Box>
-					)}
+						<GroveGrid groves={groves} selectedIndex={selectedGroveIndex} />
+					</Box>
 
 					{/* Help text */}
 					<Box marginTop={1} flexDirection="column">
 						<Text dimColor>
-							{groves.length > 0 ? '↑↓←→ Navigate' : ''} {groves.length > 0 && '• '}
-							<Text bold>c</Text> Create {groves.length > 0 && '• Enter Open'} • <Text bold>m</Text> Menu
+							↑↓←→ Navigate • Enter Select • <Text bold>m</Text> Menu
 						</Text>
 					</Box>
 				</>
