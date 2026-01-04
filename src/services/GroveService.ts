@@ -116,13 +116,18 @@ export class GroveService implements IGroveService {
 			const worktreeName = this.generateWorktreeName(selection, worktreeNames);
 
 			try {
-				// Read repository grove configuration
-				const repoConfig = this.groveConfigService.readGroveRepoConfig(repo.path);
+				// Read merged repository/project grove configuration
+				const mergedConfig = this.groveConfigService.readMergedConfig(repo.path, selection.projectPath);
 
-				// Generate branch name for this grove using repo config or default
-				// For monorepo projects, include project name in branch
+				// Generate branch name for this grove using merged config
+				// For monorepo projects, the branch suffix is added automatically
+				const branchBase = this.groveConfigService.getBranchNameForSelection(
+					repo.path,
+					name,
+					selection.projectPath
+				);
 				const branchSuffix = selection.projectPath ? `-${selection.projectPath}` : '';
-				const branchName = this.groveConfigService.getBranchNameForRepo(repo.path, name) + branchSuffix;
+				const branchName = branchBase + branchSuffix;
 
 				// Create worktree path
 				const worktreePath = path.join(grovePath, `${worktreeName}.worktree`);
@@ -134,17 +139,36 @@ export class GroveService implements IGroveService {
 					throw new Error(result.stderr || 'Failed to create worktree');
 				}
 
-				// Copy files matching patterns from repository to worktree
-				if (repoConfig.fileCopyPatterns && repoConfig.fileCopyPatterns.length > 0) {
+				// Copy files matching patterns from repository root to worktree
+				if (mergedConfig.rootFileCopyPatterns.length > 0) {
 					const copyResult = await this.fileService.copyFilesFromPatterns(
 						repo.path,
 						worktreePath,
-						repoConfig.fileCopyPatterns
+						mergedConfig.rootFileCopyPatterns
 					);
 
 					if (!copyResult.success && copyResult.errors.length > 0) {
 						console.warn(
-							`Warning: Failed to copy some files for ${repo.name}:\n${copyResult.errors.join('\n')}`
+							`Warning: Failed to copy some files from ${repo.name} root:\n${copyResult.errors.join('\n')}`
+						);
+					}
+				}
+
+				// Copy files matching patterns from project folder to worktree (for monorepos)
+				// These patterns are relative to the project folder, not the repo root
+				if (selection.projectPath && mergedConfig.projectFileCopyPatterns.length > 0) {
+					const projectSourcePath = path.join(repo.path, selection.projectPath);
+					const projectDestPath = path.join(worktreePath, selection.projectPath);
+
+					const copyResult = await this.fileService.copyFilesFromPatterns(
+						projectSourcePath,
+						projectDestPath,
+						mergedConfig.projectFileCopyPatterns
+					);
+
+					if (!copyResult.success && copyResult.errors.length > 0) {
+						console.warn(
+							`Warning: Failed to copy some files from ${repo.name}/${selection.projectPath}:\n${copyResult.errors.join('\n')}`
 						);
 					}
 				}

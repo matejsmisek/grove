@@ -169,6 +169,23 @@ export interface IGrovesService {
 }
 
 /**
+ * Merged configuration for a repository selection
+ * Contains both root and project configs merged together
+ */
+export interface MergedGroveConfig {
+	/** Final branch name template (project overrides root) */
+	branchNameTemplate?: string;
+	/** File patterns from root config (to copy from repo root) */
+	rootFileCopyPatterns: string[];
+	/** File patterns from project config (to copy from project folder) */
+	projectFileCopyPatterns: string[];
+	/** Init actions from root config */
+	rootInitActions: string[];
+	/** Init actions from project config */
+	projectInitActions: string[];
+}
+
+/**
  * Grove repository configuration service interface
  * Reads .grove.json and .grove.local.json from repositories
  */
@@ -177,6 +194,16 @@ export interface IGroveConfigService {
 	 * Read and merge .grove.json and .grove.local.json from a repository
 	 */
 	readGroveRepoConfig(repositoryPath: string): GroveRepoConfig;
+
+	/**
+	 * Read and merge configs for a repository selection
+	 * For monorepo projects, reads both root and project-level .grove.json files
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 * @returns Merged configuration with project overriding root for most fields,
+	 *          but fileCopyPatterns kept separate for staged copying
+	 */
+	readMergedConfig(repositoryPath: string, projectPath?: string): MergedGroveConfig;
 
 	/**
 	 * Validate branch name template contains ${GROVE_NAME}
@@ -192,6 +219,14 @@ export interface IGroveConfigService {
 	 * Get branch name for a repository based on config or default
 	 */
 	getBranchNameForRepo(repositoryPath: string, groveName: string): string;
+
+	/**
+	 * Get branch name for a repository selection (with optional project path)
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param groveName - Name of the grove being created
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	getBranchNameForSelection(repositoryPath: string, groveName: string, projectPath?: string): string;
 }
 
 // ============================================================================
