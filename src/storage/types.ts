@@ -26,6 +26,11 @@ export interface StorageConfig {
 	 * The path to the groves index file
 	 */
 	grovesIndexPath: string;
+
+	/**
+	 * The path to the recent selections file
+	 */
+	recentSelectionsPath: string;
 }
 
 export interface Repository {
@@ -43,6 +48,12 @@ export interface Repository {
 	 * When the repository was registered
 	 */
 	registeredAt: string;
+
+	/**
+	 * Whether this repository is a monorepo with multiple projects
+	 * When true, grove creation will allow selecting specific project folders
+	 */
+	isMonorepo?: boolean;
 }
 
 export interface RepositoriesData {
@@ -50,6 +61,20 @@ export interface RepositoriesData {
 	 * List of registered repositories
 	 */
 	repositories: Repository[];
+}
+
+/**
+ * Represents a repository selection for grove creation
+ * Used to pass repository + optional project path to GroveService
+ */
+export interface RepositorySelection {
+	/** The repository being selected */
+	repository: Repository;
+	/**
+	 * Project folder path relative to repository root (for monorepos)
+	 * When undefined, the entire repository is selected
+	 */
+	projectPath?: string;
 }
 
 /**
@@ -64,6 +89,11 @@ export interface Worktree {
 	worktreePath: string;
 	/** Branch name for this worktree */
 	branch: string;
+	/**
+	 * Project folder path relative to repository root (for monorepos)
+	 * When set, indicates this worktree is for a specific project within a monorepo
+	 */
+	projectPath?: string;
 }
 
 /**
@@ -104,6 +134,31 @@ export interface GroveMetadata {
 	createdAt: string;
 	/** Timestamp when the grove was last updated */
 	updatedAt: string;
+}
+
+/**
+ * Represents a recently used repository/project selection
+ * Stored in ~/.grove/recent.json
+ */
+export interface RecentSelection {
+	/** Repository path */
+	repositoryPath: string;
+	/** Repository name */
+	repositoryName: string;
+	/**
+	 * Project folder path for monorepos (undefined for whole repo)
+	 */
+	projectPath?: string;
+	/** When this selection was last used */
+	lastUsedAt: string;
+}
+
+/**
+ * Container for recent selections
+ */
+export interface RecentSelectionsData {
+	/** List of recent selections, ordered by most recent first */
+	selections: RecentSelection[];
 }
 
 /**

@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 import { useNavigation } from '../navigation/useNavigation.js';
-import { getAllRepositories, removeRepository } from '../storage/index.js';
+import { getAllRepositories, removeRepository, updateRepository } from '../storage/index.js';
 import type { Repository } from '../storage/index.js';
 
 type ScreenMode = 'list' | 'confirm-delete';
@@ -14,6 +14,7 @@ export function RepositoriesScreen() {
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [mode, setMode] = useState<ScreenMode>('list');
 	const [deleteSuccess, setDeleteSuccess] = useState(false);
+	const [monorepoToggleSuccess, setMonorepoToggleSuccess] = useState(false);
 
 	useInput((input, key) => {
 		if (key.escape) {
@@ -30,6 +31,19 @@ export function RepositoriesScreen() {
 			} else if (key.delete || key.backspace || input === 'd') {
 				if (repositories.length > 0) {
 					setMode('confirm-delete');
+				}
+			} else if (input === 'm' || input === 'M') {
+				// Toggle monorepo flag
+				if (repositories.length > 0) {
+					const repo = repositories[selectedIndex];
+					const newIsMonorepo = !repo.isMonorepo;
+					updateRepository(repo.path, { isMonorepo: newIsMonorepo });
+					// Refresh the list
+					setRepositories(getAllRepositories());
+					setMonorepoToggleSuccess(true);
+					setTimeout(() => {
+						setMonorepoToggleSuccess(false);
+					}, 2000);
 				}
 			}
 		} else if (mode === 'confirm-delete') {
@@ -142,6 +156,12 @@ export function RepositoriesScreen() {
 				</Box>
 			)}
 
+			{monorepoToggleSuccess && (
+				<Box marginBottom={1}>
+					<Text color="green">✓ Monorepo setting updated</Text>
+				</Box>
+			)}
+
 			<Box flexDirection="column" marginTop={1}>
 				<Text dimColor>
 					{repositories.length} {repositories.length === 1 ? 'repository' : 'repositories'} registered:
@@ -155,6 +175,7 @@ export function RepositoriesScreen() {
 									<Text color={isSelected ? 'cyan' : undefined} bold={isSelected}>
 										{isSelected ? '❯ ' : '  '}
 										{repo.name}
+										{repo.isMonorepo && <Text color="magenta"> [monorepo]</Text>}
 									</Text>
 								</Box>
 								<Box marginLeft={2}>
@@ -172,6 +193,9 @@ export function RepositoriesScreen() {
 			<Box marginTop={2} flexDirection="column">
 				<Text dimColor>
 					Use <Text color="cyan">↑/↓</Text> arrows to select
+				</Text>
+				<Text dimColor>
+					Press <Text color="cyan">M</Text> to toggle monorepo mode
 				</Text>
 				<Text dimColor>
 					Press <Text color="cyan">D</Text> or <Text color="cyan">Delete</Text> to unregister selected

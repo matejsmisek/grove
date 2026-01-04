@@ -1,1 +1,7 @@
-export { getGitRoot, isGitRepository, isGitWorktree, verifyValidRepository } from './utils.js';
+export {
+	getGitRoot,
+	getMonorepoProjects,
+	isGitRepository,
+	isGitWorktree,
+	verifyValidRepository,
+} from './utils.js';

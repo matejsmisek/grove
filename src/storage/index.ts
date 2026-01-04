@@ -13,6 +13,7 @@ export {
 	isRepositoryRegistered,
 	readRepositories,
 	removeRepository,
+	updateRepository,
 	writeRepositories,
 } from './repositories.js';
 export {
@@ -32,13 +33,21 @@ export {
 	readGroveRepoConfig,
 	validateBranchNameTemplate,
 } from './groveConfig.js';
+export {
+	addRecentSelections,
+	getRecentSelectionDisplayName,
+	getRecentSelections,
+} from './recentSelections.js';
 export type {
 	GroveMetadata,
 	GroveReference,
 	GroveRepoConfig,
 	GrovesIndex,
+	RecentSelection,
+	RecentSelectionsData,
 	Repository,
 	RepositoriesData,
+	RepositorySelection,
 	Settings,
 	StorageConfig,
 	Worktree,

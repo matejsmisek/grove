@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-import type { GroveMetadata, Repository, Worktree } from '../storage/types.js';
+import type { GroveMetadata, Repository, RepositorySelection, Worktree } from '../storage/types.js';
 import type {
 	CloseGroveResult,
 	IContextService,
@@ -42,12 +42,34 @@ export class GroveService implements IGroveService {
 	}
 
 	/**
+	 * Generate a unique worktree name for a selection
+	 * Handles monorepo projects by appending project name
+	 */
+	private generateWorktreeName(selection: RepositorySelection, existingNames: Set<string>): string {
+		const baseName = selection.projectPath
+			? `${selection.repository.name}-${selection.projectPath}`
+			: selection.repository.name;
+
+		let name = baseName;
+		let counter = 1;
+
+		// Handle duplicate names by appending a counter
+		while (existingNames.has(name)) {
+			name = `${baseName}-${counter}`;
+			counter++;
+		}
+
+		existingNames.add(name);
+		return name;
+	}
+
+	/**
 	 * Create a new grove with worktrees for selected repositories
 	 * @param name - Name of the grove
-	 * @param repositories - Array of repositories to include
+	 * @param selections - Array of repository selections, each optionally with a project path
 	 * @returns The created grove metadata
 	 */
-	async createGrove(name: string, repositories: Repository[]): Promise<GroveMetadata> {
+	async createGrove(name: string, selections: RepositorySelection[]): Promise<GroveMetadata> {
 		const settings = this.settingsService.readSettings();
 		const groveId = this.generateGroveId();
 		const grovePath = path.join(settings.workingFolder, name);
@@ -63,11 +85,17 @@ export class GroveService implements IGroveService {
 		// Create grove metadata
 		const now = new Date().toISOString();
 
+		// Extract unique repositories for CONTEXT.md
+		const uniqueRepos = new Map<string, Repository>();
+		for (const selection of selections) {
+			uniqueRepos.set(selection.repository.path, selection.repository);
+		}
+
 		// Create CONTEXT.md file
 		this.contextService.createContextFile(grovePath, {
 			name,
 			createdAt: now,
-			repositories,
+			repositories: Array.from(uniqueRepos.values()),
 		});
 
 		const metadata: GroveMetadata = {
@@ -78,20 +106,26 @@ export class GroveService implements IGroveService {
 			updatedAt: now,
 		};
 
-		// Create worktrees for each repository
+		// Create worktrees for each selection
 		const worktrees: Worktree[] = [];
 		const errors: string[] = [];
+		const worktreeNames = new Set<string>();
 
-		for (const repo of repositories) {
+		for (const selection of selections) {
+			const repo = selection.repository;
+			const worktreeName = this.generateWorktreeName(selection, worktreeNames);
+
 			try {
 				// Read repository grove configuration
 				const repoConfig = this.groveConfigService.readGroveRepoConfig(repo.path);
 
 				// Generate branch name for this grove using repo config or default
-				const branchName = this.groveConfigService.getBranchNameForRepo(repo.path, name);
+				// For monorepo projects, include project name in branch
+				const branchSuffix = selection.projectPath ? `-${selection.projectPath}` : '';
+				const branchName = this.groveConfigService.getBranchNameForRepo(repo.path, name) + branchSuffix;
 
 				// Create worktree path
-				const worktreePath = path.join(grovePath, `${repo.name}.worktree`);
+				const worktreePath = path.join(grovePath, `${worktreeName}.worktree`);
 
 				// Add worktree (creates new branch from HEAD)
 				const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, 'HEAD');
@@ -121,12 +155,14 @@ export class GroveService implements IGroveService {
 					repositoryPath: repo.path,
 					worktreePath,
 					branch: branchName,
+					projectPath: selection.projectPath,
 				};
 
 				worktrees.push(worktree);
 			} catch (error) {
 				const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-				errors.push(`${repo.name}: ${errorMsg}`);
+				const displayName = selection.projectPath ? `${repo.name}/${selection.projectPath}` : repo.name;
+				errors.push(`${displayName}: ${errorMsg}`);
 			}
 		}
 
