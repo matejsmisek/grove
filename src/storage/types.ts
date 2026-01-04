@@ -10,8 +10,16 @@ export interface TerminalConfig {
 
 /**
  * Supported IDE types for "Open in IDE" feature
+ * 'jetbrains-auto' will auto-detect the appropriate JetBrains IDE based on project files
  */
-export type IDEType = 'vscode' | 'phpstorm' | 'webstorm' | 'idea' | 'vim';
+export type IDEType =
+	| 'vscode'
+	| 'phpstorm'
+	| 'webstorm'
+	| 'idea'
+	| 'pycharm'
+	| 'jetbrains-auto'
+	| 'vim';
 
 /**
  * Configuration for a specific IDE
