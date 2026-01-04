@@ -3,6 +3,7 @@ export type Routes = {
 	home: Record<string, never>;
 	chat: Record<string, never>;
 	createGrove: Record<string, never>;
+	groveDetail: { groveId: string };
 	closeGrove: { groveId: string };
 	openTerminal: { groveId: string };
 	settings: { section?: string };

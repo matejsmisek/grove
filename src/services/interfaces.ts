@@ -296,6 +296,31 @@ export interface IGitService {
 	 * @param repoPath - Repository root path
 	 */
 	hasUnpushedCommits(repoPath: string): Promise<boolean>;
+
+	/**
+	 * Get the current branch name
+	 * @param repoPath - Repository root path
+	 * @returns Branch name or 'detached' if in detached HEAD state
+	 */
+	getCurrentBranch(repoPath: string): Promise<string>;
+
+	/**
+	 * Get file change statistics
+	 * @param repoPath - Repository root path
+	 * @returns Object with counts for modified, added, deleted, and untracked files
+	 */
+	getFileChangeStats(repoPath: string): Promise<FileChangeStats>;
+}
+
+/**
+ * File change statistics from git status
+ */
+export interface FileChangeStats {
+	modified: number;
+	added: number;
+	deleted: number;
+	untracked: number;
+	total: number;
 }
 
 // ============================================================================
