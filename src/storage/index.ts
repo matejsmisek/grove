@@ -50,6 +50,7 @@ export type {
 	RepositorySelection,
 	Settings,
 	StorageConfig,
+	TerminalConfig,
 	Worktree,
 } from './types.js';
 

@@ -5,11 +5,20 @@ import { render } from 'ink';
 
 import { registerRepository } from './commands/index.js';
 import { App } from './components/App.js';
-import { initializeServices } from './services/index.js';
-import { initializeStorage } from './storage/index.js';
+import { detectTerminal, initializeServices } from './services/index.js';
+import { initializeStorage, readSettings, updateSettings } from './storage/index.js';
 
 // Initialize storage before rendering the app
 initializeStorage();
+
+// Detect terminal on first startup if not already configured
+const settings = readSettings();
+if (!settings.terminal) {
+	const terminalConfig = detectTerminal();
+	if (terminalConfig) {
+		updateSettings({ terminal: terminalConfig });
+	}
+}
 
 // Initialize DI services
 initializeServices();

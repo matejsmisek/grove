@@ -1,9 +1,24 @@
+/**
+ * Terminal configuration for opening terminals
+ */
+export interface TerminalConfig {
+	/** The terminal command to use (e.g., 'gnome-terminal', 'konsole') */
+	command: string;
+	/** Arguments to pass to the terminal, use {path} as placeholder for the directory */
+	args: string[];
+}
+
 export interface Settings {
 	/**
 	 * The working folder path where worktrees are created.
 	 * This is different from the .grove folder which stores Grove's data.
 	 */
 	workingFolder: string;
+	/**
+	 * Terminal configuration detected on first startup.
+	 * If not set, terminal opening will not work.
+	 */
+	terminal?: TerminalConfig;
 }
 
 export interface StorageConfig {
