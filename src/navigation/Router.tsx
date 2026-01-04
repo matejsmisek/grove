@@ -5,6 +5,7 @@ import { Box, Text } from 'ink';
 import { ChatScreen } from '../screens/ChatScreen.js';
 import { CloseGroveScreen } from '../screens/CloseGroveScreen.js';
 import { CreateGroveScreen } from '../screens/CreateGroveScreen.js';
+import { GroveDetailScreen } from '../screens/GroveDetailScreen.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
 import { OpenTerminalScreen } from '../screens/OpenTerminalScreen.js';
 import { RepositoriesScreen } from '../screens/RepositoriesScreen.js';
@@ -26,6 +27,9 @@ export function Router() {
 			return <ChatScreen />;
 		case 'createGrove':
 			return <CreateGroveScreen />;
+		case 'groveDetail':
+			// Type narrowing: we know params is { groveId: string } here
+			return <GroveDetailScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
 		case 'closeGrove':
 			// Type narrowing: we know params is { groveId: string } here
 			return <CloseGroveScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;

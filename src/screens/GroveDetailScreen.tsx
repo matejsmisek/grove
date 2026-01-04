@@ -1,0 +1,212 @@
+import React, { useEffect, useState } from 'react';
+
+import { Box, Text, useInput } from 'ink';
+
+import { useService } from '../di/index.js';
+import { useNavigation } from '../navigation/useNavigation.js';
+import type { FileChangeStats } from '../services/interfaces.js';
+import { GitServiceToken } from '../services/tokens.js';
+import { getGroveById, readGroveMetadata } from '../storage/index.js';
+import type { Worktree } from '../storage/types.js';
+
+interface WorktreeDetails {
+	worktree: Worktree;
+	branch: string;
+	fileStats: FileChangeStats;
+	hasUnpushedCommits: boolean;
+}
+
+interface GroveDetailScreenProps {
+	groveId: string;
+}
+
+export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
+	const { goBack, navigate } = useNavigation();
+	const gitService = useService(GitServiceToken);
+	const [loading, setLoading] = useState(true);
+	const [groveName, setGroveName] = useState('');
+	const [grovePath, setGrovePath] = useState('');
+	const [worktreeDetails, setWorktreeDetails] = useState<WorktreeDetails[]>([]);
+	const [selectedIndex, setSelectedIndex] = useState(0);
+	const [error, setError] = useState<string | null>(null);
+
+	// Load grove details on mount
+	useEffect(() => {
+		async function loadDetails() {
+			try {
+				const groveRef = getGroveById(groveId);
+				if (!groveRef) {
+					setError('Grove not found');
+					setLoading(false);
+					return;
+				}
+
+				setGroveName(groveRef.name);
+				setGrovePath(groveRef.path);
+
+				const metadata = readGroveMetadata(groveRef.path);
+				if (!metadata) {
+					setError('Grove metadata not found');
+					setLoading(false);
+					return;
+				}
+
+				// Fetch details for each worktree in parallel
+				const detailsPromises = metadata.worktrees.map(async (worktree) => {
+					const [branch, fileStats, hasUnpushed] = await Promise.all([
+						gitService.getCurrentBranch(worktree.worktreePath),
+						gitService.getFileChangeStats(worktree.worktreePath),
+						gitService.hasUnpushedCommits(worktree.worktreePath),
+					]);
+
+					return {
+						worktree,
+						branch,
+						fileStats,
+						hasUnpushedCommits: hasUnpushed,
+					};
+				});
+
+				const details = await Promise.all(detailsPromises);
+				setWorktreeDetails(details);
+				setLoading(false);
+			} catch (err) {
+				const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+				setError(errorMsg);
+				setLoading(false);
+			}
+		}
+
+		loadDetails();
+	}, [groveId]);
+
+	// Handle keyboard navigation
+	useInput((input, key) => {
+		if (key.escape) {
+			goBack();
+		} else if (key.upArrow && worktreeDetails.length > 0) {
+			setSelectedIndex((prev) => (prev > 0 ? prev - 1 : worktreeDetails.length - 1));
+		} else if (key.downArrow && worktreeDetails.length > 0) {
+			setSelectedIndex((prev) => (prev < worktreeDetails.length - 1 ? prev + 1 : 0));
+		} else if (input === 'c') {
+			navigate('closeGrove', { groveId });
+		} else if (input === 't') {
+			navigate('openTerminal', { groveId });
+		}
+	});
+
+	// Format file change stats for display
+	const formatFileStats = (stats: FileChangeStats): string => {
+		if (stats.total === 0) {
+			return 'Clean';
+		}
+
+		const parts: string[] = [];
+		if (stats.modified > 0) parts.push(`${stats.modified} modified`);
+		if (stats.added > 0) parts.push(`${stats.added} added`);
+		if (stats.deleted > 0) parts.push(`${stats.deleted} deleted`);
+		if (stats.untracked > 0) parts.push(`${stats.untracked} untracked`);
+
+		return parts.join(', ');
+	};
+
+	if (loading) {
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Text>Loading grove details...</Text>
+			</Box>
+		);
+	}
+
+	if (error) {
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Text color="red">Error: {error}</Text>
+				<Box marginTop={1}>
+					<Text dimColor>Press ESC to go back</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	return (
+		<Box flexDirection="column" padding={1}>
+			{/* Header */}
+			<Box marginBottom={1} flexDirection="column">
+				<Text bold color="green">
+					🌳 {groveName}
+				</Text>
+				<Text dimColor>{grovePath}</Text>
+			</Box>
+
+			{/* Worktrees/Panels Section */}
+			<Box marginBottom={1}>
+				<Text bold underline>
+					Panels ({worktreeDetails.length})
+				</Text>
+			</Box>
+
+			{worktreeDetails.length === 0 ? (
+				<Box marginLeft={2}>
+					<Text dimColor>No worktrees in this grove</Text>
+				</Box>
+			) : (
+				<Box flexDirection="column">
+					{worktreeDetails.map((detail, index) => {
+						const isSelected = index === selectedIndex;
+						const hasChanges = detail.fileStats.total > 0;
+
+						return (
+							<Box
+								key={detail.worktree.worktreePath}
+								flexDirection="column"
+								borderStyle={isSelected ? 'round' : 'single'}
+								borderColor={isSelected ? 'cyan' : 'gray'}
+								paddingX={1}
+								marginBottom={1}
+							>
+								{/* Repository Name */}
+								<Box>
+									<Text bold color={isSelected ? 'cyan' : undefined}>
+										{detail.worktree.repositoryName}
+										{detail.worktree.projectPath && <Text dimColor> / {detail.worktree.projectPath}</Text>}
+									</Text>
+								</Box>
+
+								{/* Branch */}
+								<Box marginTop={0}>
+									<Text dimColor>Branch: </Text>
+									<Text color="yellow">{detail.branch}</Text>
+								</Box>
+
+								{/* File Changes */}
+								<Box>
+									<Text dimColor>Files: </Text>
+									<Text color={hasChanges ? 'yellow' : 'green'}>
+										{hasChanges ? `${detail.fileStats.total} changed` : 'Clean'}
+									</Text>
+									{hasChanges && <Text dimColor> ({formatFileStats(detail.fileStats)})</Text>}
+								</Box>
+
+								{/* Unpushed Commits */}
+								{detail.hasUnpushedCommits && (
+									<Box>
+										<Text color="yellow">⚠ Unpushed commits</Text>
+									</Box>
+								)}
+							</Box>
+						);
+					})}
+				</Box>
+			)}
+
+			{/* Help text */}
+			<Box marginTop={1} flexDirection="column">
+				<Text dimColor>
+					↑↓ Navigate • <Text bold>t</Text> Open Terminal • <Text bold>c</Text> Close Grove •{' '}
+					<Text bold>ESC</Text> Back
+				</Text>
+			</Box>
+		</Box>
+	);
+}

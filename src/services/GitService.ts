@@ -229,6 +229,67 @@ export class GitService implements IGitService {
 	}
 
 	/**
+	 * Get the current branch name
+	 * @param repoPath - Repository root path
+	 * @returns Branch name or 'detached' if in detached HEAD state
+	 */
+	async getCurrentBranch(repoPath: string): Promise<string> {
+		const result = await this.executeGitCommand(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD']);
+
+		if (!result.success) {
+			return 'unknown';
+		}
+
+		const branch = result.stdout.trim();
+		return branch === 'HEAD' ? 'detached' : branch;
+	}
+
+	/**
+	 * Get the count of changed files (modified, added, deleted, untracked)
+	 * @param repoPath - Repository root path
+	 * @returns Object with counts for modified, added, deleted, and untracked files
+	 */
+	async getFileChangeStats(
+		repoPath: string
+	): Promise<{
+		modified: number;
+		added: number;
+		deleted: number;
+		untracked: number;
+		total: number;
+	}> {
+		const result = await this.executeGitCommand(repoPath, ['status', '--porcelain']);
+
+		if (!result.success || !result.stdout) {
+			return { modified: 0, added: 0, deleted: 0, untracked: 0, total: 0 };
+		}
+
+		const lines = result.stdout.split('\n').filter((line) => line.length > 0);
+		let modified = 0;
+		let added = 0;
+		let deleted = 0;
+		let untracked = 0;
+
+		for (const line of lines) {
+			const status = line.substring(0, 2);
+			if (status === '??') {
+				untracked++;
+			} else if (status.includes('M') || status.includes('R') || status.includes('C')) {
+				modified++;
+			} else if (status.includes('A')) {
+				added++;
+			} else if (status.includes('D')) {
+				deleted++;
+			} else {
+				// Other status codes (like 'U' for unmerged) count as modified
+				modified++;
+			}
+		}
+
+		return { modified, added, deleted, untracked, total: lines.length };
+	}
+
+	/**
 	 * Check if a git repository has unpushed commits on the current branch
 	 * @param repoPath - Repository root path
 	 */
