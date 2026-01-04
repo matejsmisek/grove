@@ -208,9 +208,9 @@ export function HomeScreen() {
 						</Text>
 					</Box>
 
-					{/* Panels/Worktrees Section */}
+					{/* Repos Section */}
 					<Box marginBottom={1}>
-						<Text bold>Panels</Text>
+						<Text bold>Repos</Text>
 					</Box>
 
 					{loadingDetails ? (
