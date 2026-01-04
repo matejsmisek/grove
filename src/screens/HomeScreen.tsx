@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { Box, Text, useApp, useInput } from 'ink';
 
@@ -7,18 +7,31 @@ import { GroveActionsModal } from '../components/home/GroveActionsModal.js';
 import { GroveGrid } from '../components/home/GroveGrid.js';
 import type { MenuOption } from '../components/home/MenuModal.js';
 import { MenuModal } from '../components/home/MenuModal.js';
+import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { getAllGroves, initializeStorage } from '../storage/index.js';
-import type { GroveReference } from '../storage/index.js';
+import type { FileChangeStats } from '../services/interfaces.js';
+import { GitServiceToken } from '../services/tokens.js';
+import { getAllGroves, initializeStorage, readGroveMetadata } from '../storage/index.js';
+import type { GroveReference, Worktree } from '../storage/index.js';
+
+interface WorktreeDetails {
+	worktree: Worktree;
+	branch: string;
+	fileStats: FileChangeStats;
+	hasUnpushedCommits: boolean;
+}
 
 export function HomeScreen() {
 	const { navigate } = useNavigation();
 	const { exit } = useApp();
+	const gitService = useService(GitServiceToken);
 	const [selectedGroveIndex, setSelectedGroveIndex] = useState(0);
 	const [showMenu, setShowMenu] = useState(false);
 	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
 	const [selectedGrove, setSelectedGrove] = useState<GroveReference | null>(null);
 	const [selectedGroveActionIndex, setSelectedGroveActionIndex] = useState(0);
+	const [worktreeDetails, setWorktreeDetails] = useState<WorktreeDetails[]>([]);
+	const [loadingDetails, setLoadingDetails] = useState(false);
 
 	// Initialize storage and get groves
 	initializeStorage();
@@ -30,16 +43,63 @@ export function HomeScreen() {
 		{ label: 'Quit', action: () => exit() },
 	];
 
+	// Load worktree details when a grove is selected
+	useEffect(() => {
+		if (!selectedGrove) {
+			setWorktreeDetails([]);
+			return;
+		}
+
+		async function loadDetails() {
+			setLoadingDetails(true);
+			try {
+				const metadata = readGroveMetadata(selectedGrove!.path);
+				if (!metadata) {
+					setWorktreeDetails([]);
+					setLoadingDetails(false);
+					return;
+				}
+
+				const detailsPromises = metadata.worktrees.map(async (worktree) => {
+					const [branch, fileStats, hasUnpushed] = await Promise.all([
+						gitService.getCurrentBranch(worktree.worktreePath),
+						gitService.getFileChangeStats(worktree.worktreePath),
+						gitService.hasUnpushedCommits(worktree.worktreePath),
+					]);
+
+					return {
+						worktree,
+						branch,
+						fileStats,
+						hasUnpushedCommits: hasUnpushed,
+					};
+				});
+
+				const details = await Promise.all(detailsPromises);
+				setWorktreeDetails(details);
+			} catch {
+				setWorktreeDetails([]);
+			}
+			setLoadingDetails(false);
+		}
+
+		loadDetails();
+	}, [selectedGrove]);
+
+	// Format file change stats for display
+	const formatFileStats = (stats: FileChangeStats): string => {
+		if (stats.total === 0) return 'Clean';
+		const parts: string[] = [];
+		if (stats.modified > 0) parts.push(`${stats.modified}M`);
+		if (stats.added > 0) parts.push(`${stats.added}A`);
+		if (stats.deleted > 0) parts.push(`${stats.deleted}D`);
+		if (stats.untracked > 0) parts.push(`${stats.untracked}?`);
+		return parts.join(' ');
+	};
+
 	// Grove action menu (when a grove is selected)
 	const groveActions: GroveAction[] = selectedGrove
 		? [
-				{
-					label: 'View Details',
-					action: () => {
-						navigate('groveDetail', { groveId: selectedGrove.id });
-						setSelectedGrove(null);
-					},
-				},
 				{
 					label: 'Open in Chat',
 					action: () => {
@@ -139,13 +199,66 @@ export function HomeScreen() {
 					helpText="Press ESC or 'm' to close"
 				/>
 			) : selectedGrove ? (
-				/* Show Grove Actions Modal */
-				<GroveActionsModal
-					grove={selectedGrove}
-					actions={groveActions}
-					selectedIndex={selectedGroveActionIndex}
-					helpText="Press ESC to close"
-				/>
+				/* Show Grove Details + Actions */
+				<Box flexDirection="column">
+					{/* Grove Header */}
+					<Box marginBottom={1}>
+						<Text bold color="green">
+							🌳 {selectedGrove.name}
+						</Text>
+					</Box>
+
+					{/* Panels/Worktrees Section */}
+					<Box marginBottom={1}>
+						<Text bold>Panels</Text>
+					</Box>
+
+					{loadingDetails ? (
+						<Box marginBottom={1}>
+							<Text dimColor>Loading...</Text>
+						</Box>
+					) : worktreeDetails.length === 0 ? (
+						<Box marginBottom={1}>
+							<Text dimColor>No worktrees</Text>
+						</Box>
+					) : (
+						<Box flexDirection="column" marginBottom={1}>
+							{worktreeDetails.map((detail) => {
+								const hasChanges = detail.fileStats.total > 0;
+								return (
+									<Box
+										key={detail.worktree.worktreePath}
+										borderStyle="single"
+										borderColor="gray"
+										paddingX={1}
+										marginBottom={0}
+										flexDirection="column"
+									>
+										<Box>
+											<Text bold>{detail.worktree.repositoryName}</Text>
+											{detail.worktree.projectPath && <Text dimColor> / {detail.worktree.projectPath}</Text>}
+										</Box>
+										<Box>
+											<Text dimColor>Branch: </Text>
+											<Text color="yellow">{detail.branch}</Text>
+											<Text dimColor> │ Files: </Text>
+											<Text color={hasChanges ? 'yellow' : 'green'}>{formatFileStats(detail.fileStats)}</Text>
+											{detail.hasUnpushedCommits && <Text color="yellow"> │ ⚠ unpushed</Text>}
+										</Box>
+									</Box>
+								);
+							})}
+						</Box>
+					)}
+
+					{/* Actions */}
+					<GroveActionsModal
+						grove={selectedGrove}
+						actions={groveActions}
+						selectedIndex={selectedGroveActionIndex}
+						helpText="Press ESC to close"
+					/>
+				</Box>
 			) : (
 				/* Show Main Screen */
 				<>
