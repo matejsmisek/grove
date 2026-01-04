@@ -4,8 +4,8 @@ import { Box, Text, useInput } from 'ink';
 
 import { useNavigation } from '../navigation/useNavigation.js';
 import { openTerminalInPath } from '../services/index.js';
-import { getGroveById, readGroveMetadata } from '../storage/index.js';
-import type { Worktree } from '../storage/index.js';
+import { getGroveById, readGroveMetadata, readSettings } from '../storage/index.js';
+import type { TerminalConfig, Worktree } from '../storage/index.js';
 
 interface OpenTerminalScreenProps {
 	groveId: string;
@@ -16,16 +16,22 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
 	const [worktrees, setWorktrees] = useState<Worktree[]>([]);
+	const [terminalConfig, setTerminalConfig] = useState<TerminalConfig | undefined>(undefined);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [error, setError] = useState<string | null>(null);
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
 
 	useEffect(() => {
-		console.error(`[OpenTerminalScreen] Starting with groveId: ${groveId}`);
+		// Read terminal config from settings
+		const settings = readSettings();
+		if (!settings.terminal) {
+			setError('No terminal configured. Please restart Grove to detect available terminals.');
+			setLoading(false);
+			return;
+		}
+		setTerminalConfig(settings.terminal);
 
 		const groveRef = getGroveById(groveId);
-		console.error(`[OpenTerminalScreen] groveRef: ${JSON.stringify(groveRef)}`);
-
 		if (!groveRef) {
 			setError('Grove not found');
 			setLoading(false);
@@ -35,15 +41,11 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 		setGroveName(groveRef.name);
 
 		const metadata = readGroveMetadata(groveRef.path);
-		console.error(`[OpenTerminalScreen] metadata: ${JSON.stringify(metadata)}`);
-
 		if (!metadata) {
 			setError('Grove metadata not found');
 			setLoading(false);
 			return;
 		}
-
-		console.error(`[OpenTerminalScreen] worktrees count: ${metadata.worktrees.length}`);
 
 		if (metadata.worktrees.length === 0) {
 			setError('No worktrees found in this grove');
@@ -53,11 +55,7 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 
 		// If only one worktree, open terminal directly
 		if (metadata.worktrees.length === 1) {
-			console.error(
-				`[OpenTerminalScreen] Single worktree, opening: ${metadata.worktrees[0].worktreePath}`
-			);
-			const result = openTerminalInPath(metadata.worktrees[0].worktreePath);
-			console.error(`[OpenTerminalScreen] openTerminalInPath result: ${JSON.stringify(result)}`);
+			const result = openTerminalInPath(metadata.worktrees[0].worktreePath, settings.terminal);
 			if (result.success) {
 				goBack();
 			} else {
@@ -68,13 +66,12 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 		}
 
 		// Multiple worktrees - show selection
-		console.error('[OpenTerminalScreen] Multiple worktrees, showing selection');
 		setWorktrees(metadata.worktrees);
 		setLoading(false);
 	}, [groveId, goBack]);
 
 	const handleSelect = (worktree: Worktree) => {
-		const result = openTerminalInPath(worktree.worktreePath);
+		const result = openTerminalInPath(worktree.worktreePath, terminalConfig);
 		if (result.success) {
 			setResultMessage(`Opened terminal in ${worktree.repositoryName}`);
 			// Go back after a short delay to show the message
