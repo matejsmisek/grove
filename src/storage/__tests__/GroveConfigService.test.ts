@@ -149,39 +149,43 @@ describe('GroveConfigService', () => {
 	});
 
 	describe('applyBranchNameTemplate', () => {
-		it('should replace ${GROVE_NAME} with normalized grove name', () => {
-			const result = service.applyBranchNameTemplate('grove/${GROVE_NAME}', 'My Grove');
+		it('should replace ${GROVE_NAME} with grove name', () => {
+			// Grove name should already be normalized before passing to this function
+			const result = service.applyBranchNameTemplate('grove/${GROVE_NAME}', 'my-grove-abc12');
 
-			expect(result).toBe('grove/my-grove');
+			expect(result).toBe('grove/my-grove-abc12');
 		});
 
-		it('should lowercase and replace spaces with hyphens', () => {
-			const result = service.applyBranchNameTemplate('${GROVE_NAME}', 'Test Grove Name');
+		it('should handle grove names as-is (normalization happens elsewhere)', () => {
+			// This function no longer normalizes - it expects normalized input
+			const result = service.applyBranchNameTemplate('${GROVE_NAME}', 'test-grove-name-xyz78');
 
-			expect(result).toBe('test-grove-name');
+			expect(result).toBe('test-grove-name-xyz78');
 		});
 
 		it('should replace multiple occurrences of ${GROVE_NAME}', () => {
 			const result = service.applyBranchNameTemplate(
 				'${GROVE_NAME}/${GROVE_NAME}-branch',
-				'Feature',
+				'feature-abc12',
 			);
 
-			expect(result).toBe('feature/feature-branch');
+			expect(result).toBe('feature-abc12/feature-abc12-branch');
 		});
 
-		it('should handle multiple spaces', () => {
-			const result = service.applyBranchNameTemplate('grove/${GROVE_NAME}', 'Test  Multiple  Spaces');
+		it('should preserve the grove name exactly as provided', () => {
+			// No normalization happens in this function
+			const result = service.applyBranchNameTemplate('grove/${GROVE_NAME}', 'my-special-grove-12345');
 
-			expect(result).toBe('grove/test-multiple-spaces');
+			expect(result).toBe('grove/my-special-grove-12345');
 		});
 	});
 
 	describe('getBranchNameForRepo', () => {
 		it('should return default branch name if no config', () => {
-			const branch = service.getBranchNameForRepo(repoPath, 'My Grove');
+			// Grove name should already be normalized
+			const branch = service.getBranchNameForRepo(repoPath, 'my-grove-abc12');
 
-			expect(branch).toBe('grove/my-grove');
+			expect(branch).toBe('grove/my-grove-abc12');
 		});
 
 		it('should use custom template from config', () => {
@@ -194,9 +198,9 @@ describe('GroveConfigService', () => {
 				JSON.stringify(groveConfig, null, 2),
 			);
 
-			const branch = service.getBranchNameForRepo(repoPath, 'My Grove');
+			const branch = service.getBranchNameForRepo(repoPath, 'my-grove-abc12');
 
-			expect(branch).toBe('custom/my-grove');
+			expect(branch).toBe('custom/my-grove-abc12');
 		});
 
 		it('should fall back to default for invalid template', () => {
@@ -211,9 +215,9 @@ describe('GroveConfigService', () => {
 
 			const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-			const branch = service.getBranchNameForRepo(repoPath, 'My Grove');
+			const branch = service.getBranchNameForRepo(repoPath, 'my-grove-abc12');
 
-			expect(branch).toBe('grove/my-grove');
+			expect(branch).toBe('grove/my-grove-abc12');
 			expect(consoleWarnSpy).toHaveBeenCalled();
 
 			consoleWarnSpy.mockRestore();
@@ -330,9 +334,10 @@ describe('GroveConfigService', () => {
 
 	describe('getBranchNameForSelection', () => {
 		it('should return default branch for selection without project', () => {
-			const branch = service.getBranchNameForSelection(repoPath, 'My Grove');
+			// Grove name should already be normalized
+			const branch = service.getBranchNameForSelection(repoPath, 'my-grove-abc12');
 
-			expect(branch).toBe('grove/my-grove');
+			expect(branch).toBe('grove/my-grove-abc12');
 		});
 
 		it('should use merged config for selection with project', () => {
@@ -358,9 +363,9 @@ describe('GroveConfigService', () => {
 				JSON.stringify(projectConfig, null, 2),
 			);
 
-			const branch = service.getBranchNameForSelection(repoPath, 'My Grove', projectPath);
+			const branch = service.getBranchNameForSelection(repoPath, 'my-grove-abc12', projectPath);
 
-			expect(branch).toBe('project/my-grove');
+			expect(branch).toBe('project/my-grove-abc12');
 		});
 	});
 
