@@ -5,12 +5,7 @@ import { Box, Text, useInput } from 'ink';
 import path from 'path';
 
 import { useNavigation } from '../navigation/useNavigation.js';
-import {
-	getEffectiveIDEConfig,
-	getIDEDisplayName,
-	openIDEInPath,
-	resolveIDEForPath,
-} from '../services/index.js';
+import { getIDEDisplayName, openIDEInPath, resolveIDEForPath } from '../services/index.js';
 import {
 	GroveConfigService,
 	getGroveById,

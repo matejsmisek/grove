@@ -19,6 +19,7 @@ export {
 	getEffectiveIDEConfig,
 	getIDEDisplayName,
 	isCommandAvailable,
+	isValidIDEType,
 	openIDEInPath,
 	resolveIDEForPath,
 } from './IDEService.js';

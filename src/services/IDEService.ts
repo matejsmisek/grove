@@ -87,6 +87,13 @@ export const ALL_IDE_TYPES: IDEType[] = [
 ];
 
 /**
+ * Check if a string is a valid IDE type
+ */
+export function isValidIDEType(value: string): value is IDEType {
+	return ALL_IDE_TYPES.includes(value as IDEType);
+}
+
+/**
  * Get the display name for an IDE type
  */
 export function getIDEDisplayName(ideType: IDEType): string {
@@ -212,8 +219,8 @@ export function getDefaultIDEConfig(ideType: IDEType): IDEConfig {
 export interface ResolvedIDEConfig {
 	/** The resolved IDE type (never 'jetbrains-auto') */
 	resolvedType: Exclude<IDEType, 'jetbrains-auto'>;
-	/** The IDE configuration to use */
-	config: IDEConfig;
+	/** The IDE configuration to use (undefined if IDE type is invalid) */
+	config: IDEConfig | undefined;
 }
 
 /**
@@ -296,11 +303,18 @@ export function detectAvailableIDEs(): IDEType[] {
 /**
  * Get the effective IDE configuration
  * Returns custom config if set, otherwise returns default for the IDE type
+ * Returns undefined if the IDE type is not valid
  */
 export function getEffectiveIDEConfig(
-	ideType: IDEType,
+	ideType: IDEType | string,
 	customConfigs?: Partial<Record<IDEType, IDEConfig>>
-): IDEConfig {
+): IDEConfig | undefined {
+	// Validate IDE type at runtime (TypeScript types are erased)
+	if (!isValidIDEType(ideType)) {
+		console.warn(`Invalid IDE type: "${ideType}". Valid types: ${ALL_IDE_TYPES.join(', ')}`);
+		return undefined;
+	}
+
 	// Use custom config if available
 	if (customConfigs && customConfigs[ideType]) {
 		return customConfigs[ideType]!;
