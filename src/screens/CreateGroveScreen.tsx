@@ -301,11 +301,11 @@ export function CreateGroveScreen() {
 
 		groveService
 			.createGrove(groveName, selections)
-			.then(() => {
+			.then((metadata) => {
 				// Save selections to recent history
 				addRecentSelections(selections);
 				setStep('done');
-				setTimeout(() => navigate('home', {}), 1500);
+				setTimeout(() => navigate('groveDetail', { groveId: metadata.id }), 1500);
 			})
 			.catch((err) => {
 				setError(err instanceof Error ? err.message : 'Failed to create grove');
@@ -525,7 +525,7 @@ export function CreateGroveScreen() {
 				</Box>
 				<Text>Grove "{groveName}" has been created.</Text>
 				<Box marginTop={1}>
-					<Text dimColor>Returning to home...</Text>
+					<Text dimColor>Opening grove detail...</Text>
 				</Box>
 			</Box>
 		);
