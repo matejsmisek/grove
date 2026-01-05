@@ -26,6 +26,11 @@ export function NavigationProvider({ children, initialScreen = 'home' }: Navigat
 		[current]
 	);
 
+	const replace = useCallback(<T extends keyof Routes>(screen: T, params: Routes[T]) => {
+		// Replace current screen without modifying history
+		setCurrent({ screen, params });
+	}, []);
+
 	const goBack = useCallback(() => {
 		if (history.length > 0) {
 			const previous = history[history.length - 1];
@@ -37,7 +42,7 @@ export function NavigationProvider({ children, initialScreen = 'home' }: Navigat
 	const canGoBack = history.length > 0;
 
 	return (
-		<NavigationContext.Provider value={{ current, navigate, goBack, canGoBack, history }}>
+		<NavigationContext.Provider value={{ current, navigate, replace, goBack, canGoBack, history }}>
 			{children}
 		</NavigationContext.Provider>
 	);

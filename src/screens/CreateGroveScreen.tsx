@@ -34,7 +34,7 @@ interface ListItem {
 }
 
 export function CreateGroveScreen() {
-	const { navigate, goBack } = useNavigation();
+	const { replace, goBack } = useNavigation();
 	const groveService = useService(GroveServiceToken);
 	const [step, setStep] = useState<CreateStep>('name');
 	const [groveName, setGroveName] = useState('');
@@ -305,7 +305,7 @@ export function CreateGroveScreen() {
 				// Save selections to recent history
 				addRecentSelections(selections);
 				setStep('done');
-				setTimeout(() => navigate('groveDetail', { groveId: metadata.id }), 1500);
+				setTimeout(() => replace('groveDetail', { groveId: metadata.id }), 1500);
 			})
 			.catch((err) => {
 				setError(err instanceof Error ? err.message : 'Failed to create grove');

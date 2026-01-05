@@ -24,6 +24,7 @@ export type NavigationState<T extends keyof Routes = keyof Routes> = {
 export type NavigationContextType = {
 	current: NavigationState;
 	navigate: <T extends keyof Routes>(screen: T, params: Routes[T]) => void;
+	replace: <T extends keyof Routes>(screen: T, params: Routes[T]) => void;
 	goBack: () => void;
 	canGoBack: boolean;
 	history: NavigationState[];
