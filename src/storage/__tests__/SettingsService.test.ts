@@ -1,39 +1,56 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Volume } from 'memfs';
 
-import { cleanupTempDir, createTempDir } from '../../__tests__/helpers.js';
+import { createMockFs, setupMockHomeDir } from '../../__tests__/helpers.js';
 import { SettingsService } from '../SettingsService.js';
 import type { Settings } from '../types.js';
 
-// Mock os.homedir at the module level
-let mockHomeDir = '';
-vi.mock('os', async (importOriginal) => {
-	const actual = (await importOriginal()) as typeof import('os');
+// Mock filesystem and os modules
+let vol: Volume;
+let mockHomeDir: string;
+
+vi.mock('fs', () => {
 	return {
-		...actual,
-		homedir: () => mockHomeDir,
+		default: new Proxy({}, {
+			get(_target, prop) {
+				return vol?.[prop as keyof Volume];
+			},
+		}),
+		...Object.fromEntries(
+			Object.getOwnPropertyNames(Volume.prototype)
+				.filter(key => key !== 'constructor')
+				.map(key => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
+		),
 	};
 });
 
+vi.mock('os', () => ({
+	default: {
+		homedir: () => mockHomeDir,
+	},
+	homedir: () => mockHomeDir,
+}));
+
 describe('SettingsService', () => {
 	let service: SettingsService;
-	let tempDir: string;
 	let mockGroveFolder: string;
 
 	beforeEach(() => {
-		tempDir = createTempDir();
-		mockGroveFolder = path.join(tempDir, '.grove');
+		// Create fresh in-memory filesystem
+		const mockFs = createMockFs();
+		vol = mockFs.vol;
 
-		// Set the mock home directory
-		mockHomeDir = tempDir;
+		// Setup mock home directory
+		mockHomeDir = '/home/testuser';
+		setupMockHomeDir(vol, mockHomeDir);
+		mockGroveFolder = path.join(mockHomeDir, '.grove');
 
 		service = new SettingsService();
 	});
 
 	afterEach(() => {
-		vi.restoreAllMocks();
-		cleanupTempDir(tempDir);
+		vi.clearAllMocks();
 	});
 
 	describe('getStorageConfig', () => {
@@ -52,25 +69,28 @@ describe('SettingsService', () => {
 		it('should return default settings with correct workingFolder', () => {
 			const defaults = service.getDefaultSettings();
 
-			expect(defaults.workingFolder).toBe(path.join(tempDir, 'grove-worktrees'));
+			expect(defaults.workingFolder).toBe(path.join(mockHomeDir, 'grove-worktrees'));
 		});
 	});
 
 	describe('initializeStorage', () => {
 		it('should create .grove folder if it does not exist', () => {
+			// Remove the folder first
+			vol.rmdirSync(mockGroveFolder);
+
 			service.initializeStorage();
 
-			expect(fs.existsSync(mockGroveFolder)).toBe(true);
+			expect(vol.existsSync(mockGroveFolder)).toBe(true);
 		});
 
 		it('should create settings.json with defaults if it does not exist', () => {
 			service.initializeStorage();
 
 			const settingsPath = path.join(mockGroveFolder, 'settings.json');
-			expect(fs.existsSync(settingsPath)).toBe(true);
+			expect(vol.existsSync(settingsPath)).toBe(true);
 
-			const content = fs.readFileSync(settingsPath, 'utf-8');
-			const settings = JSON.parse(content);
+			const content = vol.readFileSync(settingsPath, 'utf-8');
+			const settings = JSON.parse(content as string);
 			expect(settings).toHaveProperty('workingFolder');
 		});
 
@@ -118,8 +138,7 @@ describe('SettingsService', () => {
 
 		it('should merge with defaults for missing fields', () => {
 			// Write partial settings
-			fs.mkdirSync(mockGroveFolder, { recursive: true });
-			fs.writeFileSync(
+			vol.writeFileSync(
 				path.join(mockGroveFolder, 'settings.json'),
 				JSON.stringify({ workingFolder: '/custom/path' }),
 			);
@@ -127,13 +146,11 @@ describe('SettingsService', () => {
 			const settings = service.readSettings();
 
 			expect(settings.workingFolder).toBe('/custom/path');
-			// Other defaults should be merged in if needed
 		});
 
 		it('should return defaults on parse error', () => {
 			// Write invalid JSON
-			fs.mkdirSync(mockGroveFolder, { recursive: true });
-			fs.writeFileSync(path.join(mockGroveFolder, 'settings.json'), 'invalid json {');
+			vol.writeFileSync(path.join(mockGroveFolder, 'settings.json'), 'invalid json {');
 
 			const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -155,21 +172,24 @@ describe('SettingsService', () => {
 			service.writeSettings(customSettings);
 
 			const settingsPath = path.join(mockGroveFolder, 'settings.json');
-			expect(fs.existsSync(settingsPath)).toBe(true);
+			expect(vol.existsSync(settingsPath)).toBe(true);
 
-			const content = fs.readFileSync(settingsPath, 'utf-8');
-			const parsed = JSON.parse(content);
+			const content = vol.readFileSync(settingsPath, 'utf-8');
+			const parsed = JSON.parse(content as string);
 			expect(parsed.workingFolder).toBe('/test/path');
 		});
 
 		it('should create .grove folder if it does not exist', () => {
+			// Remove the folder
+			vol.rmdirSync(mockGroveFolder);
+
 			const customSettings: Settings = {
 				workingFolder: '/test/path',
 			};
 
 			service.writeSettings(customSettings);
 
-			expect(fs.existsSync(mockGroveFolder)).toBe(true);
+			expect(vol.existsSync(mockGroveFolder)).toBe(true);
 		});
 
 		it('should format JSON with tabs', () => {
@@ -180,7 +200,7 @@ describe('SettingsService', () => {
 			service.writeSettings(customSettings);
 
 			const settingsPath = path.join(mockGroveFolder, 'settings.json');
-			const content = fs.readFileSync(settingsPath, 'utf-8');
+			const content = vol.readFileSync(settingsPath, 'utf-8') as string;
 
 			// Should contain tabs (formatted JSON)
 			expect(content).toContain('\t');
@@ -215,7 +235,7 @@ describe('SettingsService', () => {
 			expect(updated.workingFolder).toBe('/new/path');
 
 			const settingsPath = path.join(mockGroveFolder, 'settings.json');
-			expect(fs.existsSync(settingsPath)).toBe(true);
+			expect(vol.existsSync(settingsPath)).toBe(true);
 		});
 
 		it('should return updated settings', () => {

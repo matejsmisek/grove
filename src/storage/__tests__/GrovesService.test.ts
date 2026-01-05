@@ -1,32 +1,52 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Volume } from 'memfs';
 
-import { cleanupTempDir, createTempDir } from '../../__tests__/helpers.js';
+import { createMockFs, setupMockHomeDir } from '../../__tests__/helpers.js';
 import { GrovesService } from '../GrovesService.js';
 import { SettingsService } from '../SettingsService.js';
 import type { GroveMetadata, GroveReference } from '../types.js';
 
-// Mock os.homedir at the module level
-let mockHomeDir = '';
-vi.mock('os', async (importOriginal) => {
-	const actual = (await importOriginal()) as typeof import('os');
+// Mock filesystem and os modules
+let vol: Volume;
+let mockHomeDir: string;
+
+vi.mock('fs', () => {
 	return {
-		...actual,
-		homedir: () => mockHomeDir,
+		default: new Proxy({}, {
+			get(_target, prop) {
+				return vol?.[prop as keyof Volume];
+			},
+		}),
+		...Object.fromEntries(
+			Object.getOwnPropertyNames(Volume.prototype)
+				.filter(key => key !== 'constructor')
+				.map(key => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
+		),
 	};
 });
+
+vi.mock('os', () => ({
+	default: {
+		homedir: () => mockHomeDir,
+	},
+	homedir: () => mockHomeDir,
+}));
 
 describe('GrovesService', () => {
 	let service: GrovesService;
 	let settingsService: SettingsService;
-	let tempDir: string;
+	let mockGroveFolder: string;
 
 	beforeEach(() => {
-		tempDir = createTempDir();
+		// Create fresh in-memory filesystem
+		const mockFs = createMockFs();
+		vol = mockFs.vol;
 
-		// Set the mock home directory
-		mockHomeDir = tempDir;
+		// Setup mock home directory
+		mockHomeDir = '/home/testuser';
+		setupMockHomeDir(vol, mockHomeDir);
+		mockGroveFolder = path.join(mockHomeDir, '.grove');
 
 		settingsService = new SettingsService();
 		settingsService.initializeStorage();
@@ -36,7 +56,6 @@ describe('GrovesService', () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
-		cleanupTempDir(tempDir);
 	});
 
 	describe('addGroveToIndex', () => {
@@ -191,8 +210,8 @@ describe('GrovesService', () => {
 
 	describe('readGroveMetadata', () => {
 		it('should return null if metadata file does not exist', () => {
-			const grovePath = path.join(tempDir, 'grove-folder');
-			fs.mkdirSync(grovePath);
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
 
 			const metadata = service.readGroveMetadata(grovePath);
 
@@ -200,8 +219,8 @@ describe('GrovesService', () => {
 		});
 
 		it('should read metadata from grove.json', () => {
-			const grovePath = path.join(tempDir, 'grove-folder');
-			fs.mkdirSync(grovePath);
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
 
 			const testMetadata: GroveMetadata = {
 				id: 'test-grove',
@@ -211,7 +230,7 @@ describe('GrovesService', () => {
 				worktrees: [],
 			};
 
-			fs.writeFileSync(
+			vol.writeFileSync(
 				path.join(grovePath, 'grove.json'),
 				JSON.stringify(testMetadata, null, '\t'),
 			);
@@ -223,10 +242,10 @@ describe('GrovesService', () => {
 		});
 
 		it('should return null on parse error', () => {
-			const grovePath = path.join(tempDir, 'grove-folder');
-			fs.mkdirSync(grovePath);
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
 
-			fs.writeFileSync(path.join(grovePath, 'grove.json'), 'invalid json {');
+			vol.writeFileSync(path.join(grovePath, 'grove.json'), 'invalid json {');
 
 			const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -241,8 +260,8 @@ describe('GrovesService', () => {
 
 	describe('writeGroveMetadata', () => {
 		it('should write metadata to grove.json', () => {
-			const grovePath = path.join(tempDir, 'grove-folder');
-			fs.mkdirSync(grovePath);
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
 
 			const metadata: GroveMetadata = {
 				id: 'test-grove',
@@ -255,16 +274,16 @@ describe('GrovesService', () => {
 			service.writeGroveMetadata(grovePath, metadata);
 
 			const metadataPath = path.join(grovePath, 'grove.json');
-			expect(fs.existsSync(metadataPath)).toBe(true);
+			expect(vol.existsSync(metadataPath)).toBe(true);
 
-			const content = fs.readFileSync(metadataPath, 'utf-8');
-			const parsed = JSON.parse(content);
+			const content = vol.readFileSync(metadataPath, 'utf-8');
+			const parsed = JSON.parse(content as string);
 			expect(parsed.id).toBe('test-grove');
 		});
 
 		it('should update updatedAt timestamp automatically', () => {
-			const grovePath = path.join(tempDir, 'grove-folder');
-			fs.mkdirSync(grovePath);
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
 
 			const metadata: GroveMetadata = {
 				id: 'test-grove',
@@ -281,8 +300,8 @@ describe('GrovesService', () => {
 		});
 
 		it('should update grove in index', () => {
-			const grovePath = path.join(tempDir, 'grove-folder');
-			fs.mkdirSync(grovePath);
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
 
 			const groveRef: GroveReference = {
 				id: 'test-grove',
@@ -311,8 +330,8 @@ describe('GrovesService', () => {
 
 	describe('addWorktreeToGrove', () => {
 		it('should add worktree to grove metadata', () => {
-			const grovePath = path.join(tempDir, 'grove-folder');
-			fs.mkdirSync(grovePath);
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
 
 			const metadata: GroveMetadata = {
 				id: 'test-grove',
@@ -339,7 +358,7 @@ describe('GrovesService', () => {
 		});
 
 		it('should throw error if metadata not found', () => {
-			const grovePath = path.join(tempDir, 'nonexistent-grove');
+			const grovePath = '/nonexistent-grove';
 
 			expect(() =>
 				service.addWorktreeToGrove(grovePath, 'repo1', '/path/to/repo1', 'main'),
@@ -347,8 +366,8 @@ describe('GrovesService', () => {
 		});
 
 		it('should generate correct worktree path', () => {
-			const grovePath = path.join(tempDir, 'grove-folder');
-			fs.mkdirSync(grovePath);
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
 
 			const metadata: GroveMetadata = {
 				id: 'test-grove',
@@ -373,8 +392,8 @@ describe('GrovesService', () => {
 
 	describe('deleteGrove', () => {
 		it('should delete grove from index without deleting folder', () => {
-			const grovePath = path.join(tempDir, 'grove-folder');
-			fs.mkdirSync(grovePath);
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
 
 			const groveRef: GroveReference = {
 				id: 'test-grove',
@@ -390,12 +409,12 @@ describe('GrovesService', () => {
 
 			expect(deleted).toBe(true);
 			expect(service.getGroveById('test-grove')).toBeNull();
-			expect(fs.existsSync(grovePath)).toBe(true); // Folder should still exist
+			expect(vol.existsSync(grovePath)).toBe(true); // Folder should still exist
 		});
 
 		it('should delete grove from index and delete folder', () => {
-			const grovePath = path.join(tempDir, 'grove-folder');
-			fs.mkdirSync(grovePath);
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
 
 			const groveRef: GroveReference = {
 				id: 'test-grove',
@@ -411,7 +430,7 @@ describe('GrovesService', () => {
 
 			expect(deleted).toBe(true);
 			expect(service.getGroveById('test-grove')).toBeNull();
-			expect(fs.existsSync(grovePath)).toBe(false); // Folder should be deleted
+			expect(vol.existsSync(grovePath)).toBe(false); // Folder should be deleted
 		});
 
 		it('should return false if grove not found', () => {

@@ -1,20 +1,45 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import * as path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Volume } from 'memfs';
 
-import { cleanupTempDir, createTempDir, fileExists, readFile } from '../../__tests__/helpers.js';
+import { createMockFs } from '../../__tests__/helpers.js';
 import { ContextService } from '../ContextService.js';
 import type { ContextData } from '../interfaces.js';
+
+// Mock filesystem
+let vol: Volume;
+
+vi.mock('fs', () => {
+	return {
+		default: new Proxy({}, {
+			get(_target, prop) {
+				return vol?.[prop as keyof Volume];
+			},
+		}),
+		...Object.fromEntries(
+			Object.getOwnPropertyNames(Volume.prototype)
+				.filter(key => key !== 'constructor')
+				.map(key => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
+		),
+	};
+});
 
 describe('ContextService', () => {
 	let service: ContextService;
 	let tempDir: string;
 
 	beforeEach(() => {
+		// Create fresh in-memory filesystem
+		const mockFs = createMockFs();
+		vol = mockFs.vol;
+
 		service = new ContextService();
-		tempDir = createTempDir();
+		tempDir = '/test';
+		vol.mkdirSync(tempDir, { recursive: true });
 	});
 
 	afterEach(() => {
-		cleanupTempDir(tempDir);
+		vi.clearAllMocks();
 	});
 
 	describe('generateContent', () => {
@@ -93,9 +118,9 @@ describe('ContextService', () => {
 			service.createContextFile(tempDir, data);
 
 			const contextPath = service.getContextFilePath(tempDir);
-			expect(fileExists(contextPath)).toBe(true);
+			expect(vol.existsSync(contextPath)).toBe(true);
 
-			const content = readFile(contextPath);
+			const content = vol.readFileSync(contextPath, 'utf-8') as string;
 			expect(content).toContain('# Test Grove');
 			expect(content).toContain('Testing');
 		});

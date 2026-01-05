@@ -1,33 +1,36 @@
-import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
+import { Volume, createFsFromVolume } from 'memfs';
 
 /**
- * Create a temporary directory for testing
+ * Create a new in-memory filesystem volume for testing
+ * Returns the volume and fs instance
  */
-export function createTempDir(prefix = 'grove-test-'): string {
-	return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+export function createMockFs() {
+	const vol = new Volume();
+	const fs = createFsFromVolume(vol);
+	return { vol, fs };
 }
 
 /**
- * Clean up a temporary directory
+ * Setup a mock home directory structure in the volume
+ * @param vol - memfs Volume instance
+ * @param homeDir - Path to use as home directory (e.g., '/home/testuser')
  */
-export function cleanupTempDir(dirPath: string): void {
-	if (fs.existsSync(dirPath)) {
-		fs.rmSync(dirPath, { recursive: true, force: true });
-	}
+export function setupMockHomeDir(vol: Volume, homeDir: string): void {
+	vol.mkdirSync(homeDir, { recursive: true });
+	vol.mkdirSync(path.join(homeDir, '.grove'), { recursive: true });
 }
 
 /**
  * Create a mock git repository structure
  */
-export function createMockGitRepo(basePath: string): string {
+export function createMockGitRepo(vol: Volume, basePath: string): string {
 	const repoPath = path.join(basePath, 'test-repo');
-	fs.mkdirSync(repoPath, { recursive: true });
-	fs.mkdirSync(path.join(repoPath, '.git'));
+	vol.mkdirSync(repoPath, { recursive: true });
+	vol.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
 
 	// Create a basic git config file
-	fs.writeFileSync(
+	vol.writeFileSync(
 		path.join(repoPath, '.git', 'config'),
 		'[core]\n\trepositoryformatversion = 0\n',
 	);
@@ -38,32 +41,32 @@ export function createMockGitRepo(basePath: string): string {
 /**
  * Create a file with content at the given path
  */
-export function createFile(filePath: string, content: string): void {
+export function createFile(vol: Volume, filePath: string, content: string): void {
 	const dir = path.dirname(filePath);
-	if (!fs.existsSync(dir)) {
-		fs.mkdirSync(dir, { recursive: true });
+	if (!vol.existsSync(dir)) {
+		vol.mkdirSync(dir, { recursive: true });
 	}
-	fs.writeFileSync(filePath, content);
+	vol.writeFileSync(filePath, content);
 }
 
 /**
  * Read file contents
  */
-export function readFile(filePath: string): string {
-	return fs.readFileSync(filePath, 'utf-8');
+export function readFile(vol: Volume, filePath: string): string {
+	return vol.readFileSync(filePath, 'utf-8') as string;
 }
 
 /**
  * Check if file exists
  */
-export function fileExists(filePath: string): boolean {
-	return fs.existsSync(filePath);
+export function fileExists(vol: Volume, filePath: string): boolean {
+	return vol.existsSync(filePath);
 }
 
 /**
  * Create a mock .grove.json config file
  */
-export function createMockGroveConfig(repoPath: string, config: unknown): void {
+export function createMockGroveConfig(vol: Volume, repoPath: string, config: unknown): void {
 	const configPath = path.join(repoPath, '.grove.json');
-	fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+	vol.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }

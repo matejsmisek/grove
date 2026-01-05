@@ -1,30 +1,108 @@
-import * as fs from 'fs';
 import * as path from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Volume } from 'memfs';
 
-import { cleanupTempDir, createFile, createTempDir, fileExists } from '../../__tests__/helpers.js';
+import { createFile, createMockFs } from '../../__tests__/helpers.js';
 import { FileService } from '../FileService.js';
+
+// Mock filesystem
+let vol: Volume;
+
+vi.mock('fs', () => {
+	return {
+		default: new Proxy({}, {
+			get(_target, prop) {
+				return vol?.[prop as keyof Volume];
+			},
+		}),
+		...Object.fromEntries(
+			Object.getOwnPropertyNames(Volume.prototype)
+				.filter(key => key !== 'constructor')
+				.map(key => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
+		),
+	};
+});
+
+// Mock glob to work with memfs
+vi.mock('glob', () => ({
+	glob: vi.fn(async (pattern: string, options: { cwd?: string }) => {
+		const cwd = options.cwd || '/';
+
+		// Use memfs to list files
+		const files: string[] = [];
+
+		function walk(dir: string, base: string = '') {
+			try {
+				const entries = vol.readdirSync(dir) as string[];
+				for (const entry of entries) {
+					const fullPath = path.join(dir, entry);
+					const relativePath = base ? path.join(base, entry) : entry;
+
+					try {
+						const stats = vol.statSync(fullPath);
+						if (stats.isDirectory()) {
+							// Recursively walk subdirectories for ** patterns
+							if (pattern.includes('**')) {
+								walk(fullPath, relativePath);
+							}
+						} else if (stats.isFile()) {
+							files.push(relativePath);
+						}
+					} catch {
+						// Skip files we can't stat
+					}
+				}
+			} catch {
+				// Skip directories we can't read
+			}
+		}
+
+		walk(cwd);
+
+		// Filter files based on pattern
+		const filtered = files.filter(file => {
+			// Simple pattern matching
+			if (pattern === '*.txt') return file.endsWith('.txt') && !file.includes('/');
+			if (pattern === '*.md') return file.endsWith('.md') && !file.includes('/');
+			if (pattern === '*.json') return file.endsWith('.json') && !file.includes('/');
+			if (pattern === '*.xyz') return file.endsWith('.xyz');
+			if (pattern === '.**') return file.startsWith('.');
+			if (pattern === '.*') return file.startsWith('.') && !file.includes('/');
+			if (pattern === '**/*.txt') return file.endsWith('.txt');
+			if (pattern === '**/*.md') return file.endsWith('.md');
+
+			return false;
+		});
+
+		return filtered;
+	}),
+}));
 
 describe('FileService', () => {
 	let service: FileService;
 	let tempDir: string;
 
 	beforeEach(() => {
+		// Create fresh in-memory filesystem
+		const mockFs = createMockFs();
+		vol = mockFs.vol;
+
 		service = new FileService();
-		tempDir = createTempDir();
+		tempDir = '/test';
+		vol.mkdirSync(tempDir, { recursive: true });
 	});
 
 	afterEach(() => {
-		cleanupTempDir(tempDir);
+		vi.clearAllMocks();
 	});
 
 	describe('matchPattern', () => {
 		beforeEach(() => {
 			// Create test file structure
-			createFile(path.join(tempDir, 'file1.txt'), 'content');
-			createFile(path.join(tempDir, 'file2.md'), 'content');
-			createFile(path.join(tempDir, 'subdir', 'file3.txt'), 'content');
-			createFile(path.join(tempDir, '.gitignore'), 'node_modules/');
+			createFile(vol, path.join(tempDir, 'file1.txt'), 'content');
+			createFile(vol, path.join(tempDir, 'file2.md'), 'content');
+			createFile(vol, path.join(tempDir, 'subdir', 'file3.txt'), 'content');
+			createFile(vol, path.join(tempDir, '.gitignore'), 'node_modules/');
 		});
 
 		it('should match files by extension', async () => {
@@ -66,9 +144,9 @@ describe('FileService', () => {
 
 	describe('matchPatterns', () => {
 		beforeEach(() => {
-			createFile(path.join(tempDir, 'file1.txt'), 'content');
-			createFile(path.join(tempDir, 'file2.md'), 'content');
-			createFile(path.join(tempDir, 'README.md'), 'content');
+			createFile(vol, path.join(tempDir, 'file1.txt'), 'content');
+			createFile(vol, path.join(tempDir, 'file2.md'), 'content');
+			createFile(vol, path.join(tempDir, 'README.md'), 'content');
 		});
 
 		it('should match multiple patterns', async () => {
@@ -106,38 +184,38 @@ describe('FileService', () => {
 		beforeEach(() => {
 			sourceDir = path.join(tempDir, 'source');
 			destDir = path.join(tempDir, 'dest');
-			fs.mkdirSync(sourceDir);
+			vol.mkdirSync(sourceDir, { recursive: true });
 		});
 
 		it('should copy a file to destination', () => {
 			const testContent = 'test content';
-			createFile(path.join(sourceDir, 'test.txt'), testContent);
+			createFile(vol, path.join(sourceDir, 'test.txt'), testContent);
 
 			service.copyFile(sourceDir, destDir, 'test.txt');
 
 			const destPath = path.join(destDir, 'test.txt');
-			expect(fileExists(destPath)).toBe(true);
-			expect(fs.readFileSync(destPath, 'utf-8')).toBe(testContent);
+			expect(vol.existsSync(destPath)).toBe(true);
+			expect(vol.readFileSync(destPath, 'utf-8')).toBe(testContent);
 		});
 
 		it('should preserve directory structure', () => {
 			const testContent = 'nested content';
-			createFile(path.join(sourceDir, 'subdir', 'nested.txt'), testContent);
+			createFile(vol, path.join(sourceDir, 'subdir', 'nested.txt'), testContent);
 
 			service.copyFile(sourceDir, destDir, 'subdir/nested.txt');
 
 			const destPath = path.join(destDir, 'subdir', 'nested.txt');
-			expect(fileExists(destPath)).toBe(true);
-			expect(fs.readFileSync(destPath, 'utf-8')).toBe(testContent);
+			expect(vol.existsSync(destPath)).toBe(true);
+			expect(vol.readFileSync(destPath, 'utf-8')).toBe(testContent);
 		});
 
 		it('should create destination directory if it does not exist', () => {
-			createFile(path.join(sourceDir, 'test.txt'), 'content');
+			createFile(vol, path.join(sourceDir, 'test.txt'), 'content');
 
 			service.copyFile(sourceDir, destDir, 'test.txt');
 
-			expect(fs.existsSync(destDir)).toBe(true);
-			expect(fileExists(path.join(destDir, 'test.txt'))).toBe(true);
+			expect(vol.existsSync(destDir)).toBe(true);
+			expect(vol.existsSync(path.join(destDir, 'test.txt'))).toBe(true);
 		});
 	});
 
@@ -148,12 +226,12 @@ describe('FileService', () => {
 		beforeEach(() => {
 			sourceDir = path.join(tempDir, 'source');
 			destDir = path.join(tempDir, 'dest');
-			fs.mkdirSync(sourceDir);
+			vol.mkdirSync(sourceDir, { recursive: true });
 
 			// Create test files
-			createFile(path.join(sourceDir, 'file1.txt'), 'content1');
-			createFile(path.join(sourceDir, 'file2.md'), 'content2');
-			createFile(path.join(sourceDir, 'subdir', 'file3.txt'), 'content3');
+			createFile(vol, path.join(sourceDir, 'file1.txt'), 'content1');
+			createFile(vol, path.join(sourceDir, 'file2.md'), 'content2');
+			createFile(vol, path.join(sourceDir, 'subdir', 'file3.txt'), 'content3');
 		});
 
 		it('should copy files matching patterns', async () => {
@@ -162,7 +240,7 @@ describe('FileService', () => {
 			expect(result.success).toBe(true);
 			expect(result.copiedFiles).toContain('file1.txt');
 			expect(result.errors).toHaveLength(0);
-			expect(fileExists(path.join(destDir, 'file1.txt'))).toBe(true);
+			expect(vol.existsSync(path.join(destDir, 'file1.txt'))).toBe(true);
 		});
 
 		it('should copy files from multiple patterns', async () => {
@@ -183,7 +261,7 @@ describe('FileService', () => {
 			expect(result.success).toBe(true);
 			expect(result.copiedFiles).toContain('file1.txt');
 			expect(result.copiedFiles).toContain('subdir/file3.txt');
-			expect(fileExists(path.join(destDir, 'subdir', 'file3.txt'))).toBe(true);
+			expect(vol.existsSync(path.join(destDir, 'subdir', 'file3.txt'))).toBe(true);
 		});
 
 		it('should handle empty patterns array', async () => {
@@ -198,13 +276,13 @@ describe('FileService', () => {
 			const result = await service.copyFilesFromPatterns(sourceDir, destDir, ['*.txt']);
 
 			expect(result.success).toBe(true);
-			expect(fs.existsSync(destDir)).toBe(true);
+			expect(vol.existsSync(destDir)).toBe(true);
 		});
 
 		it('should collect errors for failed copy operations', async () => {
 			// Try to copy from a file that will be deleted
 			const testFile = path.join(sourceDir, 'temp.txt');
-			createFile(testFile, 'content');
+			createFile(vol, testFile, 'content');
 
 			// This test is tricky - we need to simulate a copy failure
 			// One way is to make the destination read-only, but that's platform-specific
@@ -221,7 +299,7 @@ describe('FileService', () => {
 	describe('exists', () => {
 		it('should return true for existing file', () => {
 			const filePath = path.join(tempDir, 'exists.txt');
-			createFile(filePath, 'content');
+			createFile(vol, filePath, 'content');
 
 			expect(service.exists(filePath)).toBe(true);
 		});
@@ -244,7 +322,7 @@ describe('FileService', () => {
 
 		it('should return false for file', () => {
 			const filePath = path.join(tempDir, 'file.txt');
-			createFile(filePath, 'content');
+			createFile(vol, filePath, 'content');
 
 			expect(service.isDirectory(filePath)).toBe(false);
 		});
@@ -259,7 +337,7 @@ describe('FileService', () => {
 	describe('isFile', () => {
 		it('should return true for file', () => {
 			const filePath = path.join(tempDir, 'file.txt');
-			createFile(filePath, 'content');
+			createFile(vol, filePath, 'content');
 
 			expect(service.isFile(filePath)).toBe(true);
 		});

@@ -1,33 +1,51 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Volume } from 'memfs';
 
-import { cleanupTempDir, createTempDir } from '../../__tests__/helpers.js';
+import { createMockFs, setupMockHomeDir } from '../../__tests__/helpers.js';
 import { RepositoryService } from '../RepositoryService.js';
 import { SettingsService } from '../SettingsService.js';
 
-// Mock os.homedir at the module level
-let mockHomeDir = '';
-vi.mock('os', async (importOriginal) => {
-	const actual = (await importOriginal()) as typeof import('os');
+// Mock filesystem and os modules
+let vol: Volume;
+let mockHomeDir: string;
+
+vi.mock('fs', () => {
 	return {
-		...actual,
-		homedir: () => mockHomeDir,
+		default: new Proxy({}, {
+			get(_target, prop) {
+				return vol?.[prop as keyof Volume];
+			},
+		}),
+		...Object.fromEntries(
+			Object.getOwnPropertyNames(Volume.prototype)
+				.filter(key => key !== 'constructor')
+				.map(key => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
+		),
 	};
 });
+
+vi.mock('os', () => ({
+	default: {
+		homedir: () => mockHomeDir,
+	},
+	homedir: () => mockHomeDir,
+}));
 
 describe('RepositoryService', () => {
 	let service: RepositoryService;
 	let settingsService: SettingsService;
-	let tempDir: string;
 	let mockGroveFolder: string;
 
 	beforeEach(() => {
-		tempDir = createTempDir();
-		mockGroveFolder = path.join(tempDir, '.grove');
+		// Create fresh in-memory filesystem
+		const mockFs = createMockFs();
+		vol = mockFs.vol;
 
-		// Set the mock home directory
-		mockHomeDir = tempDir;
+		// Setup mock home directory
+		mockHomeDir = '/home/testuser';
+		setupMockHomeDir(vol, mockHomeDir);
+		mockGroveFolder = path.join(mockHomeDir, '.grove');
 
 		settingsService = new SettingsService();
 		settingsService.initializeStorage();
@@ -36,8 +54,7 @@ describe('RepositoryService', () => {
 	});
 
 	afterEach(() => {
-		vi.restoreAllMocks();
-		cleanupTempDir(tempDir);
+		vi.clearAllMocks();
 	});
 
 	describe('getDefaultRepositories', () => {
@@ -76,7 +93,7 @@ describe('RepositoryService', () => {
 		it('should return defaults on parse error', () => {
 			// Write invalid JSON
 			const repositoriesPath = path.join(mockGroveFolder, 'repositories.json');
-			fs.writeFileSync(repositoriesPath, 'invalid json {');
+			vol.writeFileSync(repositoriesPath, 'invalid json {');
 
 			const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -104,18 +121,16 @@ describe('RepositoryService', () => {
 			service.writeRepositories(testRepos);
 
 			const repositoriesPath = path.join(mockGroveFolder, 'repositories.json');
-			expect(fs.existsSync(repositoriesPath)).toBe(true);
+			expect(vol.existsSync(repositoriesPath)).toBe(true);
 
-			const content = fs.readFileSync(repositoriesPath, 'utf-8');
-			const parsed = JSON.parse(content);
+			const content = vol.readFileSync(repositoriesPath, 'utf-8');
+			const parsed = JSON.parse(content as string);
 			expect(parsed.repositories).toHaveLength(1);
 		});
 
 		it('should create .grove folder if it does not exist', () => {
 			// Remove the grove folder
-			if (fs.existsSync(mockGroveFolder)) {
-				fs.rmSync(mockGroveFolder, { recursive: true });
-			}
+			vol.rmdirSync(mockGroveFolder, { recursive: true });
 
 			const testRepos = {
 				repositories: [],
@@ -123,7 +138,7 @@ describe('RepositoryService', () => {
 
 			service.writeRepositories(testRepos);
 
-			expect(fs.existsSync(mockGroveFolder)).toBe(true);
+			expect(vol.existsSync(mockGroveFolder)).toBe(true);
 		});
 	});
 
