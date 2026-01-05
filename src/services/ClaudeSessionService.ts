@@ -94,29 +94,14 @@ launch --title "cmd" bash
 	/**
 	 * Get the template for a specific repository/project
 	 * Checks .grove.json for custom template, then settings, then default
+	 * Priority: project-level .grove.json > repo-level .grove.json > settings > default
 	 */
 	getTemplateForRepo(
 		terminalType: ClaudeTerminalType,
 		repositoryPath: string,
 		projectPath?: string
 	): string {
-		const config = this.groveConfigService.readMergedConfig(repositoryPath, projectPath);
-		if (config.ide && typeof config.ide === 'object' && 'claudeSessionTemplates' in config) {
-			// FIXME: This doesn't work because ide doesn't have claudeSessionTemplates
-			// We need to check the raw GroveRepoConfig instead
-		}
-
-		// Try to get from raw repo config
-		const repoConfig = this.groveConfigService.readGroveRepoConfig(repositoryPath);
-		const repoTemplates = repoConfig.claudeSessionTemplates;
-		if (repoTemplates) {
-			const repoTemplate = repoTemplates[terminalType];
-			if (repoTemplate) {
-				return repoTemplate.content;
-			}
-		}
-
-		// If monorepo, check project-level config
+		// If monorepo, check project-level config first (highest priority)
 		if (projectPath) {
 			const projectConfigPath = path.join(repositoryPath, projectPath, '.grove.json');
 			if (fs.existsSync(projectConfigPath)) {
@@ -132,6 +117,16 @@ launch --title "cmd" bash
 				} catch {
 					// Ignore JSON parse errors
 				}
+			}
+		}
+
+		// Check repository-level config
+		const repoConfig = this.groveConfigService.readGroveRepoConfig(repositoryPath);
+		const repoTemplates = repoConfig.claudeSessionTemplates;
+		if (repoTemplates) {
+			const repoTemplate = repoTemplates[terminalType];
+			if (repoTemplate) {
+				return repoTemplate.content;
 			}
 		}
 
@@ -169,9 +164,9 @@ launch --title "cmd" bash
 	 */
 	openSession(
 		workingDir: string,
-		terminalType?: ClaudeTerminalType,
-		repositoryPath?: string,
-		projectPath?: string
+		repositoryPath: string,
+		projectPath?: string,
+		terminalType?: ClaudeTerminalType
 	): ClaudeSessionResult {
 		// Determine which terminal to use
 		let terminal: ClaudeTerminalType | undefined = terminalType;
@@ -213,13 +208,8 @@ launch --title "cmd" bash
 		try {
 			this.ensureTmpDir();
 
-			// Get the appropriate template
-			let template: string;
-			if (repositoryPath) {
-				template = this.getTemplateForRepo(terminal, repositoryPath, projectPath);
-			} else {
-				template = this.getEffectiveTemplate(terminal);
-			}
+			// Get the appropriate template (always uses repo-specific lookup)
+			const template = this.getTemplateForRepo(terminal, repositoryPath, projectPath);
 
 			// Apply template with working directory
 			const sessionContent = this.applyTemplate(template, workingDir);

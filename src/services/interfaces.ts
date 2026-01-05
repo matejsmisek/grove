@@ -587,15 +587,15 @@ export interface IClaudeSessionService {
 	 * Open Claude in a terminal session with the working directory set
 	 * Creates two tabs: one running Claude CLI, one with regular bash shell
 	 * @param workingDir - Directory to set as working directory for both tabs
+	 * @param repositoryPath - Repository path for template lookup
+	 * @param projectPath - Optional project path for template lookup (for monorepos)
 	 * @param terminalType - Optional terminal type to use (if not provided, uses setting or auto-detects)
-	 * @param repositoryPath - Optional repository path for template lookup
-	 * @param projectPath - Optional project path for template lookup
 	 */
 	openSession(
 		workingDir: string,
-		terminalType?: ClaudeTerminalType,
-		repositoryPath?: string,
-		projectPath?: string
+		repositoryPath: string,
+		projectPath?: string,
+		terminalType?: ClaudeTerminalType
 	): ClaudeSessionResult;
 }
 

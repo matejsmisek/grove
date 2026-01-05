@@ -97,9 +97,9 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 				: worktree.worktreePath;
 			const result = claudeSessionService.openSession(
 				workingDir,
-				terminalToUse!,
 				worktree.repositoryPath,
-				worktree.projectPath
+				worktree.projectPath,
+				terminalToUse!
 			);
 			if (result.success) {
 				goBack();
@@ -129,9 +129,9 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 			: worktree.worktreePath;
 		const result = claudeSessionService.openSession(
 			workingDir,
-			selectedTerminal!,
 			worktree.repositoryPath,
-			worktree.projectPath
+			worktree.projectPath,
+			selectedTerminal!
 		);
 		if (result.success) {
 			setResultMessage(`Opened Claude in ${worktree.repositoryName}`);

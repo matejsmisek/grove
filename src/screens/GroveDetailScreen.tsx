@@ -150,7 +150,11 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	const handleOpenInClaude = () => {
 		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selectedWorktree);
-		const result = claudeSessionService.openSession(targetPath);
+		const result = claudeSessionService.openSession(
+			targetPath,
+			selectedWorktree.repositoryPath,
+			selectedWorktree.projectPath
+		);
 		setShowActions(false);
 		if (result.success) {
 			setResultMessage(`Opened Claude session in ${selectedWorktree.repositoryName}`);
