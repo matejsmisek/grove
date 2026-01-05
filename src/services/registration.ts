@@ -15,6 +15,7 @@ import { ContextService } from './ContextService.js';
 import { FileService } from './FileService.js';
 import { GitService } from './GitService.js';
 import { GroveService } from './GroveService.js';
+import { LLMService } from './LLMService.js';
 import {
 	ClaudeSessionServiceToken,
 	ContextServiceToken,
@@ -23,6 +24,7 @@ import {
 	GroveConfigServiceToken,
 	GroveServiceToken,
 	GrovesServiceToken,
+	LLMServiceToken,
 	RepositoryServiceToken,
 	SettingsServiceToken,
 } from './tokens.js';
@@ -40,6 +42,7 @@ import {
  * - ContextService: no dependencies
  * - FileService: no dependencies
  * - ClaudeSessionService: depends on SettingsService, GroveConfigService
+ * - LLMService: depends on SettingsService
  * - GroveService: depends on SettingsService, GrovesService, GroveConfigService, GitService, ContextService, FileService
  *
  * @param container - Container to register services in (defaults to global container)
@@ -79,6 +82,12 @@ export function registerServices(container?: IMutableContainer): void {
 				cont.resolve(SettingsServiceToken),
 				cont.resolve(GroveConfigServiceToken)
 			)
+	);
+
+	// LLMService depends on SettingsService
+	c.registerSingleton(
+		LLMServiceToken,
+		(cont) => new LLMService(cont.resolve(SettingsServiceToken))
 	);
 
 	// Register GroveService with all its dependencies

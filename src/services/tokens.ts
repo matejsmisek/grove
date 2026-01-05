@@ -11,6 +11,7 @@ import type {
 	IGroveConfigService,
 	IGroveService,
 	IGrovesService,
+	ILLMService,
 	IRepositoryService,
 	ISettingsService,
 } from './interfaces.js';
@@ -27,3 +28,4 @@ export const ContextServiceToken = createToken<IContextService>('ContextService'
 export const FileServiceToken = createToken<IFileService>('FileService');
 export const GroveServiceToken = createToken<IGroveService>('GroveService');
 export const ClaudeSessionServiceToken = createToken<IClaudeSessionService>('ClaudeSessionService');
+export const LLMServiceToken = createToken<ILLMService>('LLMService');

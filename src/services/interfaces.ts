@@ -621,3 +621,37 @@ export interface IGroveService {
 	 */
 	closeGrove(groveId: string): Promise<CloseGroveResult>;
 }
+
+/**
+ * Result from LLM grove name generation
+ */
+export interface GroveNameGenerationResult {
+	/** The generated grove name (human-readable) */
+	name: string;
+	/** Suggested normalized version (may be empty if no suggestion) */
+	normalizedSuggestion?: string;
+}
+
+/**
+ * LLM service interface
+ * Provides AI-powered features using OpenRouter/Anthropic
+ */
+export interface ILLMService {
+	/**
+	 * Check if the LLM service is configured with an API key
+	 */
+	isConfigured(): boolean;
+
+	/**
+	 * Generate a grove name from a description
+	 * @param description - User's description of what they'll be working on
+	 * @returns Generated grove name
+	 * @throws Error if API key not configured or API call fails
+	 */
+	generateGroveName(description: string): Promise<GroveNameGenerationResult>;
+
+	/**
+	 * Get the current model being used
+	 */
+	getModel(): string;
+}
