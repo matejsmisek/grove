@@ -18,7 +18,8 @@ This document provides comprehensive information about the Grove codebase for AI
 - **Open in Terminal**: Launch terminal windows for grove worktrees
 - **Open in IDE**: Launch IDEs (VS Code, PhpStorm, WebStorm, IntelliJ, PyCharm, Vim) for worktrees
 - **JetBrains Auto-Detect**: Automatically select appropriate JetBrains IDE based on project files
-- **Multi-Screen Navigation**: Home, Chat, Create Grove, Settings, Grove Detail, and more (10 screens)
+- **Open in Claude**: Launch Claude CLI sessions with terminal tabs (Konsole, Kitty)
+- **Multi-Screen Navigation**: Home, Chat, Create Grove, Settings, Grove Detail, and more (11 screens)
 - **Dependency Injection**: Testable architecture with DI container and service interfaces
 - **Command-Line Interface**: Support for CLI commands like `grove --register`
 - Built on React and Ink for terminal-based UI
@@ -83,7 +84,7 @@ grove/
 │   │   ├── Router.tsx     # Screen router component
 │   │   ├── types.ts       # Navigation type definitions
 │   │   └── useNavigation.ts # Navigation hook
-│   ├── screens/           # Screen components (10 screens)
+│   ├── screens/           # Screen components (11 screens)
 │   │   ├── HomeScreen.tsx        # Home/welcome screen with grove grid
 │   │   ├── ChatScreen.tsx        # AI chat interface screen
 │   │   ├── CreateGroveScreen.tsx # Grove creation with monorepo support
@@ -91,6 +92,7 @@ grove/
 │   │   ├── CloseGroveScreen.tsx  # Grove closing confirmation
 │   │   ├── OpenTerminalScreen.tsx # Terminal launcher for worktrees
 │   │   ├── OpenIDEScreen.tsx     # IDE launcher for worktrees
+│   │   ├── OpenClaudeScreen.tsx  # Claude CLI session launcher
 │   │   ├── IDESettingsScreen.tsx # IDE configuration screen
 │   │   ├── SettingsScreen.tsx    # Settings management screen
 │   │   ├── WorkingFolderScreen.tsx # Working folder configuration
@@ -102,6 +104,7 @@ grove/
 │   │   ├── FileService.ts     # File operations with glob patterns
 │   │   ├── TerminalService.ts # Terminal detection and launching
 │   │   ├── IDEService.ts      # IDE detection and launching
+│   │   ├── ClaudeSessionService.ts # Claude CLI session launching
 │   │   ├── interfaces.ts      # Service interface definitions
 │   │   ├── tokens.ts          # DI service tokens
 │   │   ├── registration.ts    # Service registration for DI
@@ -143,9 +146,9 @@ grove/
 
 ### Current Codebase Size
 
-- **Total Lines**: ~7,300 lines across TypeScript and TSX files
-- **Screens**: 10 screen components
-- **Services**: 6 service classes with DI support
+- **Total Lines**: ~7,700 lines across TypeScript and TSX files
+- **Screens**: 11 screen components
+- **Services**: 7 service classes with DI support
 - **Modules**: 10 major modules (commands, components, di, git, navigation, screens, services, storage, utils, index)
 - **Architecture**: Modular architecture with dependency injection for testability
 
@@ -406,6 +409,31 @@ The services layer uses **dependency injection** for testability. Services imple
 - `IDEType` - Union type including `'jetbrains-auto'`
 - `ResolvedIDEConfig` - Result of resolving jetbrains-auto to specific IDE
 
+#### src/services/ClaudeSessionService.ts
+
+**Purpose**: Claude CLI session launching in terminal with multiple tabs
+
+**Key Features**:
+
+- Supports KDE Konsole and Kitty terminals
+- Creates session files for multi-tab terminal launch
+- Two tabs: Claude CLI + regular bash shell
+- Session files stored temporarily in `~/.grove/tmp/` and cleaned up after launch
+
+**Key Methods**:
+
+- `detectTerminal()` - Find available terminal (konsole or kitty)
+- `openSession(workingDir)` - Open Claude session in directory
+
+**Dependencies** (via DI):
+
+- `ISettingsService` - For storage config to get tmp directory path
+
+**Session File Formats**:
+
+- **Konsole**: `title: Claude ;; workdir: /path ;; command: claude`
+- **Kitty**: `layout tall` + `launch --title "claude" claude`
+
 #### src/services/interfaces.ts
 
 **Purpose**: Service interface definitions for dependency injection
@@ -420,6 +448,7 @@ The services layer uses **dependency injection** for testability. Services imple
 - `IContextService` - CONTEXT.md management
 - `IFileService` - File operations
 - `IGroveService` - Grove lifecycle
+- `IClaudeSessionService` - Claude CLI session launching
 
 #### src/services/tokens.ts
 
@@ -429,7 +458,7 @@ The services layer uses **dependency injection** for testability. Services imple
 
 - `SettingsServiceToken`, `RepositoryServiceToken`, `GrovesServiceToken`
 - `GroveConfigServiceToken`, `GitServiceToken`, `ContextServiceToken`
-- `FileServiceToken`, `GroveServiceToken`
+- `FileServiceToken`, `GroveServiceToken`, `ClaudeSessionServiceToken`
 
 ### Commands Layer (`src/commands/`)
 
@@ -468,6 +497,7 @@ The services layer uses **dependency injection** for testability. Services imple
 - `closeGrove` - Grove closing confirmation (groveId param)
 - `openTerminal` - Terminal launcher (groveId param)
 - `openIDE` - IDE launcher (groveId param)
+- `openClaude` - Claude session launcher (groveId param)
 - `settings` - Settings screen (optional section param)
 - `workingFolder` - Working folder config (no params)
 - `repositories` - Repository list (no params)
@@ -612,14 +642,14 @@ const [settings, repos] = useServices(SettingsServiceToken, RepositoryServiceTok
 Extracted components for the home screen panel layout:
 
 - **`CreateGrovePanel.tsx`** - "Create Grove" button panel in grove grid
-- **`GroveActionsModal.tsx`** - Actions menu for a selected grove (detail, terminal, IDE, close)
+- **`GroveActionsModal.tsx`** - Actions menu for a selected grove (Claude, terminal, IDE, close)
 - **`GroveGrid.tsx`** - Grid layout for displaying groves
 - **`GrovePanel.tsx`** - Individual grove card with name and timestamp
 - **`MenuModal.tsx`** - General modal for menu overlays
 
 ### Screens Layer (`src/screens/`)
 
-The screens layer contains the 10 main screen components that make up the Grove UI. Each screen is a full-page view that users navigate between.
+The screens layer contains the 11 main screen components that make up the Grove UI. Each screen is a full-page view that users navigate between.
 
 **Screens**:
 
@@ -630,6 +660,7 @@ The screens layer contains the 10 main screen components that make up the Grove 
 - `CloseGroveScreen.tsx` - Grove closing confirmation with worktree cleanup
 - `OpenTerminalScreen.tsx` - Terminal launcher for grove worktrees
 - `OpenIDEScreen.tsx` - IDE launcher for grove worktrees
+- `OpenClaudeScreen.tsx` - Claude CLI session launcher for grove worktrees
 - `IDESettingsScreen.tsx` - IDE configuration (select default IDE)
 - `SettingsScreen.tsx` - Settings management hub
 - `WorkingFolderScreen.tsx` - Working folder configuration
@@ -941,6 +972,7 @@ The pre-commit hook automatically runs:
 - **Close Grove**: Edit `src/screens/CloseGroveScreen.tsx`
 - **Open Terminal**: Edit `src/screens/OpenTerminalScreen.tsx`
 - **Open IDE**: Edit `src/screens/OpenIDEScreen.tsx`
+- **Open Claude**: Edit `src/screens/OpenClaudeScreen.tsx`
 - **IDE Settings**: Edit `src/screens/IDESettingsScreen.tsx`
 - **Settings**: Edit `src/screens/SettingsScreen.tsx`
 - **Working Folder**: Edit `src/screens/WorkingFolderScreen.tsx`
@@ -954,6 +986,7 @@ The pre-commit hook automatically runs:
 - **File Operations**: Edit `src/services/FileService.ts`
 - **Terminal Launcher**: Edit `src/services/TerminalService.ts`
 - **IDE Launcher**: Edit `src/services/IDEService.ts`
+- **Claude Session Launcher**: Edit `src/services/ClaudeSessionService.ts`
 - **Service Interfaces**: Edit `src/services/interfaces.ts`
 - **DI Tokens**: Edit `src/services/tokens.ts`
 - **Service Registration**: Edit `src/services/registration.ts`
@@ -1052,11 +1085,11 @@ Current organization follows a **modular, feature-based architecture with depend
 - **Grove Management**: ✅ Create, view details, and close groves with worktrees
 - **Grove Configuration**: ✅ Per-repo `.grove.json` for branch naming and file copying
 - **Monorepo Support**: ✅ Select specific project folders within monorepos
-- **External Tools**: ✅ Open worktrees in terminal or IDE (VS Code, JetBrains with auto-detect, PyCharm, Vim)
-- **Navigation**: ✅ 10-screen UI with type-safe routing
+- **External Tools**: ✅ Open worktrees in terminal, IDE (VS Code, JetBrains with auto-detect, PyCharm, Vim), or Claude
+- **Navigation**: ✅ 11-screen UI with type-safe routing
 - **Dependency Injection**: ✅ DI container for testable architecture
 - **AI Integration**: ⚠️ Chat screen exists but AI/LLM integration not yet connected
-- **Architecture**: Mature modular structure with 10 distinct layers (~7,300 lines)
+- **Architecture**: Mature modular structure with 10 distinct layers (~7,700 lines)
 
 ### Development Priorities
 
@@ -1141,8 +1174,9 @@ grove
 ✅ **Open in Terminal** - Launch terminal windows for worktrees
 ✅ **Open in IDE** - Launch VS Code, JetBrains IDEs, PyCharm, or Vim for worktrees
 ✅ **JetBrains Auto-Detect** - Automatically select IDE based on project files (composer.json, package.json, etc.)
+✅ **Open in Claude** - Launch Claude CLI sessions with terminal tabs (Konsole, Kitty)
 ✅ **IDE Settings** - Configure default IDE and custom commands
-✅ **Navigation System** - Type-safe 10-screen routing with history
+✅ **Navigation System** - Type-safe 11-screen routing with history
 ✅ **Dependency Injection** - DI container with React hooks for testability
 ✅ **Recent Selections** - Track recently used repo/project selections
 ✅ **Settings Management** - Configure working folder, terminal, IDE
@@ -1274,7 +1308,7 @@ Refer to:
 ---
 
 **Last Updated**: 2026-01-05
-**Document Version**: 3.1.0
+**Document Version**: 3.2.0
 **Codebase State**: Active development (v0.0.1) with mature feature set
-**Lines of Code**: ~7,500 lines
-**Key Milestones**: Storage ✅ | Git Operations ✅ | Navigation ✅ | Repository Tracking ✅ | Grove Management ✅ | Monorepo Support ✅ | DI Container ✅ | External Tool Integration ✅ | JetBrains Auto-Detect ✅
+**Lines of Code**: ~7,700 lines
+**Key Milestones**: Storage ✅ | Git Operations ✅ | Navigation ✅ | Repository Tracking ✅ | Grove Management ✅ | Monorepo Support ✅ | DI Container ✅ | External Tool Integration ✅ | JetBrains Auto-Detect ✅ | Claude Integration ✅
