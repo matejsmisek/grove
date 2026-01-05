@@ -29,6 +29,8 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	const [worktreeDetails, setWorktreeDetails] = useState<WorktreeDetails[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [error, setError] = useState<string | null>(null);
+	const [showActions, setShowActions] = useState(false);
+	const [selectedActionIndex, setSelectedActionIndex] = useState(0);
 
 	// Load grove details on mount
 	useEffect(() => {
@@ -80,20 +82,59 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 		loadDetails();
 	}, [groveId]);
 
+	// Worktree action options
+	const worktreeActions = [
+		{
+			label: 'Open in Claude',
+			action: () => {
+				navigate('openClaude', { groveId });
+				setShowActions(false);
+			},
+		},
+		{
+			label: 'Open in Terminal',
+			action: () => {
+				navigate('openTerminal', { groveId });
+				setShowActions(false);
+			},
+		},
+		{
+			label: 'Open in IDE',
+			action: () => {
+				navigate('openIDE', { groveId });
+				setShowActions(false);
+			},
+		},
+	];
+
 	// Handle keyboard navigation
 	useInput((input, key) => {
-		if (key.escape) {
-			goBack();
-		} else if (key.upArrow && worktreeDetails.length > 0) {
-			setSelectedIndex((prev) => (prev > 0 ? prev - 1 : worktreeDetails.length - 1));
-		} else if (key.downArrow && worktreeDetails.length > 0) {
-			setSelectedIndex((prev) => (prev < worktreeDetails.length - 1 ? prev + 1 : 0));
-		} else if (input === 'c') {
-			navigate('closeGrove', { groveId });
-		} else if (input === 't') {
-			navigate('openTerminal', { groveId });
-		} else if (input === 'i') {
-			navigate('openIDE', { groveId });
+		if (showActions) {
+			// Actions menu navigation
+			if (key.escape) {
+				setShowActions(false);
+				setSelectedActionIndex(0);
+			} else if (key.upArrow) {
+				setSelectedActionIndex((prev) => (prev > 0 ? prev - 1 : worktreeActions.length - 1));
+			} else if (key.downArrow) {
+				setSelectedActionIndex((prev) => (prev < worktreeActions.length - 1 ? prev + 1 : 0));
+			} else if (key.return) {
+				worktreeActions[selectedActionIndex].action();
+			}
+		} else {
+			// Main screen navigation
+			if (key.escape) {
+				goBack();
+			} else if (key.upArrow && worktreeDetails.length > 0) {
+				setSelectedIndex((prev) => (prev > 0 ? prev - 1 : worktreeDetails.length - 1));
+			} else if (key.downArrow && worktreeDetails.length > 0) {
+				setSelectedIndex((prev) => (prev < worktreeDetails.length - 1 ? prev + 1 : 0));
+			} else if (key.return && worktreeDetails.length > 0) {
+				setShowActions(true);
+				setSelectedActionIndex(0);
+			} else if (input === 'c') {
+				navigate('closeGrove', { groveId });
+			}
 		}
 	});
 
@@ -133,82 +174,125 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			{/* Header */}
-			<Box marginBottom={1} flexDirection="column">
-				<Text bold color="green">
-					🌳 {groveName}
-				</Text>
-				<Text dimColor>{grovePath}</Text>
-			</Box>
+			{showActions ? (
+				/* Show Actions Menu */
+				<Box flexDirection="column">
+					{/* Header */}
+					<Box marginBottom={1}>
+						<Text bold color="green">
+							Select Action
+						</Text>
+					</Box>
 
-			{/* Worktrees/Panels Section */}
-			<Box marginBottom={1}>
-				<Text bold underline>
-					Panels ({worktreeDetails.length})
-				</Text>
-			</Box>
+					{/* Selected Worktree Info */}
+					{worktreeDetails[selectedIndex] && (
+						<Box marginBottom={1} flexDirection="column">
+							<Text bold>{worktreeDetails[selectedIndex].worktree.repositoryName}</Text>
+							{worktreeDetails[selectedIndex].worktree.projectPath && (
+								<Text dimColor>Project: {worktreeDetails[selectedIndex].worktree.projectPath}</Text>
+							)}
+							<Text dimColor>Branch: {worktreeDetails[selectedIndex].branch}</Text>
+						</Box>
+					)}
 
-			{worktreeDetails.length === 0 ? (
-				<Box marginLeft={2}>
-					<Text dimColor>No worktrees in this grove</Text>
+					{/* Actions */}
+					<Box flexDirection="column" marginBottom={1}>
+						{worktreeActions.map((action, index) => (
+							<Box key={action.label}>
+								<Text color={selectedActionIndex === index ? 'cyan' : undefined}>
+									{selectedActionIndex === index ? '❯ ' : '  '}
+									{action.label}
+								</Text>
+							</Box>
+						))}
+					</Box>
+
+					{/* Help text */}
+					<Box marginTop={1}>
+						<Text dimColor>↑↓ Navigate • Enter Select • ESC Cancel</Text>
+					</Box>
 				</Box>
 			) : (
-				<Box flexDirection="column">
-					{worktreeDetails.map((detail, index) => {
-						const isSelected = index === selectedIndex;
-						const hasChanges = detail.fileStats.total > 0;
+				/* Show Grove Details */
+				<>
+					{/* Header */}
+					<Box marginBottom={1} flexDirection="column">
+						<Text bold color="green">
+							🌳 {groveName}
+						</Text>
+						<Text dimColor>{grovePath}</Text>
+					</Box>
 
-						return (
-							<Box
-								key={detail.worktree.worktreePath}
-								flexDirection="column"
-								borderStyle={isSelected ? 'round' : 'single'}
-								borderColor={isSelected ? 'cyan' : 'gray'}
-								paddingX={1}
-								marginBottom={1}
-							>
-								{/* Repository Name */}
-								<Box>
-									<Text bold color={isSelected ? 'cyan' : undefined}>
-										{detail.worktree.repositoryName}
-										{detail.worktree.projectPath && <Text dimColor> / {detail.worktree.projectPath}</Text>}
-									</Text>
-								</Box>
+					{/* Worktrees/Panels Section */}
+					<Box marginBottom={1}>
+						<Text bold underline>
+							Panels ({worktreeDetails.length})
+						</Text>
+					</Box>
 
-								{/* Branch */}
-								<Box marginTop={0}>
-									<Text dimColor>Branch: </Text>
-									<Text color="yellow">{detail.branch}</Text>
-								</Box>
+					{worktreeDetails.length === 0 ? (
+						<Box marginLeft={2}>
+							<Text dimColor>No worktrees in this grove</Text>
+						</Box>
+					) : (
+						<Box flexDirection="column">
+							{worktreeDetails.map((detail, index) => {
+								const isSelected = index === selectedIndex;
+								const hasChanges = detail.fileStats.total > 0;
 
-								{/* File Changes */}
-								<Box>
-									<Text dimColor>Files: </Text>
-									<Text color={hasChanges ? 'yellow' : 'green'}>
-										{hasChanges ? `${detail.fileStats.total} changed` : 'Clean'}
-									</Text>
-									{hasChanges && <Text dimColor> ({formatFileStats(detail.fileStats)})</Text>}
-								</Box>
+								return (
+									<Box
+										key={detail.worktree.worktreePath}
+										flexDirection="column"
+										borderStyle={isSelected ? 'round' : 'single'}
+										borderColor={isSelected ? 'cyan' : 'gray'}
+										paddingX={1}
+										marginBottom={1}
+									>
+										{/* Repository Name */}
+										<Box>
+											<Text bold color={isSelected ? 'cyan' : undefined}>
+												{detail.worktree.repositoryName}
+												{detail.worktree.projectPath && <Text dimColor> / {detail.worktree.projectPath}</Text>}
+											</Text>
+										</Box>
 
-								{/* Unpushed Commits */}
-								{detail.hasUnpushedCommits && (
-									<Box>
-										<Text color="yellow">⚠ Unpushed commits</Text>
+										{/* Branch */}
+										<Box marginTop={0}>
+											<Text dimColor>Branch: </Text>
+											<Text color="yellow">{detail.branch}</Text>
+										</Box>
+
+										{/* File Changes */}
+										<Box>
+											<Text dimColor>Files: </Text>
+											<Text color={hasChanges ? 'yellow' : 'green'}>
+												{hasChanges ? `${detail.fileStats.total} changed` : 'Clean'}
+											</Text>
+											{hasChanges && <Text dimColor> ({formatFileStats(detail.fileStats)})</Text>}
+										</Box>
+
+										{/* Unpushed Commits */}
+										{detail.hasUnpushedCommits && (
+											<Box>
+												<Text color="yellow">⚠ Unpushed commits</Text>
+											</Box>
+										)}
 									</Box>
-								)}
-							</Box>
-						);
-					})}
-				</Box>
-			)}
+								);
+							})}
+						</Box>
+					)}
 
-			{/* Help text */}
-			<Box marginTop={1} flexDirection="column">
-				<Text dimColor>
-					↑↓ Navigate • <Text bold>t</Text> Terminal • <Text bold>i</Text> IDE • <Text bold>c</Text>{' '}
-					Close Grove • <Text bold>ESC</Text> Back
-				</Text>
-			</Box>
+					{/* Help text */}
+					<Box marginTop={1} flexDirection="column">
+						<Text dimColor>
+							↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>c</Text> Close Grove •{' '}
+							<Text bold>ESC</Text> Back
+						</Text>
+					</Box>
+				</>
+			)}
 		</Box>
 	);
 }
