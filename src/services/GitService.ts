@@ -249,9 +249,7 @@ export class GitService implements IGitService {
 	 * @param repoPath - Repository root path
 	 * @returns Object with counts for modified, added, deleted, and untracked files
 	 */
-	async getFileChangeStats(
-		repoPath: string
-	): Promise<{
+	async getFileChangeStats(repoPath: string): Promise<{
 		modified: number;
 		added: number;
 		deleted: number;
