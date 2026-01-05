@@ -1,12 +1,17 @@
 {
 	"name": "grove",
 	"version": "0.0.1",
-	"description": "A CLI app using Ink and React to manage Git",
+	"description": "AI-powered Git worktree management CLI with interactive terminal UI",
 	"type": "module",
 	"main": "./dist/index.js",
 	"bin": {
 		"grove": "./dist/index.js"
 	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch",
@@ -15,16 +20,32 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"typecheck": "tsc --noEmit --skipLibCheck",
-		"prepare": "husky"
+		"prepare": "husky",
+		"prepublishOnly": "npm run typecheck && npm run build"
 	},
 	"keywords": [
 		"git",
+		"worktree",
 		"cli",
+		"terminal",
 		"ink",
-		"react"
+		"react",
+		"git-management",
+		"developer-tools",
+		"monorepo",
+		"ai",
+		"interactive-cli"
 	],
-	"author": "",
+	"author": "Matej Smisek",
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/matejsmisek/grove.git"
+	},
+	"bugs": {
+		"url": "https://github.com/matejsmisek/grove/issues"
+	},
+	"homepage": "https://github.com/matejsmisek/grove#readme",
 	"engines": {
 		"node": ">=18.0.0"
 	},

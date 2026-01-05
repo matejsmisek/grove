@@ -1,46 +1,95 @@
 # Grove
 
-A CLI app using Ink and React to manage Git.
+**AI-powered Git worktree management CLI with an interactive terminal UI**
 
-## Development
+Grove is a modern command-line tool that makes managing Git worktrees effortless. Built with React and Ink, it provides an intuitive, interactive interface for creating and managing collections of worktrees (called "groves"), with support for monorepos, custom configurations, and seamless IDE integration.
 
-### Prerequisites
+## Features
 
-- Node.js >= 18.0.0
-- npm
+- **Interactive Terminal UI** - Navigate with keyboard shortcuts in a beautiful CLI interface
+- **Grove Management** - Create and manage collections of git worktrees across multiple repositories
+- **Monorepo Support** - Select specific project folders within monorepos for grove creation
+- **Smart IDE Integration** - Auto-detect and launch the right IDE (VS Code, JetBrains IDEs, Vim) for each project
+- **JetBrains Auto-Detection** - Automatically selects the appropriate JetBrains IDE based on project files
+- **Custom Configuration** - Per-repository `.grove.json` for branch naming, file copying, and IDE preferences
+- **Claude Integration** - Launch Claude CLI sessions with terminal tabs for AI-assisted development
+- **Terminal Launcher** - Open terminal windows directly in your grove worktrees
+- **Git Status Tracking** - See uncommitted changes and unpushed commits at a glance
 
-### Setup
+## Installation
+
+Install Grove globally via npm:
 
 ```bash
-npm install
+npm install -g grove
 ```
 
-### Scripts
+## Usage
 
-- `npm run build` - Build the TypeScript project
-- `npm run dev` - Build in watch mode
-- `npm run lint` - Lint the codebase
-- `npm run lint:fix` - Lint and auto-fix issues
-- `npm run typecheck` - Type check without emitting files
+### Quick Start
 
-### Project Structure
+1. **Launch Grove**:
 
-```
-grove/
-├── src/           # Source files
-│   └── index.ts   # Entry point
-├── dist/          # Compiled output
-├── eslint.config.js  # ESLint configuration
-├── tsconfig.json  # TypeScript configuration
-└── package.json   # Project metadata
-```
+   ```bash
+   grove
+   ```
 
-## Technology Stack
+2. **Register a repository**:
 
-- **TypeScript** - Type-safe JavaScript
-- **React** - UI library
-- **Ink** - React for CLI applications
-- **ESLint** - Code linting with typescript-eslint
+   ```bash
+   cd /path/to/your/repo
+   grove --register
+   ```
+
+3. **Create a grove** - Use the interactive UI to create a new grove with worktrees for your registered repositories
+
+### Commands
+
+- `grove` - Launch the interactive UI
+- `grove --register` - Register the current directory as a repository
+
+### Interactive UI Navigation
+
+Once in the interactive UI:
+
+- **Arrow keys** - Navigate between items
+- **Enter** - Select/confirm
+- **Escape** - Go back/cancel
+- **Tab** - Switch focus between panels
+- **q** - Quit (when applicable)
+
+### Workflow Example
+
+1. Register your repositories:
+
+   ```bash
+   cd ~/projects/my-app
+   grove --register
+
+   cd ~/projects/my-api
+   grove --register
+   ```
+
+2. Launch Grove and create a new grove for a feature:
+
+   ```bash
+   grove
+   # Select "Create Grove"
+   # Name it "feature-auth"
+   # Select repositories/projects to include
+   ```
+
+3. Grove creates worktrees in `~/grove-worktrees/feature-auth/`:
+
+   ```
+   ~/grove-worktrees/feature-auth/
+   ├── my-app/     (worktree on branch feature-auth)
+   └── my-api/     (worktree on branch feature-auth)
+   ```
+
+4. Open in your IDE, terminal, or Claude for development
+
+5. When done, close the grove to clean up worktrees
 
 ## Configuration
 
@@ -132,3 +181,92 @@ For a monorepo with different projects requiring different IDEs:
 ```
 
 Project-level settings override root settings, so the API package will open in PyCharm while the web package opens in WebStorm.
+
+## Requirements
+
+- **Node.js** >= 18.0.0
+- **Git** >= 2.5.0 (for worktree support)
+- **Supported Operating Systems**: Linux, macOS
+- **Optional**: IDEs (VS Code, JetBrains IDEs, Vim) for IDE integration
+- **Optional**: Konsole or Kitty terminal for Claude integration
+
+## Development
+
+Want to contribute to Grove? Here's how to set up your development environment:
+
+### Prerequisites
+
+- Node.js >= 18.0.0
+- npm
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/matejsmisek/grove.git
+cd grove
+
+# Install dependencies
+npm install
+
+# Build the project
+npm run build
+
+# Link for local testing
+npm link
+```
+
+### Available Scripts
+
+- `npm run build` - Build the TypeScript project
+- `npm run dev` - Build in watch mode for development
+- `npm run lint` - Check for linting errors
+- `npm run lint:fix` - Auto-fix linting issues
+- `npm run format` - Format code with Prettier
+- `npm run typecheck` - Type-check without emitting files
+
+### Technology Stack
+
+- **TypeScript** - Type-safe JavaScript with strict mode
+- **React** - UI component library
+- **Ink** - React renderer for CLI applications
+- **ESLint** - Code linting with typescript-eslint
+- **Prettier** - Code formatting
+
+### Project Structure
+
+The project follows a modular architecture with dependency injection:
+
+- `src/components/` - React UI components
+- `src/screens/` - Full-page screen components
+- `src/services/` - Business logic services
+- `src/storage/` - Persistence layer
+- `src/navigation/` - Routing system
+- `src/di/` - Dependency injection container
+
+For detailed documentation, see [CLAUDE.md](https://github.com/matejsmisek/grove/blob/main/CLAUDE.md).
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+### Guidelines
+
+- Follow the existing code style (enforced by ESLint and Prettier)
+- Run `npm run typecheck` before committing
+- Write clear commit messages
+- Update documentation as needed
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Built with [Ink](https://github.com/vadimdemedes/ink) - React for CLI apps
+- Inspired by modern Git workflows and the need for better worktree management
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/matejsmisek/grove/issues)
+- **Documentation**: See [CLAUDE.md](https://github.com/matejsmisek/grove/blob/main/CLAUDE.md) for comprehensive development documentation

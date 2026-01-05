@@ -1,0 +1,50 @@
+# Source files (we publish compiled dist/ instead)
+src/
+tsconfig.json
+
+# Development files
+.husky/
+.lintstagedrc.json
+eslint.config.js
+.prettierrc
+.prettierignore
+
+# Documentation (keep only README.md)
+CLAUDE.md
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+*.test.ts
+*.spec.ts
+__tests__/
+
+# CI
+.github/
+
+# Build artifacts
+*.tsbuildinfo
+
+# Development dependencies
+node_modules/
