@@ -7,6 +7,7 @@ import TextInput from 'ink-text-input';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
 	ALL_IDE_TYPES,
+	detectAvailableIDEs,
 	getDefaultIDEConfig,
 	getIDEDisplayName,
 	isCommandAvailable,
@@ -108,7 +109,10 @@ export function IDESettingsScreen() {
 				} else if (key.return) {
 					handleSelectIDE(ALL_IDE_TYPES[selectedIndex]);
 				} else if (input === 'c') {
-					startConfigure(ALL_IDE_TYPES[selectedIndex]);
+					// Don't allow configuring jetbrains-auto (it auto-detects)
+					if (ALL_IDE_TYPES[selectedIndex] !== 'jetbrains-auto') {
+						startConfigure(ALL_IDE_TYPES[selectedIndex]);
+					}
 				}
 			} else if (viewMode === 'configure' && editingField === null) {
 				if (key.escape) {
@@ -223,7 +227,11 @@ export function IDESettingsScreen() {
 				const isSelected = index === selectedIndex;
 				const isCurrent = settings.selectedIDE === ideType;
 				const config = getIDEConfig(ideType);
-				const isAvailable = isCommandAvailable(config.command);
+				// For jetbrains-auto, check if any JetBrains IDE is available
+				const isAvailable =
+					ideType === 'jetbrains-auto'
+						? detectAvailableIDEs().includes('jetbrains-auto')
+						: isCommandAvailable(config.command);
 				const hasCustomConfig = settings.ideConfigs && settings.ideConfigs[ideType];
 
 				return (

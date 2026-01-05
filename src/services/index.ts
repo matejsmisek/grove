@@ -13,13 +13,15 @@ export type { TerminalResult } from './TerminalService.js';
 export {
 	ALL_IDE_TYPES,
 	detectAvailableIDEs,
+	detectJetBrainsIDE,
 	getDefaultIDEConfig,
 	getEffectiveIDEConfig,
 	getIDEDisplayName,
 	isCommandAvailable,
 	openIDEInPath,
+	resolveIDEForPath,
 } from './IDEService.js';
-export type { IDEResult } from './IDEService.js';
+export type { IDEResult, ResolvedIDEConfig } from './IDEService.js';
 
 // Service interfaces
 export type {

@@ -16,7 +16,8 @@ This document provides comprehensive information about the Grove codebase for AI
 - **Git Worktree Operations**: Create, list, and manage git worktrees via GitService
 - **Grove Repository Configuration**: Per-repo `.grove.json` for branch naming and file copying
 - **Open in Terminal**: Launch terminal windows for grove worktrees
-- **Open in IDE**: Launch IDEs (VS Code, PhpStorm, WebStorm, IntelliJ, Vim) for worktrees
+- **Open in IDE**: Launch IDEs (VS Code, PhpStorm, WebStorm, IntelliJ, PyCharm, Vim) for worktrees
+- **JetBrains Auto-Detect**: Automatically select appropriate JetBrains IDE based on project files
 - **Multi-Screen Navigation**: Home, Chat, Create Grove, Settings, Grove Detail, and more (10 screens)
 - **Dependency Injection**: Testable architecture with DI container and service interfaces
 - **Command-Line Interface**: Support for CLI commands like `grove --register`
@@ -157,12 +158,14 @@ grove/
 **Purpose**: Application entry point, CLI argument parsing, and bootstrapping
 
 **Key Responsibilities**:
+
 - Initialize storage system (`initializeStorage()`)
 - Parse command-line arguments (e.g., `--register`)
 - Handle CLI commands before launching UI
 - Render the main App component for interactive mode
 
 **Features**:
+
 - Shebang for CLI execution (`#!/usr/bin/env node`)
 - Command-line flag handling (`grove --register`)
 - Storage initialization on startup
@@ -176,6 +179,7 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 **Purpose**: Type definitions for storage data structures
 
 **Key Types**:
+
 - `Settings` - User settings (workingFolder, terminal, selectedIDE, ideConfigs)
 - `StorageConfig` - Storage paths configuration
 - `Repository` - Registered repository metadata (including `isMonorepo` flag)
@@ -195,6 +199,7 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 **Purpose**: Settings management in `~/.grove/settings.json`
 
 **Key Functions**:
+
 - `getStorageConfig()` - Get storage paths (~/.grove/settings.json, etc.)
 - `getDefaultSettings()` - Default settings (workingFolder: ~/grove-worktrees)
 - `initializeStorage()` - Create .grove folder structure
@@ -206,6 +211,7 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 **Purpose**: Repository tracking in `~/.grove/repositories.json`
 
 **Key Functions**:
+
 - `readRepositories()` / `writeRepositories()` - Repository list persistence
 - `addRepository()` - Register a new repository
 - `removeRepository()` - Unregister a repository
@@ -217,6 +223,7 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 **Purpose**: Grove management (groves.json index + per-grove grove.json files) - Legacy functions
 
 **Key Functions**:
+
 - `readGrovesIndex()` / `writeGrovesIndex()` - Global grove list (~/.grove/groves.json)
 - `readGroveMetadata()` / `writeGroveMetadata()` - Per-grove metadata (grove-folder/grove.json)
 - `getAllGroves()` - Get all grove references
@@ -230,12 +237,14 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 **Purpose**: Read `.grove.json` and `.grove.local.json` from repositories for custom configuration
 
 **Key Methods**:
+
 - `readGroveRepoConfig()` - Read and merge .grove.json configs
 - `readMergedConfig()` - Merge root and project-level configs (for monorepos)
 - `getBranchNameForSelection()` - Get branch name with template substitution
 - `applyBranchNameTemplate()` - Replace `${GROVE_NAME}` in templates
 
 **Configuration Options** (in `.grove.json`):
+
 - `branchNameTemplate` - Custom branch naming (e.g., `"grove/${GROVE_NAME}"`)
 - `fileCopyPatterns` - Glob patterns for files to copy to worktrees
 - `initActions` - Post-creation actions (not yet implemented)
@@ -245,6 +254,7 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 **Purpose**: Track recently used repository/project selections for quick access
 
 **Key Functions**:
+
 - `addRecentSelections()` - Save selections after grove creation
 - `getRecentSelections()` - Get recent selections (filtered to valid repos)
 - `getRecentSelectionDisplayName()` - Format selection for display
@@ -256,6 +266,7 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 **Purpose**: Git repository validation, detection, and monorepo utilities
 
 **Key Functions**:
+
 - `isGitRepository()` - Check if directory is inside a git repo
 - `isGitWorktree()` - Detect if directory is a worktree (not main repo)
 - `getGitRoot()` - Get repository root path
@@ -273,12 +284,14 @@ The services layer uses **dependency injection** for testability. Services imple
 **Purpose**: Git worktree operations via spawn
 
 **Key Features**:
+
 - Async git command execution using spawn
 - Structured result objects with stdout/stderr/exitCode
 - Comprehensive worktree management
 - Git status queries for grove detail view
 
 **Key Methods**:
+
 - `addWorktree(repoPath, worktreePath, branch?, commitish?)` - Create new worktree
 - `listWorktrees(repoPath, porcelain?)` - List all worktrees
 - `parseWorktreeList()` - Parse porcelain output into structured data
@@ -292,6 +305,7 @@ The services layer uses **dependency injection** for testability. Services imple
 - `getFileChangeStats(repoPath)` - Get modified/added/deleted/untracked counts
 
 **Types** (in `interfaces.ts`):
+
 - `GitCommandResult` - Command execution result
 - `WorktreeInfo` - Parsed worktree information
 - `FileChangeStats` - File change counts
@@ -301,16 +315,19 @@ The services layer uses **dependency injection** for testability. Services imple
 **Purpose**: Grove lifecycle operations (create and close)
 
 **Key Features**:
+
 - Orchestrates grove creation with multiple worktrees
 - Handles monorepo project selections
 - Copies files based on `.grove.json` patterns
 - Cleans up worktrees when closing groves
 
 **Key Methods**:
+
 - `createGrove(name, selections)` - Create grove with worktrees for selected repos/projects
 - `closeGrove(groveId)` - Remove worktrees and delete grove folder
 
 **Dependencies** (via DI):
+
 - `ISettingsService`, `IGrovesService`, `IGroveConfigService`
 - `IGitService`, `IContextService`, `IFileService`
 
@@ -319,6 +336,7 @@ The services layer uses **dependency injection** for testability. Services imple
 **Purpose**: CONTEXT.md file management for groves
 
 **Key Methods**:
+
 - `generateContent(data)` - Generate markdown content
 - `createContextFile(grovePath, data)` - Create CONTEXT.md in grove folder
 - `contextFileExists(grovePath)` - Check if file exists
@@ -329,6 +347,7 @@ The services layer uses **dependency injection** for testability. Services imple
 **Purpose**: File operations with glob pattern matching
 
 **Key Methods**:
+
 - `matchPattern(sourceDir, pattern)` - Find files matching a glob pattern
 - `matchPatterns(sourceDir, patterns)` - Match multiple patterns
 - `copyFilesFromPatterns(sourceDir, destDir, patterns)` - Copy files matching patterns
@@ -341,34 +360,58 @@ The services layer uses **dependency injection** for testability. Services imple
 **Purpose**: Terminal detection and launching for worktrees
 
 **Key Features**:
+
 - Auto-detects available terminal emulators
 - Supports gnome-terminal, konsole, xfce4-terminal, xterm
 - Spawns terminal windows in specified directories
 
 **Key Methods**:
+
 - `detectTerminal()` - Find available terminal emulator
 - `openTerminal(path, config)` - Open terminal in directory
 - `getTerminalDisplayName(config)` - Get human-readable terminal name
 
 #### src/services/IDEService.ts
 
-**Purpose**: IDE detection and launching for worktrees
+**Purpose**: IDE detection, auto-detection, and launching for worktrees
 
 **Key Features**:
-- Supports VS Code, PhpStorm, WebStorm, IntelliJ IDEA, Vim
+
+- Supports VS Code, PhpStorm, WebStorm, IntelliJ IDEA, PyCharm, Vim
 - Auto-detects installed IDEs
+- **JetBrains Auto-Detect**: Automatically selects appropriate JetBrains IDE based on project files
 - Configurable command and arguments per IDE
 
+**JetBrains Auto-Detection Strategy**:
+
+1. Config file detection (highest priority):
+   - `composer.json` → PhpStorm
+   - `requirements.txt`, `pyproject.toml`, `setup.py`, `Pipfile` → PyCharm
+   - `pom.xml`, `build.gradle`, `build.gradle.kts` → IntelliJ IDEA
+   - `package.json` → WebStorm
+2. File extension counting (fallback): counts `.php`, `.py`, `.java`/`.kt`, `.js`/`.ts` files
+3. Default: IntelliJ IDEA
+
 **Key Methods**:
-- `detectAvailableIDEs()` - Find installed IDEs
-- `getDefaultConfig(ideType)` - Get default IDE configuration
-- `openIDE(path, ideType, config?)` - Open IDE in directory
+
+- `detectAvailableIDEs()` - Find installed IDEs (includes `jetbrains-auto` if any JetBrains IDE available)
+- `detectJetBrainsIDE(projectPath)` - Detect best JetBrains IDE for a project
+- `resolveIDEForPath(ideType, projectPath, customConfigs?)` - Resolve IDE type and config (handles auto-detection)
+- `getDefaultIDEConfig(ideType)` - Get default IDE configuration
+- `getEffectiveIDEConfig(ideType, customConfigs?)` - Get effective config with custom overrides
+- `openIDEInPath(path, config)` - Open IDE in directory
+
+**Types**:
+
+- `IDEType` - Union type including `'jetbrains-auto'`
+- `ResolvedIDEConfig` - Result of resolving jetbrains-auto to specific IDE
 
 #### src/services/interfaces.ts
 
 **Purpose**: Service interface definitions for dependency injection
 
 **Key Interfaces**:
+
 - `ISettingsService` - Settings management
 - `IRepositoryService` - Repository registry
 - `IGrovesService` - Grove index and metadata
@@ -383,6 +426,7 @@ The services layer uses **dependency injection** for testability. Services imple
 **Purpose**: DI service tokens for type-safe dependency resolution
 
 **Tokens**:
+
 - `SettingsServiceToken`, `RepositoryServiceToken`, `GrovesServiceToken`
 - `GroveConfigServiceToken`, `GitServiceToken`, `ContextServiceToken`
 - `FileServiceToken`, `GroveServiceToken`
@@ -394,6 +438,7 @@ The services layer uses **dependency injection** for testability. Services imple
 **Purpose**: Repository registration command handler
 
 **Key Function**:
+
 - `registerRepository(cwd?)` - Register current directory as repository
   - Verifies it's a valid git repository (not worktree)
   - Checks if already registered
@@ -409,11 +454,13 @@ The services layer uses **dependency injection** for testability. Services imple
 **Purpose**: Type-safe navigation definitions
 
 **Key Types**:
+
 - `Routes` - Map of screen names to their params
 - `NavigationState` - Current screen and params
 - `NavigationContextType` - Navigation context interface
 
 **Screens**:
+
 - `home` - Home screen (no params)
 - `chat` - Chat screen (no params)
 - `createGrove` - Grove creation (no params)
@@ -431,6 +478,7 @@ The services layer uses **dependency injection** for testability. Services imple
 **Purpose**: Navigation state management via React Context
 
 **Provides**:
+
 - Navigation state (current screen and params)
 - Navigation history stack
 - `navigate()` - Navigate to screen with params
@@ -448,6 +496,7 @@ The services layer uses **dependency injection** for testability. Services imple
 **Purpose**: Route screen components based on navigation state
 
 **Functionality**:
+
 - Renders appropriate screen component based on `current.screen`
 - Passes params to screens
 - Centralized screen routing logic
@@ -461,11 +510,13 @@ The DI layer provides a lightweight dependency injection container for testable,
 **Purpose**: DI container implementation
 
 **Key Features**:
+
 - Type-safe service resolution via tokens
 - Singleton and transient service lifetimes
 - Factory-based service creation
 
 **Key Functions**:
+
 - `Container` class with `register()`, `registerSingleton()`, `registerTransient()`, `registerInstance()`
 - `resolve<T>(token)` - Get service instance
 - `getContainer()` / `setContainer()` / `resetContainer()` - Global container management
@@ -475,6 +526,7 @@ The DI layer provides a lightweight dependency injection container for testable,
 **Purpose**: React integration for DI container
 
 **Key Exports**:
+
 - `ServiceProvider` - React context provider component
 - `useService(token)` - Hook to resolve a service
 - `useServices(...tokens)` - Hook to resolve multiple services
@@ -482,6 +534,7 @@ The DI layer provides a lightweight dependency injection container for testable,
 - `useHasService(token)` - Check if service is registered
 
 **Usage Pattern**:
+
 ```typescript
 // In component
 const gitService = useService(GitServiceToken);
@@ -493,6 +546,7 @@ const [settings, repos] = useServices(SettingsServiceToken, RepositoryServiceTok
 **Purpose**: DI type definitions
 
 **Key Types**:
+
 - `ServiceToken<T>` - Branded token type for type-safe resolution
 - `ServiceFactory<T>` - Factory function type
 - `ServiceRegistration<T>` - Registration options
@@ -505,6 +559,7 @@ const [settings, repos] = useServices(SettingsServiceToken, RepositoryServiceTok
 **Purpose**: Root application component
 
 **Key Responsibilities**:
+
 - Wraps app in `ServiceProvider` for dependency injection
 - Wraps app in `NavigationProvider` for routing
 - Renders StatusBar and Router
@@ -517,6 +572,7 @@ const [settings, repos] = useServices(SettingsServiceToken, RepositoryServiceTok
 **Props**: `isProcessing: boolean`
 
 **Features**:
+
 - Grove branding
 - Processing indicator (● active, ○ ready)
 - Color-coded status (yellow/green)
@@ -528,6 +584,7 @@ const [settings, repos] = useServices(SettingsServiceToken, RepositoryServiceTok
 **Props**: `messages: Message[]`
 
 **Features**:
+
 - Role-based styling (user/assistant/system)
 - Scrollable message list
 - Line-by-line message rendering
@@ -539,6 +596,7 @@ const [settings, repos] = useServices(SettingsServiceToken, RepositoryServiceTok
 **Props**: `isProcessing`, `input`, `onInputChange`, `onSubmit`
 
 **Features**:
+
 - Disabled during processing
 - Submit on Enter
 - Placeholder text
@@ -564,6 +622,7 @@ Extracted components for the home screen panel layout:
 The screens layer contains the 10 main screen components that make up the Grove UI. Each screen is a full-page view that users navigate between.
 
 **Screens**:
+
 - `HomeScreen.tsx` - Home screen with grove grid and panel layout
 - `ChatScreen.tsx` - AI chat interface (uses MessageList, InputPrompt)
 - `CreateGroveScreen.tsx` - Grove creation wizard with monorepo project selection
@@ -577,6 +636,7 @@ The screens layer contains the 10 main screen components that make up the Grove 
 - `RepositoriesScreen.tsx` - Repository list and management (with monorepo toggle)
 
 **Common Patterns**:
+
 - Use `useNavigation()` hook for navigation
 - Use `useService()` hook for dependency injection
 - Full-screen Box layouts
@@ -864,6 +924,7 @@ The pre-commit hook automatically runs:
 ### Modifying Different Parts of Grove
 
 **UI Components**:
+
 - **Status Bar**: Edit `src/components/StatusBar.tsx`
 - **Message List/Response Area**: Edit `src/components/MessageList.tsx`
 - **Input Prompt**: Edit `src/components/InputPrompt.tsx`
@@ -872,6 +933,7 @@ The pre-commit hook automatically runs:
 - **Home Components**: Edit files in `src/components/home/`
 
 **Screens**:
+
 - **Home Screen**: Edit `src/screens/HomeScreen.tsx`
 - **Chat Screen**: Edit `src/screens/ChatScreen.tsx`
 - **Create Grove**: Edit `src/screens/CreateGroveScreen.tsx`
@@ -885,6 +947,7 @@ The pre-commit hook automatically runs:
 - **Repositories**: Edit `src/screens/RepositoriesScreen.tsx`
 
 **Services** (business logic):
+
 - **Git Operations**: Edit `src/services/GitService.ts`
 - **Grove Lifecycle**: Edit `src/services/GroveService.ts`
 - **Context Files**: Edit `src/services/ContextService.ts`
@@ -896,6 +959,7 @@ The pre-commit hook automatically runs:
 - **Service Registration**: Edit `src/services/registration.ts`
 
 **Storage & Data**:
+
 - **Settings Service**: Edit `src/storage/SettingsService.ts`
 - **Repository Service**: Edit `src/storage/RepositoryService.ts`
 - **Groves Service**: Edit `src/storage/GrovesService.ts`
@@ -905,23 +969,28 @@ The pre-commit hook automatically runs:
 - **Legacy Functions**: Edit `src/storage/storage.ts`, `repositories.ts`, `groves.ts`
 
 **Dependency Injection**:
+
 - **DI Container**: Edit `src/di/Container.ts`
 - **React Integration**: Edit `src/di/ServiceContext.tsx`
 - **DI Types**: Edit `src/di/types.ts`
 
 **Git Utilities**:
+
 - **Git Utils**: Edit `src/git/utils.ts`
 
 **Navigation**:
+
 - **Navigation Context**: Edit `src/navigation/NavigationContext.tsx`
 - **Router**: Edit `src/navigation/Router.tsx`
 - **Navigation Types**: Edit `src/navigation/types.ts`
 
 **Commands & CLI**:
+
 - **Repository Registration**: Edit `src/commands/register.ts`
 - **CLI Entry Point**: Edit `src/index.tsx`
 
 **Utilities**:
+
 - **Time Formatting**: Edit `src/utils/time.ts`
 
 ### Adding Dependencies
@@ -941,6 +1010,7 @@ Always update package.json and commit package-lock.json.
 Current organization follows a **modular, feature-based architecture with dependency injection**:
 
 **Established Patterns**:
+
 - **DI Layer** (`src/di/`) - Dependency injection container and React integration
 - **Storage Layer** (`src/storage/`) - Persistence logic with DI-compatible service classes
 - **Services Layer** (`src/services/`) - Business logic services (GitService, GroveService, etc.)
@@ -953,6 +1023,7 @@ Current organization follows a **modular, feature-based architecture with depend
 - **Entry Point** (`src/index.tsx`) - CLI arg parsing and app bootstrap
 
 **Architecture Principles**:
+
 - **Dependency Injection**: Services use constructor injection for testability
 - **Interface Segregation**: Services implement interfaces defined in `interfaces.ts`
 - **Separation of Concerns**: Each layer has a specific responsibility
@@ -962,6 +1033,7 @@ Current organization follows a **modular, feature-based architecture with depend
 - **Export Structure**: Use `index.ts` files to export public APIs from modules
 
 **When Adding New Features**:
+
 - **New Storage Service**: Create class in `src/storage/`, implement interface in `interfaces.ts`, register in `registration.ts`
 - **New Business Service**: Create class in `src/services/`, implement interface, create token, register in container
 - **New Screen**: Add to `src/screens/` and update Router + navigation types
@@ -980,7 +1052,7 @@ Current organization follows a **modular, feature-based architecture with depend
 - **Grove Management**: ✅ Create, view details, and close groves with worktrees
 - **Grove Configuration**: ✅ Per-repo `.grove.json` for branch naming and file copying
 - **Monorepo Support**: ✅ Select specific project folders within monorepos
-- **External Tools**: ✅ Open worktrees in terminal or IDE (VS Code, JetBrains, Vim)
+- **External Tools**: ✅ Open worktrees in terminal or IDE (VS Code, JetBrains with auto-detect, PyCharm, Vim)
 - **Navigation**: ✅ 10-screen UI with type-safe routing
 - **Dependency Injection**: ✅ DI container for testable architecture
 - **AI Integration**: ⚠️ Chat screen exists but AI/LLM integration not yet connected
@@ -1067,7 +1139,8 @@ grove
 ✅ **File Copying** - Copy files matching glob patterns to worktrees during creation
 ✅ **Git Worktree Operations** - Full GitService with add/list/remove/prune/status
 ✅ **Open in Terminal** - Launch terminal windows for worktrees
-✅ **Open in IDE** - Launch VS Code, JetBrains IDEs, or Vim for worktrees
+✅ **Open in IDE** - Launch VS Code, JetBrains IDEs, PyCharm, or Vim for worktrees
+✅ **JetBrains Auto-Detect** - Automatically select IDE based on project files (composer.json, package.json, etc.)
 ✅ **IDE Settings** - Configure default IDE and custom commands
 ✅ **Navigation System** - Type-safe 10-screen routing with history
 ✅ **Dependency Injection** - DI container with React hooks for testability
@@ -1078,18 +1151,21 @@ grove
 ### Future Expansion Areas
 
 **High Priority**:
+
 - AI/LLM integration for chat functionality (Anthropic Claude API)
 - Connect chat to git operations (natural language git commands)
 - Execute `initActions` from `.grove.json` after grove creation
 - More CLI commands (list repos, list groves, etc.)
 
 **Medium Priority**:
+
 - Testing framework (Jest or Vitest) - DI architecture enables easy testing
 - Command history in chat
 - Git operations beyond worktrees (commit, push, pull, etc.)
 - Batch operations on multiple worktrees
 
 **Low Priority**:
+
 - Logging and debugging utilities
 - Configuration file support (global ~/.grove/config.json)
 - Plugin/extension system
@@ -1128,6 +1204,7 @@ grove
 - **Appropriate Scale**: Perfect for personal tool with limited data
 
 **Storage Structure**:
+
 - `~/.grove/settings.json` - User settings (workingFolder, terminal, selectedIDE, ideConfigs)
 - `~/.grove/repositories.json` - List of registered repositories (with isMonorepo flag)
 - `~/.grove/groves.json` - Global grove index
@@ -1141,6 +1218,7 @@ grove
 ### Why Service Layer Pattern?
 
 **GitService Benefits**:
+
 - **Abstraction**: Hides git command complexity behind clean API
 - **Testability**: Easy to mock for testing
 - **Error Handling**: Centralized error handling for git operations
@@ -1160,6 +1238,7 @@ The DI pattern was introduced to improve testability and maintainability:
 - **Lifecycle Control**: Singleton vs transient service lifetimes
 
 **Implementation**:
+
 - Custom lightweight DI container (no external library)
 - React integration via `useService()` hook
 - Service tokens for type-safe resolution
@@ -1194,8 +1273,8 @@ Refer to:
 
 ---
 
-**Last Updated**: 2026-01-04
-**Document Version**: 3.0.0
+**Last Updated**: 2026-01-05
+**Document Version**: 3.1.0
 **Codebase State**: Active development (v0.0.1) with mature feature set
-**Lines of Code**: ~7,300 lines
-**Key Milestones**: Storage ✅ | Git Operations ✅ | Navigation ✅ | Repository Tracking ✅ | Grove Management ✅ | Monorepo Support ✅ | DI Container ✅ | External Tool Integration ✅
+**Lines of Code**: ~7,500 lines
+**Key Milestones**: Storage ✅ | Git Operations ✅ | Navigation ✅ | Repository Tracking ✅ | Grove Management ✅ | Monorepo Support ✅ | DI Container ✅ | External Tool Integration ✅ | JetBrains Auto-Detect ✅
