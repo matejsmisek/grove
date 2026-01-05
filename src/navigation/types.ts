@@ -12,6 +12,7 @@ export type Routes = {
 	workingFolder: Record<string, never>;
 	repositories: Record<string, never>;
 	ideSettings: Record<string, never>;
+	claudeTerminalSettings: Record<string, never>;
 };
 
 // Navigation state for current screen and params

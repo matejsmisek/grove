@@ -3,6 +3,7 @@
  * All service interfaces are defined here for clean separation of concerns
  */
 import type {
+	ClaudeTerminalType,
 	GroveIDEConfig,
 	GroveMetadata,
 	GroveReference,
@@ -528,27 +529,74 @@ export interface ClaudeSessionResult {
 }
 
 /**
- * Supported terminal types for Claude sessions
- */
-export type ClaudeTerminalType = 'konsole' | 'kitty';
-
-/**
  * Claude session service interface
  * Launches Claude CLI in terminal sessions with multiple tabs
  */
 export interface IClaudeSessionService {
 	/**
+	 * Detect all available supported terminals (konsole or kitty)
+	 * @returns Array of available terminal types
+	 */
+	detectAvailableTerminals(): ClaudeTerminalType[];
+
+	/**
 	 * Detect which supported terminal is available (konsole or kitty)
-	 * @returns The detected terminal type, or null if none available
+	 * @returns The first detected terminal type, or null if none available
+	 * @deprecated Use detectAvailableTerminals() instead
 	 */
 	detectTerminal(): ClaudeTerminalType | null;
+
+	/**
+	 * Get the default template for a terminal type
+	 * @param terminalType - The terminal type (konsole or kitty)
+	 * @returns The default template content
+	 */
+	getDefaultTemplate(terminalType: ClaudeTerminalType): string;
+
+	/**
+	 * Get the effective template for a terminal type
+	 * Checks settings for custom template, falls back to default
+	 * @param terminalType - The terminal type (konsole or kitty)
+	 * @returns The template content to use
+	 */
+	getEffectiveTemplate(terminalType: ClaudeTerminalType): string;
+
+	/**
+	 * Get the template for a specific repository/project
+	 * Checks .grove.json for custom template, then settings, then default
+	 * @param terminalType - The terminal type (konsole or kitty)
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 * @returns The template content to use
+	 */
+	getTemplateForRepo(
+		terminalType: ClaudeTerminalType,
+		repositoryPath: string,
+		projectPath?: string
+	): string;
+
+	/**
+	 * Apply template by replacing ${WORKING_DIR} placeholder
+	 * @param template - Template content
+	 * @param workingDir - Working directory path
+	 * @returns Template with placeholder replaced
+	 */
+	applyTemplate(template: string, workingDir: string): string;
 
 	/**
 	 * Open Claude in a terminal session with the working directory set
 	 * Creates two tabs: one running Claude CLI, one with regular bash shell
 	 * @param workingDir - Directory to set as working directory for both tabs
+	 * @param terminalType - Optional terminal type to use (if not provided, uses setting or auto-detects)
+	 * @param repositoryPath - Optional repository path for template lookup
+	 * @param projectPath - Optional project path for template lookup
 	 */
-	openSession(workingDir: string): ClaudeSessionResult;
+	openSession(
+		workingDir: string,
+		terminalType?: ClaudeTerminalType,
+		repositoryPath?: string,
+		projectPath?: string
+	): ClaudeSessionResult;
 }
 
 /**

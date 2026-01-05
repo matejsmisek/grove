@@ -3,11 +3,12 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-import type { ISettingsService } from './interfaces.js';
+import type { ClaudeTerminalType } from '../storage/types.js';
 import type {
 	ClaudeSessionResult,
-	ClaudeTerminalType,
 	IClaudeSessionService,
+	IGroveConfigService,
+	ISettingsService,
 } from './interfaces.js';
 
 /**
@@ -15,7 +16,10 @@ import type {
  * Launches Claude CLI in terminal sessions with multiple tabs (konsole or kitty)
  */
 export class ClaudeSessionService implements IClaudeSessionService {
-	constructor(private readonly settingsService: ISettingsService) {}
+	constructor(
+		private readonly settingsService: ISettingsService,
+		private readonly groveConfigService: IGroveConfigService
+	) {}
 
 	/**
 	 * Check if a command exists in the system PATH
@@ -30,16 +34,116 @@ export class ClaudeSessionService implements IClaudeSessionService {
 	}
 
 	/**
-	 * Detect which supported terminal is available (konsole or kitty)
+	 * Detect all available supported terminals (konsole or kitty)
 	 */
-	detectTerminal(): ClaudeTerminalType | null {
+	detectAvailableTerminals(): ClaudeTerminalType[] {
+		const terminals: ClaudeTerminalType[] = [];
 		if (this.commandExists('konsole')) {
-			return 'konsole';
+			terminals.push('konsole');
 		}
 		if (this.commandExists('kitty')) {
-			return 'kitty';
+			terminals.push('kitty');
 		}
-		return null;
+		return terminals;
+	}
+
+	/**
+	 * Detect which supported terminal is available (konsole or kitty)
+	 * @deprecated Use detectAvailableTerminals() instead
+	 */
+	detectTerminal(): ClaudeTerminalType | null {
+		const terminals = this.detectAvailableTerminals();
+		return terminals.length > 0 ? terminals[0] : null;
+	}
+
+	/**
+	 * Get the default template for a terminal type
+	 */
+	getDefaultTemplate(terminalType: ClaudeTerminalType): string {
+		if (terminalType === 'konsole') {
+			return `title: Claude ;; workdir: \${WORKING_DIR} ;; command: claude
+title: cmd ;; workdir: \${WORKING_DIR} ;; command: bash
+`;
+		} else {
+			// kitty
+			return `layout tall
+cd \${WORKING_DIR}
+layout tall:bias=65;full_size=1
+launch --title "claude" claude
+launch --title "cmd" bash
+`;
+		}
+	}
+
+	/**
+	 * Get the effective template for a terminal type
+	 * Checks settings for custom template, falls back to default
+	 */
+	getEffectiveTemplate(terminalType: ClaudeTerminalType): string {
+		const settings = this.settingsService.readSettings();
+		const templates = settings.claudeSessionTemplates;
+		if (templates) {
+			const template = templates[terminalType];
+			if (template) {
+				return template.content;
+			}
+		}
+		return this.getDefaultTemplate(terminalType);
+	}
+
+	/**
+	 * Get the template for a specific repository/project
+	 * Checks .grove.json for custom template, then settings, then default
+	 */
+	getTemplateForRepo(
+		terminalType: ClaudeTerminalType,
+		repositoryPath: string,
+		projectPath?: string
+	): string {
+		const config = this.groveConfigService.readMergedConfig(repositoryPath, projectPath);
+		if (config.ide && typeof config.ide === 'object' && 'claudeSessionTemplates' in config) {
+			// FIXME: This doesn't work because ide doesn't have claudeSessionTemplates
+			// We need to check the raw GroveRepoConfig instead
+		}
+
+		// Try to get from raw repo config
+		const repoConfig = this.groveConfigService.readGroveRepoConfig(repositoryPath);
+		const repoTemplates = repoConfig.claudeSessionTemplates;
+		if (repoTemplates) {
+			const repoTemplate = repoTemplates[terminalType];
+			if (repoTemplate) {
+				return repoTemplate.content;
+			}
+		}
+
+		// If monorepo, check project-level config
+		if (projectPath) {
+			const projectConfigPath = path.join(repositoryPath, projectPath, '.grove.json');
+			if (fs.existsSync(projectConfigPath)) {
+				try {
+					const projectConfigContent = fs.readFileSync(projectConfigPath, 'utf-8');
+					const projectConfig = JSON.parse(projectConfigContent);
+					if (
+						projectConfig.claudeSessionTemplates &&
+						projectConfig.claudeSessionTemplates[terminalType]
+					) {
+						return projectConfig.claudeSessionTemplates[terminalType].content;
+					}
+				} catch {
+					// Ignore JSON parse errors
+				}
+			}
+		}
+
+		// Fall back to settings or default
+		return this.getEffectiveTemplate(terminalType);
+	}
+
+	/**
+	 * Apply template by replacing ${WORKING_DIR} placeholder
+	 */
+	applyTemplate(template: string, workingDir: string): string {
+		return template.replace(/\$\{WORKING_DIR\}/g, workingDir);
 	}
 
 	/**
@@ -61,36 +165,40 @@ export class ClaudeSessionService implements IClaudeSessionService {
 	}
 
 	/**
-	 * Generate konsole tabs file content
-	 */
-	private generateKonsoleTabs(workingDir: string): string {
-		return `title: Claude ;; workdir: ${workingDir} ;; command: claude
-title: cmd ;; workdir: ${workingDir} ;; command: bash
-`;
-	}
-
-	/**
-	 * Generate kitty session file content
-	 */
-	private generateKittySession(workingDir: string): string {
-		return `layout tall
-cd ${workingDir}
-layout tall:bias=65;full_size=1
-launch --title "claude" claude
-launch --title "cmd" bash
-`;
-	}
-
-	/**
 	 * Open Claude in a terminal session with the working directory set
 	 */
-	openSession(workingDir: string): ClaudeSessionResult {
-		const terminal = this.detectTerminal();
+	openSession(
+		workingDir: string,
+		terminalType?: ClaudeTerminalType,
+		repositoryPath?: string,
+		projectPath?: string
+	): ClaudeSessionResult {
+		// Determine which terminal to use
+		let terminal: ClaudeTerminalType | undefined = terminalType;
+		if (!terminal) {
+			// Check settings for selected terminal
+			const settings = this.settingsService.readSettings();
+			if (settings.selectedClaudeTerminal) {
+				terminal = settings.selectedClaudeTerminal;
+			} else {
+				// Auto-detect
+				const detected = this.detectTerminal();
+				terminal = detected ?? undefined;
+			}
+		}
 
 		if (!terminal) {
 			return {
 				success: false,
 				message: 'No supported terminal found. This feature requires KDE Konsole or Kitty.',
+			};
+		}
+
+		// Verify the selected terminal is actually available
+		if (!this.commandExists(terminal)) {
+			return {
+				success: false,
+				message: `Selected terminal '${terminal}' is not available on this system.`,
 			};
 		}
 
@@ -105,14 +213,25 @@ launch --title "cmd" bash
 		try {
 			this.ensureTmpDir();
 
+			// Get the appropriate template
+			let template: string;
+			if (repositoryPath) {
+				template = this.getTemplateForRepo(terminal, repositoryPath, projectPath);
+			} else {
+				template = this.getEffectiveTemplate(terminal);
+			}
+
+			// Apply template with working directory
+			const sessionContent = this.applyTemplate(template, workingDir);
+
 			// Generate unique filename for the session file
 			const sessionId = crypto.randomBytes(8).toString('hex');
 			const tmpDir = this.getTmpDir();
 
 			if (terminal === 'konsole') {
-				return this.launchKonsole(workingDir, tmpDir, sessionId);
+				return this.launchKonsole(sessionContent, tmpDir, sessionId);
 			} else {
-				return this.launchKitty(workingDir, tmpDir, sessionId);
+				return this.launchKitty(sessionContent, tmpDir, sessionId);
 			}
 		} catch (error) {
 			return {
@@ -125,11 +244,15 @@ launch --title "cmd" bash
 	/**
 	 * Launch konsole with tabs file
 	 */
-	private launchKonsole(workingDir: string, tmpDir: string, sessionId: string): ClaudeSessionResult {
+	private launchKonsole(
+		sessionContent: string,
+		tmpDir: string,
+		sessionId: string
+	): ClaudeSessionResult {
 		const tabsFile = path.join(tmpDir, `konsole-tabs-${sessionId}.txt`);
 
 		// Write the tabs file
-		fs.writeFileSync(tabsFile, this.generateKonsoleTabs(workingDir), 'utf-8');
+		fs.writeFileSync(tabsFile, sessionContent, 'utf-8');
 
 		// Launch konsole with the tabs file
 		const proc = spawn('konsole', ['--tabs-from-file', tabsFile, '-e', 'bash', '-c', 'exit'], {
@@ -156,18 +279,22 @@ launch --title "cmd" bash
 
 		return {
 			success: true,
-			message: `Opened Claude session in ${workingDir}`,
+			message: 'Opened Claude session',
 		};
 	}
 
 	/**
 	 * Launch kitty with session file
 	 */
-	private launchKitty(workingDir: string, tmpDir: string, sessionId: string): ClaudeSessionResult {
+	private launchKitty(
+		sessionContent: string,
+		tmpDir: string,
+		sessionId: string
+	): ClaudeSessionResult {
 		const sessionFile = path.join(tmpDir, `kitty-session-${sessionId}.conf`);
 
 		// Write the session file
-		fs.writeFileSync(sessionFile, this.generateKittySession(workingDir), 'utf-8');
+		fs.writeFileSync(sessionFile, sessionContent, 'utf-8');
 
 		// Launch kitty with the session file
 		const proc = spawn('kitty', ['--session', sessionFile], {
@@ -194,7 +321,7 @@ launch --title "cmd" bash
 
 		return {
 			success: true,
-			message: `Opened Claude session in ${workingDir}`,
+			message: 'Opened Claude session',
 		};
 	}
 }
