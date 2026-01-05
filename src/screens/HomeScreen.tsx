@@ -101,10 +101,9 @@ export function HomeScreen() {
 	const groveActions: GroveAction[] = selectedGrove
 		? [
 				{
-					label: 'Open in Chat',
+					label: 'Open in Claude',
 					action: () => {
-						// TODO: Implement open in chat
-						navigate('chat', {});
+						navigate('openClaude', { groveId: selectedGrove.id });
 						setSelectedGrove(null);
 					},
 				},

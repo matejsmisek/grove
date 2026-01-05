@@ -203,7 +203,7 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 			{/* Help text */}
 			<Box marginTop={1} flexDirection="column">
 				<Text dimColor>
-					↑↓ Navigate • <Text bold>t</Text> Open Terminal • <Text bold>c</Text> Close Grove •{' '}
+					↑↓ Navigate • <Text bold>t</Text> Terminal • <Text bold>c</Text> Close Grove •{' '}
 					<Text bold>ESC</Text> Back
 				</Text>
 			</Box>
