@@ -78,6 +78,7 @@ export class GroveService implements IGroveService {
 	 * @param worktreeName - Name of the worktree (for log file naming)
 	 * @param worktreePath - Path to the worktree directory
 	 * @param projectPath - Optional project path for monorepos
+	 * @param onLog - Optional callback for live log streaming
 	 * @returns Status of initActions execution
 	 */
 	private async executeInitActions(
@@ -85,7 +86,8 @@ export class GroveService implements IGroveService {
 		grovePath: string,
 		worktreeName: string,
 		worktreePath: string,
-		projectPath?: string
+		projectPath?: string,
+		onLog?: (message: string) => void
 	): Promise<InitActionsStatus> {
 		const logFileName = `grove-init-${worktreeName}.log`;
 		const logFilePath = path.join(grovePath, logFileName);
@@ -105,6 +107,11 @@ ${'='.repeat(80)}
 `;
 		fs.writeFileSync(logFilePath, logHeader);
 
+		// Log initialization
+		if (onLog) {
+			onLog(`[${worktreeName}] Starting initActions (${actions.length} commands)...`);
+		}
+
 		let successfulActions = 0;
 		let errorMessage: string | undefined;
 
@@ -116,6 +123,11 @@ ${'='.repeat(80)}
 			// Append action header to log
 			fs.appendFileSync(logFilePath, actionHeader);
 
+			// Log command start
+			if (onLog) {
+				onLog(`[${worktreeName}] Running: ${action}`);
+			}
+
 			try {
 				// Execute the command
 				const { success, stdout, stderr, exitCode } = await this.executeCommand(action, workingDir);
@@ -123,6 +135,10 @@ ${'='.repeat(80)}
 				// Append output to log
 				if (stdout) {
 					fs.appendFileSync(logFilePath, `STDOUT:\n${stdout}\n`);
+					// Stream stdout to callback
+					if (onLog && stdout.trim()) {
+						onLog(`[${worktreeName}] ${stdout.trim()}`);
+					}
 				}
 				if (stderr) {
 					fs.appendFileSync(logFilePath, `STDERR:\n${stderr}\n`);
@@ -132,17 +148,32 @@ ${'='.repeat(80)}
 				if (!success) {
 					errorMessage = `Action ${i + 1} failed with exit code ${exitCode}: ${action}`;
 					fs.appendFileSync(logFilePath, `\n${'='.repeat(80)}\nEXECUTION STOPPED: ${errorMessage}\n`);
+					if (onLog) {
+						onLog(`[${worktreeName}] ✗ Failed with exit code ${exitCode}`);
+					}
 					break;
 				}
 
 				successfulActions++;
+				if (onLog) {
+					onLog(`[${worktreeName}] ✓ Command completed successfully`);
+				}
 			} catch (error) {
 				const errMsg = error instanceof Error ? error.message : 'Unknown error';
 				errorMessage = `Action ${i + 1} failed: ${errMsg}`;
 				fs.appendFileSync(logFilePath, `ERROR: ${errMsg}\n\n`);
 				fs.appendFileSync(logFilePath, `\n${'='.repeat(80)}\nEXECUTION STOPPED: ${errorMessage}\n`);
+				if (onLog) {
+					onLog(`[${worktreeName}] ✗ Error: ${errMsg}`);
+				}
 				break;
 			}
+		}
+
+		// Log completion
+		if (onLog) {
+			const status = successfulActions === actions.length ? '✓ SUCCESS' : '✗ FAILED';
+			onLog(`[${worktreeName}] ${status}: ${successfulActions}/${actions.length} actions completed`);
 		}
 
 		// Append summary to log
@@ -221,9 +252,14 @@ Completed at: ${new Date().toISOString()}
 	 * Create a new grove with worktrees for selected repositories
 	 * @param name - Name of the grove (will be normalized for folder/branch names)
 	 * @param selections - Array of repository selections, each optionally with a project path
+	 * @param onLog - Optional callback for progress logging
 	 * @returns The created grove metadata
 	 */
-	async createGrove(name: string, selections: RepositorySelection[]): Promise<GroveMetadata> {
+	async createGrove(
+		name: string,
+		selections: RepositorySelection[],
+		onLog?: (message: string) => void
+	): Promise<GroveMetadata> {
 		const settings = this.settingsService.readSettings();
 		const groveId = this.generateGroveId();
 		// Normalize the grove name for use in folder paths and branch names
@@ -272,6 +308,12 @@ Completed at: ${new Date().toISOString()}
 			const worktreeName = this.generateWorktreeName(selection, worktreeNames);
 
 			try {
+				// Log worktree creation start
+				const displayName = selection.projectPath ? `${repo.name}/${selection.projectPath}` : repo.name;
+				if (onLog) {
+					onLog(`Creating worktree for ${displayName}...`);
+				}
+
 				// Read merged repository/project grove configuration
 				const mergedConfig = this.groveConfigService.readMergedConfig(repo.path, selection.projectPath);
 
@@ -341,7 +383,8 @@ Completed at: ${new Date().toISOString()}
 							grovePath,
 							worktreeName,
 							worktreePath,
-							selection.projectPath
+							selection.projectPath,
+							onLog
 						);
 
 						// If initActions failed, add a warning
