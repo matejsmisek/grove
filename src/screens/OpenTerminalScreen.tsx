@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
+import path from 'path';
+
 import { useNavigation } from '../navigation/useNavigation.js';
 import { openTerminalInPath } from '../services/index.js';
 import { getGroveById, readGroveMetadata, readSettings } from '../storage/index.js';
@@ -9,6 +11,16 @@ import type { TerminalConfig, Worktree } from '../storage/index.js';
 
 interface OpenTerminalScreenProps {
 	groveId: string;
+}
+
+/**
+ * Get the terminal path for a worktree, including project path for monorepos
+ */
+function getTerminalPath(worktree: Worktree): string {
+	if (worktree.projectPath) {
+		return path.join(worktree.worktreePath, worktree.projectPath);
+	}
+	return worktree.worktreePath;
 }
 
 export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
@@ -55,7 +67,8 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 
 		// If only one worktree, open terminal directly
 		if (metadata.worktrees.length === 1) {
-			const result = openTerminalInPath(metadata.worktrees[0].worktreePath, settings.terminal);
+			const terminalPath = getTerminalPath(metadata.worktrees[0]);
+			const result = openTerminalInPath(terminalPath, settings.terminal);
 			if (result.success) {
 				goBack();
 			} else {
@@ -71,9 +84,11 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 	}, [groveId, goBack]);
 
 	const handleSelect = (worktree: Worktree) => {
-		const result = openTerminalInPath(worktree.worktreePath, terminalConfig);
+		const terminalPath = getTerminalPath(worktree);
+		const result = openTerminalInPath(terminalPath, terminalConfig);
 		if (result.success) {
-			setResultMessage(`Opened terminal in ${worktree.repositoryName}`);
+			const projectInfo = worktree.projectPath ? ` (${worktree.projectPath})` : '';
+			setResultMessage(`Opened terminal in ${worktree.repositoryName}${projectInfo}`);
 			// Go back after a short delay to show the message
 			setTimeout(() => goBack(), 500);
 		} else {
