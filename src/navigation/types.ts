@@ -7,6 +7,7 @@ export type Routes = {
 	closeGrove: { groveId: string };
 	openTerminal: { groveId: string };
 	openIDE: { groveId: string };
+	openClaude: { groveId: string };
 	settings: { section?: string };
 	workingFolder: Record<string, never>;
 	repositories: Record<string, never>;

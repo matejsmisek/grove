@@ -4,6 +4,7 @@
  */
 import { createToken } from '../di/index.js';
 import type {
+	IClaudeSessionService,
 	IContextService,
 	IFileService,
 	IGitService,
@@ -25,3 +26,4 @@ export const GitServiceToken = createToken<IGitService>('GitService');
 export const ContextServiceToken = createToken<IContextService>('ContextService');
 export const FileServiceToken = createToken<IFileService>('FileService');
 export const GroveServiceToken = createToken<IGroveService>('GroveService');
+export const ClaudeSessionServiceToken = createToken<IClaudeSessionService>('ClaudeSessionService');

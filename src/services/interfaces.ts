@@ -485,6 +485,38 @@ export interface CloseGroveResult {
 }
 
 /**
+ * Claude session result
+ */
+export interface ClaudeSessionResult {
+	success: boolean;
+	message: string;
+}
+
+/**
+ * Supported terminal types for Claude sessions
+ */
+export type ClaudeTerminalType = 'konsole' | 'kitty';
+
+/**
+ * Claude session service interface
+ * Launches Claude CLI in terminal sessions with multiple tabs
+ */
+export interface IClaudeSessionService {
+	/**
+	 * Detect which supported terminal is available (konsole or kitty)
+	 * @returns The detected terminal type, or null if none available
+	 */
+	detectTerminal(): ClaudeTerminalType | null;
+
+	/**
+	 * Open Claude in a terminal session with the working directory set
+	 * Creates two tabs: one running Claude CLI, one with regular bash shell
+	 * @param workingDir - Directory to set as working directory for both tabs
+	 */
+	openSession(workingDir: string): ClaudeSessionResult;
+}
+
+/**
  * Grove service interface
  * Orchestrates grove lifecycle operations
  */

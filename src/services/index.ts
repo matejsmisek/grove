@@ -4,6 +4,7 @@
  */
 
 // Service implementations
+export { ClaudeSessionService } from './ClaudeSessionService.js';
 export { ContextService } from './ContextService.js';
 export { FileService } from './FileService.js';
 export { GitService } from './GitService.js';
@@ -25,12 +26,15 @@ export type { IDEResult, ResolvedIDEConfig } from './IDEService.js';
 
 // Service interfaces
 export type {
+	ClaudeSessionResult,
+	ClaudeTerminalType,
 	CloseGroveResult,
 	ContextData,
 	CreateGroveResult,
 	FileCopyResult,
 	FileMatchResult,
 	GitCommandResult,
+	IClaudeSessionService,
 	IContextService,
 	IFileService,
 	IGitService,
@@ -44,6 +48,7 @@ export type {
 
 // Service tokens
 export {
+	ClaudeSessionServiceToken,
 	ContextServiceToken,
 	FileServiceToken,
 	GitServiceToken,
