@@ -7,7 +7,7 @@ import path from 'path';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { getIDEDisplayName, openIDEInPath, resolveIDEForPath } from '../services/index.js';
 import { getGroveById, readGroveMetadata, readSettings } from '../storage/index.js';
-import type { IDEType, Worktree } from '../storage/index.js';
+import type { IDEConfigs, IDEType, Worktree } from '../storage/index.js';
 
 interface OpenIDEScreenProps {
 	groveId: string;
@@ -21,12 +21,10 @@ export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 	const [groveName, setGroveName] = useState('');
 	const [worktrees, setWorktrees] = useState<Worktree[]>([]);
 	const [selectedIDEType, setSelectedIDEType] = useState<IDEType | undefined>(undefined);
+	const [ideConfigs, setIdeConfigs] = useState<IDEConfigs | undefined>(undefined);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [error, setError] = useState<string | null>(null);
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
-
-	// Read settings once for custom configs
-	const settings = readSettings();
 
 	// Build selection options: "All" + individual worktrees
 	const options: SelectionOption[] =
@@ -38,6 +36,9 @@ export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 			: worktrees.map((wt) => ({ type: 'worktree' as const, worktree: wt }));
 
 	useEffect(() => {
+		// Read settings once on mount
+		const settings = readSettings();
+
 		// Check if IDE is configured
 		if (!settings.selectedIDE) {
 			setError('No IDE configured. Please configure an IDE in Settings.');
@@ -46,6 +47,7 @@ export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 		}
 
 		setSelectedIDEType(settings.selectedIDE);
+		setIdeConfigs(settings.ideConfigs);
 
 		const groveRef = getGroveById(groveId);
 		if (!groveRef) {
@@ -87,7 +89,7 @@ export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 		// Multiple worktrees - show selection
 		setWorktrees(metadata.worktrees);
 		setLoading(false);
-	}, [groveId, goBack, settings.selectedIDE, settings.ideConfigs]);
+	}, [groveId, goBack]);
 
 	/**
 	 * Get the path to open in IDE for a worktree
@@ -108,7 +110,7 @@ export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 
 		for (const worktree of worktrees) {
 			const targetPath = getWorktreePath(worktree);
-			const { config } = resolveIDEForPath(selectedIDEType, targetPath, settings.ideConfigs);
+			const { config } = resolveIDEForPath(selectedIDEType, targetPath, ideConfigs);
 			const result = openIDEInPath(targetPath, config);
 			if (result.success) {
 				successCount++;
@@ -130,11 +132,7 @@ export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 		if (!selectedIDEType) return;
 
 		const targetPath = getWorktreePath(worktree);
-		const { resolvedType, config } = resolveIDEForPath(
-			selectedIDEType,
-			targetPath,
-			settings.ideConfigs
-		);
+		const { resolvedType, config } = resolveIDEForPath(selectedIDEType, targetPath, ideConfigs);
 		const result = openIDEInPath(targetPath, config);
 		if (result.success) {
 			const ideName = getIDEDisplayName(resolvedType);
