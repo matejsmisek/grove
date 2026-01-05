@@ -14,7 +14,7 @@ This document provides comprehensive information about the Grove codebase for AI
 - **Monorepo Support**: Select specific project folders within monorepos for grove creation
 - **Persistent Storage**: JSON-based storage in `~/.grove` for settings, repositories, and groves
 - **Git Worktree Operations**: Create, list, and manage git worktrees via GitService
-- **Grove Repository Configuration**: Per-repo `.grove.json` for branch naming and file copying
+- **Grove Repository Configuration**: Per-repo `.grove.json` for branch naming, file copying, and IDE selection
 - **Open in Terminal**: Launch terminal windows for grove worktrees
 - **Open in IDE**: Launch IDEs (VS Code, PhpStorm, WebStorm, IntelliJ, PyCharm, Vim) for worktrees
 - **JetBrains Auto-Detect**: Automatically select appropriate JetBrains IDE based on project files
@@ -192,7 +192,8 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 - `GroveReference` - Global grove index entry
 - `GrovesIndex` - Global list of all groves
 - `GroveMetadata` - Grove-specific data (worktrees, timestamps)
-- `GroveRepoConfig` - Per-repo `.grove.json` configuration (branchNameTemplate, fileCopyPatterns)
+- `GroveRepoConfig` - Per-repo `.grove.json` configuration (branchNameTemplate, fileCopyPatterns, ide)
+- `GroveIDEConfig` - IDE config for .grove.json (reference like `@phpstorm` or custom command)
 - `RecentSelection` - Recently used repository/project selection
 - `TerminalConfig` - Terminal command and arguments
 - `IDEType` / `IDEConfig` - IDE configuration types
@@ -245,11 +246,15 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 - `readMergedConfig()` - Merge root and project-level configs (for monorepos)
 - `getBranchNameForSelection()` - Get branch name with template substitution
 - `applyBranchNameTemplate()` - Replace `${GROVE_NAME}` in templates
+- `isIDEReference()` - Check if IDE config is a reference (e.g., `@phpstorm`)
+- `parseIDEReference()` - Extract IDE type from reference string
+- `getIDEConfigForSelection()` - Get resolved IDE config for a repo/project
 
 **Configuration Options** (in `.grove.json`):
 
 - `branchNameTemplate` - Custom branch naming (e.g., `"grove/${GROVE_NAME}"`)
 - `fileCopyPatterns` - Glob patterns for files to copy to worktrees
+- `ide` - IDE to use: reference (`"@vscode"`, `"@phpstorm"`) or custom config object
 - `initActions` - Post-creation actions (not yet implemented)
 
 #### src/storage/recentSelections.ts
@@ -1083,7 +1088,7 @@ Current organization follows a **modular, feature-based architecture with depend
 - **Storage System**: ✅ Complete JSON-based persistence with DI-compatible services
 - **Repository Tracking**: ✅ Register repositories with monorepo support
 - **Grove Management**: ✅ Create, view details, and close groves with worktrees
-- **Grove Configuration**: ✅ Per-repo `.grove.json` for branch naming and file copying
+- **Grove Configuration**: ✅ Per-repo `.grove.json` for branch naming, file copying, and IDE selection
 - **Monorepo Support**: ✅ Select specific project folders within monorepos
 - **External Tools**: ✅ Open worktrees in terminal, IDE (VS Code, JetBrains with auto-detect, PyCharm, Vim), or Claude
 - **Navigation**: ✅ 11-screen UI with type-safe routing
@@ -1167,8 +1172,8 @@ grove
 ✅ **Grove Creation** - Create collections of worktrees with project selection
 ✅ **Grove Detail View** - View grove worktrees with git status (uncommitted/unpushed)
 ✅ **Grove Closing** - Clean up worktrees and delete grove folders
-✅ **Grove Configuration** - Per-repo `.grove.json` for custom branch names and file copying
-✅ **Project-Level Config** - Monorepo projects can have their own `.grove.json`
+✅ **Grove Configuration** - Per-repo `.grove.json` for custom branch names, file copying, and IDE selection
+✅ **Project-Level Config** - Monorepo projects can have their own `.grove.json` with IDE overrides
 ✅ **File Copying** - Copy files matching glob patterns to worktrees during creation
 ✅ **Git Worktree Operations** - Full GitService with add/list/remove/prune/status
 ✅ **Open in Terminal** - Launch terminal windows for worktrees
@@ -1245,9 +1250,9 @@ grove
 - `~/.grove/recent.json` - Recent repository/project selections
 - `<grove-folder>/grove.json` - Per-grove metadata (worktrees list)
 - `<grove-folder>/CONTEXT.md` - Human-readable grove description
-- `<repo>/.grove.json` - Per-repository configuration (branchNameTemplate, fileCopyPatterns)
+- `<repo>/.grove.json` - Per-repository configuration (branchNameTemplate, fileCopyPatterns, ide)
 - `<repo>/.grove.local.json` - Local config overrides (gitignored)
-- `<repo>/<project>/.grove.json` - Project-level config for monorepos
+- `<repo>/<project>/.grove.json` - Project-level config for monorepos (can override ide)
 
 ### Why Service Layer Pattern?
 

@@ -3,9 +3,12 @@
  * All service interfaces are defined here for clean separation of concerns
  */
 import type {
+	GroveIDEConfig,
 	GroveMetadata,
 	GroveReference,
 	GroveRepoConfig,
+	IDEConfig,
+	IDEType,
 	RepositoriesData,
 	Repository,
 	RepositorySelection,
@@ -183,6 +186,11 @@ export interface MergedGroveConfig {
 	rootInitActions: string[];
 	/** Init actions from project config */
 	projectInitActions: string[];
+	/**
+	 * IDE configuration (project overrides root)
+	 * Can be a reference like "@phpstorm" or a custom config
+	 */
+	ide?: GroveIDEConfig;
 }
 
 /**
@@ -227,6 +235,33 @@ export interface IGroveConfigService {
 	 * @param projectPath - Optional relative path to project folder (for monorepos)
 	 */
 	getBranchNameForSelection(repositoryPath: string, groveName: string, projectPath?: string): string;
+
+	/**
+	 * Check if an IDE config is a reference (starts with @)
+	 * @param config - The IDE config to check
+	 * @returns true if the config is a reference like "@phpstorm"
+	 */
+	isIDEReference(config: GroveIDEConfig): config is `@${IDEType}`;
+
+	/**
+	 * Parse an IDE reference to get the IDE type
+	 * @param reference - The IDE reference (e.g., "@phpstorm")
+	 * @returns The IDE type (e.g., "phpstorm")
+	 */
+	parseIDEReference(reference: `@${IDEType}`): IDEType;
+
+	/**
+	 * Get the resolved IDE config for a repository selection
+	 * Returns the IDE config from .grove.json (project overrides root)
+	 * If it's a reference, returns the type; if it's a custom config, returns the config
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 * @returns Object with either ideType or ideConfig, or undefined if not configured
+	 */
+	getIDEConfigForSelection(
+		repositoryPath: string,
+		projectPath?: string
+	): { ideType: IDEType } | { ideConfig: IDEConfig } | undefined;
 }
 
 // ============================================================================
