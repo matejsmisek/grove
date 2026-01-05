@@ -74,23 +74,20 @@ export class GroveConfigService implements IGroveConfigService {
 	}
 
 	/**
-	 * Apply branch name template by replacing ${GROVE_NAME} with the normalized grove name
+	 * Apply branch name template by replacing ${GROVE_NAME} with the grove name
 	 * @param template - Branch name template (e.g., "grove/${GROVE_NAME}")
-	 * @param groveName - Grove name to normalize and substitute
+	 * @param groveName - Grove name to substitute (should already be normalized)
 	 * @returns Processed branch name
 	 */
 	applyBranchNameTemplate(template: string, groveName: string): string {
-		// Normalize grove name: lowercase and replace spaces with hyphens
-		const normalizedName = groveName.toLowerCase().replace(/\s+/g, '-');
-
-		// Replace ${GROVE_NAME} with normalized name
-		return template.replace(/\$\{GROVE_NAME\}/g, normalizedName);
+		// Replace ${GROVE_NAME} with the grove name (assumed to be pre-normalized)
+		return template.replace(/\$\{GROVE_NAME\}/g, groveName);
 	}
 
 	/**
 	 * Get branch name for a repository based on grove config or default
 	 * @param repositoryPath - Absolute path to the repository root
-	 * @param groveName - Name of the grove being created
+	 * @param groveName - Name of the grove being created (should already be normalized)
 	 * @returns Branch name to use for worktree
 	 */
 	getBranchNameForRepo(repositoryPath: string, groveName: string): string {
@@ -102,16 +99,16 @@ export class GroveConfigService implements IGroveConfigService {
 				console.warn(
 					`Branch template "${config.branchNameTemplate}" in ${repositoryPath} does not contain \${GROVE_NAME}. Using default.`
 				);
-				// Fall back to default
-				return `grove/${groveName.toLowerCase().replace(/\s+/g, '-')}`;
+				// Fall back to default (name should already be normalized)
+				return `grove/${groveName}`;
 			}
 
 			// Apply template
 			return this.applyBranchNameTemplate(config.branchNameTemplate, groveName);
 		}
 
-		// Default branch naming
-		return `grove/${groveName.toLowerCase().replace(/\s+/g, '-')}`;
+		// Default branch naming (name should already be normalized)
+		return `grove/${groveName}`;
 	}
 
 	/**
@@ -208,7 +205,7 @@ export class GroveConfigService implements IGroveConfigService {
 	/**
 	 * Get branch name for a repository selection (with optional project path)
 	 * @param repositoryPath - Absolute path to the repository root
-	 * @param groveName - Name of the grove being created
+	 * @param groveName - Name of the grove being created (should already be normalized)
 	 * @param projectPath - Optional relative path to project folder (for monorepos)
 	 * @returns Branch name to use for worktree
 	 */
@@ -218,7 +215,7 @@ export class GroveConfigService implements IGroveConfigService {
 		projectPath?: string
 	): string {
 		const mergedConfig = this.readMergedConfig(repositoryPath, projectPath);
-		const defaultBranch = `grove/${groveName.toLowerCase().replace(/\s+/g, '-')}`;
+		const defaultBranch = `grove/${groveName}`;
 
 		if (mergedConfig.branchNameTemplate) {
 			// Validate template

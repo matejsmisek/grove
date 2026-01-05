@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 import type { GroveMetadata, Repository, RepositorySelection, Worktree } from '../storage/types.js';
+import { normalizeGroveName } from '../utils/index.js';
 import type {
 	CloseGroveResult,
 	IContextService,
@@ -65,14 +66,16 @@ export class GroveService implements IGroveService {
 
 	/**
 	 * Create a new grove with worktrees for selected repositories
-	 * @param name - Name of the grove
+	 * @param name - Name of the grove (will be normalized for folder/branch names)
 	 * @param selections - Array of repository selections, each optionally with a project path
 	 * @returns The created grove metadata
 	 */
 	async createGrove(name: string, selections: RepositorySelection[]): Promise<GroveMetadata> {
 		const settings = this.settingsService.readSettings();
 		const groveId = this.generateGroveId();
-		const grovePath = path.join(settings.workingFolder, name);
+		// Normalize the grove name for use in folder paths and branch names
+		const normalizedName = normalizeGroveName(name);
+		const grovePath = path.join(settings.workingFolder, normalizedName);
 
 		// Check if grove folder already exists
 		if (fs.existsSync(grovePath)) {
@@ -120,10 +123,11 @@ export class GroveService implements IGroveService {
 				const mergedConfig = this.groveConfigService.readMergedConfig(repo.path, selection.projectPath);
 
 				// Generate branch name for this grove using merged config
+				// Use normalized name for consistency with folder naming
 				// For monorepo projects, the branch suffix is added automatically
 				const branchBase = this.groveConfigService.getBranchNameForSelection(
 					repo.path,
-					name,
+					normalizedName,
 					selection.projectPath
 				);
 				const branchSuffix = selection.projectPath ? `-${selection.projectPath}` : '';

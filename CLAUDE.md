@@ -123,7 +123,9 @@ grove/
 │   │   ├── types.ts           # Storage type definitions
 │   │   └── index.ts           # Storage exports
 │   ├── utils/             # Utility functions
-│   │   └── time.ts        # Time formatting utilities
+│   │   ├── normalize.ts   # Grove name normalization (shortening + unique suffix)
+│   │   ├── time.ts        # Time formatting utilities
+│   │   └── index.ts       # Utils exports
 │   └── index.tsx          # Entry point - CLI arg parsing and app bootstrap
 ├── .github/
 │   └── workflows/
@@ -1030,6 +1032,7 @@ The pre-commit hook automatically runs:
 **Utilities**:
 
 - **Time Formatting**: Edit `src/utils/time.ts`
+- **Name Normalization**: Edit `src/utils/normalize.ts`
 
 ### Adding Dependencies
 
