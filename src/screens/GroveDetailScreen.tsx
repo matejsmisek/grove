@@ -92,6 +92,8 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 			navigate('closeGrove', { groveId });
 		} else if (input === 't') {
 			navigate('openTerminal', { groveId });
+		} else if (input === 'i') {
+			navigate('openIDE', { groveId });
 		}
 	});
 
@@ -203,8 +205,8 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 			{/* Help text */}
 			<Box marginTop={1} flexDirection="column">
 				<Text dimColor>
-					↑↓ Navigate • <Text bold>t</Text> Terminal • <Text bold>c</Text> Close Grove •{' '}
-					<Text bold>ESC</Text> Back
+					↑↓ Navigate • <Text bold>t</Text> Terminal • <Text bold>i</Text> IDE • <Text bold>c</Text>{' '}
+					Close Grove • <Text bold>ESC</Text> Back
 				</Text>
 			</Box>
 		</Box>
