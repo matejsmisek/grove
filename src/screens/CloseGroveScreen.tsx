@@ -21,7 +21,7 @@ interface CloseGroveScreenProps {
 }
 
 export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
-	const { goBack } = useNavigation();
+	const { goBack, navigate } = useNavigation();
 	const gitService = useService(GitServiceToken);
 	const groveService = useService(GroveServiceToken);
 	const [loading, setLoading] = useState(true);
@@ -32,6 +32,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+	const [success, setSuccess] = useState(false);
 
 	// Run safety checks on mount
 	useEffect(() => {
@@ -102,8 +103,13 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 			const result = await groveService.closeGrove(groveId);
 
 			if (result.success) {
-				// Success - go back to home
-				goBack();
+				// Success - show success message and navigate to home
+				setSuccess(true);
+				setIsProcessing(false);
+				// Auto-navigate after 2 seconds
+				setTimeout(() => {
+					navigate('home', {});
+				}, 2000);
 			} else {
 				setError(`Failed to close grove: ${result.message}\n${result.errors.join('\n')}`);
 				setIsProcessing(false);
@@ -137,6 +143,16 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 		{ isActive: awaitingConfirmation && !hasIssues && !isProcessing }
 	);
 
+	// Handle Enter key press on success screen to immediately navigate to home
+	useInput(
+		(_input, key) => {
+			if (key.return) {
+				navigate('home', {});
+			}
+		},
+		{ isActive: success }
+	);
+
 	if (loading) {
 		return (
 			<Box flexDirection="column" padding={1}>
@@ -158,6 +174,19 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Text>Closing grove...</Text>
+			</Box>
+		);
+	}
+
+	if (success) {
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text color="green" bold>
+						✓ Grove "{groveName}" successfully closed
+					</Text>
+				</Box>
+				<Text dimColor>Press Enter to continue or wait to be redirected...</Text>
 			</Box>
 		);
 	}
