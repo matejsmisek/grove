@@ -39,7 +39,7 @@ import {
  * - GitService: no dependencies
  * - ContextService: no dependencies
  * - FileService: no dependencies
- * - ClaudeSessionService: depends on SettingsService
+ * - ClaudeSessionService: depends on SettingsService, GroveConfigService
  * - GroveService: depends on SettingsService, GrovesService, GroveConfigService, GitService, ContextService, FileService
  *
  * @param container - Container to register services in (defaults to global container)
@@ -71,10 +71,14 @@ export function registerServices(container?: IMutableContainer): void {
 	c.registerSingleton(ContextServiceToken, () => new ContextService());
 	c.registerSingleton(FileServiceToken, () => new FileService());
 
-	// ClaudeSessionService depends on SettingsService
+	// ClaudeSessionService depends on SettingsService and GroveConfigService
 	c.registerSingleton(
 		ClaudeSessionServiceToken,
-		(cont) => new ClaudeSessionService(cont.resolve(SettingsServiceToken))
+		(cont) =>
+			new ClaudeSessionService(
+				cont.resolve(SettingsServiceToken),
+				cont.resolve(GroveConfigServiceToken)
+			)
 	);
 
 	// Register GroveService with all its dependencies

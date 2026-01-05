@@ -3,6 +3,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 
 import { ChatScreen } from '../screens/ChatScreen.js';
+import { ClaudeTerminalSettingsScreen } from '../screens/ClaudeTerminalSettingsScreen.js';
 import { CloseGroveScreen } from '../screens/CloseGroveScreen.js';
 import { CreateGroveScreen } from '../screens/CreateGroveScreen.js';
 import { GroveDetailScreen } from '../screens/GroveDetailScreen.js';
@@ -49,6 +50,8 @@ export function Router() {
 			return <OpenClaudeScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
 		case 'ideSettings':
 			return <IDESettingsScreen />;
+		case 'claudeTerminalSettings':
+			return <ClaudeTerminalSettingsScreen />;
 		case 'settings':
 			// Type narrowing: we know params is { section?: string } here
 			return (

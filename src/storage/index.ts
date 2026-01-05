@@ -39,6 +39,9 @@ export {
 	getRecentSelections,
 } from './recentSelections.js';
 export type {
+	ClaudeSessionTemplate,
+	ClaudeSessionTemplates,
+	ClaudeTerminalType,
 	GroveMetadata,
 	GroveReference,
 	GroveRepoConfig,

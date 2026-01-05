@@ -28,7 +28,6 @@ export type { IDEResult, ResolvedIDEConfig } from './IDEService.js';
 // Service interfaces
 export type {
 	ClaudeSessionResult,
-	ClaudeTerminalType,
 	CloseGroveResult,
 	ContextData,
 	CreateGroveResult,
@@ -46,6 +45,9 @@ export type {
 	ISettingsService,
 	WorktreeInfo,
 } from './interfaces.js';
+
+// Re-export ClaudeTerminalType from storage types for convenience
+export type { ClaudeTerminalType } from '../storage/types.js';
 
 // Service tokens
 export {

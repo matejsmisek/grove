@@ -36,6 +36,25 @@ export interface IDEConfig {
  */
 export type IDEConfigs = Partial<Record<IDEType, IDEConfig>>;
 
+/**
+ * Supported terminal types for Claude sessions
+ */
+export type ClaudeTerminalType = 'konsole' | 'kitty';
+
+/**
+ * Template for Claude session/tabs file
+ * Contains the file content with ${WORKING_DIR} placeholder
+ */
+export interface ClaudeSessionTemplate {
+	/** Template content with ${WORKING_DIR} placeholder */
+	content: string;
+}
+
+/**
+ * Map of Claude terminal types to their session templates
+ */
+export type ClaudeSessionTemplates = Partial<Record<ClaudeTerminalType, ClaudeSessionTemplate>>;
+
 export interface Settings {
 	/**
 	 * The working folder path where worktrees are created.
@@ -57,6 +76,17 @@ export interface Settings {
 	 * If not set for an IDE type, default configuration will be used.
 	 */
 	ideConfigs?: IDEConfigs;
+	/**
+	 * Currently selected terminal type for "Open in Claude" feature.
+	 * If not set, Claude opening will auto-detect available terminal.
+	 */
+	selectedClaudeTerminal?: ClaudeTerminalType;
+	/**
+	 * Custom Claude session templates for different terminal types.
+	 * Templates use ${WORKING_DIR} placeholder for the working directory.
+	 * If not set for a terminal type, default template will be used.
+	 */
+	claudeSessionTemplates?: ClaudeSessionTemplates;
 }
 
 export interface StorageConfig {
@@ -250,4 +280,10 @@ export interface GroveRepoConfig {
 	 * When set, this IDE will be used instead of the default IDE from settings
 	 */
 	ide?: GroveIDEConfig;
+	/**
+	 * Custom Claude session templates for different terminal types.
+	 * Templates use ${WORKING_DIR} placeholder for the working directory.
+	 * When set, these templates will be used instead of global templates from settings.
+	 */
+	claudeSessionTemplates?: ClaudeSessionTemplates;
 }

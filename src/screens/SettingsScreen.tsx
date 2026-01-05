@@ -31,6 +31,10 @@ export function SettingsScreen({ section }: SettingsScreenProps) {
 			action: () => navigate('ideSettings', {}),
 		},
 		{
+			label: 'Claude Terminal Settings',
+			action: () => navigate('claudeTerminalSettings', {}),
+		},
+		{
 			label: 'AI Provider Configuration (coming soon)',
 			action: () => {}, // Placeholder
 		},
