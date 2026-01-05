@@ -18,8 +18,10 @@ This document provides comprehensive information about the Grove codebase for AI
 - **Open in Terminal**: Launch terminal windows for grove worktrees
 - **Open in IDE**: Launch IDEs (VS Code, PhpStorm, WebStorm, IntelliJ, PyCharm, Vim) for worktrees
 - **JetBrains Auto-Detect**: Automatically select appropriate JetBrains IDE based on project files
-- **Open in Claude**: Launch Claude CLI sessions with terminal tabs (Konsole, Kitty)
-- **Multi-Screen Navigation**: Home, Chat, Create Grove, Settings, Grove Detail, and more (11 screens)
+- **Open in Claude**: Launch Claude CLI sessions with configurable terminal selection (Konsole, Kitty)
+- **Claude Terminal Selection**: Choose preferred terminal and customize session templates
+- **Session Templates**: Customize Claude session files globally or per-repository with `${WORKING_DIR}` placeholder
+- **Multi-Screen Navigation**: Home, Chat, Create Grove, Settings, Grove Detail, and more (12 screens)
 - **Dependency Injection**: Testable architecture with DI container and service interfaces
 - **Command-Line Interface**: Support for CLI commands like `grove --register`
 - Built on React and Ink for terminal-based UI
@@ -93,7 +95,7 @@ grove/
 │   │   ├── Router.tsx     # Screen router component
 │   │   ├── types.ts       # Navigation type definitions
 │   │   └── useNavigation.ts # Navigation hook
-│   ├── screens/           # Screen components (11 screens)
+│   ├── screens/           # Screen components (12 screens)
 │   │   ├── HomeScreen.tsx        # Home/welcome screen with grove grid
 │   │   ├── ChatScreen.tsx        # AI chat interface screen
 │   │   ├── CreateGroveScreen.tsx # Grove creation with monorepo support
@@ -101,8 +103,9 @@ grove/
 │   │   ├── CloseGroveScreen.tsx  # Grove closing confirmation
 │   │   ├── OpenTerminalScreen.tsx # Terminal launcher for worktrees
 │   │   ├── OpenIDEScreen.tsx     # IDE launcher for worktrees
-│   │   ├── OpenClaudeScreen.tsx  # Claude CLI session launcher
+│   │   ├── OpenClaudeScreen.tsx  # Claude CLI session launcher with terminal selection
 │   │   ├── IDESettingsScreen.tsx # IDE configuration screen
+│   │   ├── ClaudeTerminalSettingsScreen.tsx # Claude terminal configuration screen
 │   │   ├── SettingsScreen.tsx    # Settings management screen
 │   │   ├── WorkingFolderScreen.tsx # Working folder configuration
 │   │   └── RepositoriesScreen.tsx # Repository list screen
@@ -166,8 +169,8 @@ grove/
 
 ### Current Codebase Size
 
-- **Total Lines**: ~7,700 lines across TypeScript and TSX files
-- **Screens**: 11 screen components
+- **Total Lines**: ~8,200 lines across TypeScript and TSX files
+- **Screens**: 12 screen components
 - **Services**: 7 service classes with DI support
 - **Modules**: 10 major modules (commands, components, di, git, navigation, screens, services, storage, utils, index)
 - **Architecture**: Modular architecture with dependency injection for testability
@@ -203,7 +206,7 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 
 **Key Types**:
 
-- `Settings` - User settings (workingFolder, terminal, selectedIDE, ideConfigs)
+- `Settings` - User settings (workingFolder, terminal, selectedIDE, ideConfigs, selectedClaudeTerminal, claudeSessionTemplates)
 - `StorageConfig` - Storage paths configuration
 - `Repository` - Registered repository metadata (including `isMonorepo` flag)
 - `RepositoriesData` - Repository list container
@@ -212,11 +215,14 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 - `GroveReference` - Global grove index entry
 - `GrovesIndex` - Global list of all groves
 - `GroveMetadata` - Grove-specific data (worktrees, timestamps)
-- `GroveRepoConfig` - Per-repo `.grove.json` configuration (branchNameTemplate, fileCopyPatterns, ide)
+- `GroveRepoConfig` - Per-repo `.grove.json` configuration (branchNameTemplate, fileCopyPatterns, ide, claudeSessionTemplates)
 - `GroveIDEConfig` - IDE config for .grove.json (reference like `@phpstorm` or custom command)
 - `RecentSelection` - Recently used repository/project selection
 - `TerminalConfig` - Terminal command and arguments
 - `IDEType` / `IDEConfig` - IDE configuration types
+- `ClaudeTerminalType` - Union type for terminal types ('konsole' | 'kitty')
+- `ClaudeSessionTemplate` - Session template with content string and `${WORKING_DIR}` placeholder
+- `ClaudeSessionTemplates` - Partial record mapping terminal types to templates
 
 #### src/storage/storage.ts
 
@@ -275,6 +281,7 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 - `branchNameTemplate` - Custom branch naming (e.g., `"grove/${GROVE_NAME}"`)
 - `fileCopyPatterns` - Glob patterns for files to copy to worktrees
 - `ide` - IDE to use: reference (`"@vscode"`, `"@phpstorm"`) or custom config object
+- `claudeSessionTemplates` - Custom session templates for Konsole/Kitty with `${WORKING_DIR}` placeholder
 - `initActions` - Post-creation actions (not yet implemented)
 
 #### src/storage/recentSelections.ts
@@ -436,28 +443,42 @@ The services layer uses **dependency injection** for testability. Services imple
 
 #### src/services/ClaudeSessionService.ts
 
-**Purpose**: Claude CLI session launching in terminal with multiple tabs
+**Purpose**: Claude CLI session launching in terminal with configurable templates
 
 **Key Features**:
 
-- Supports KDE Konsole and Kitty terminals
-- Creates session files for multi-tab terminal launch
+- Supports KDE Konsole and Kitty terminals with user selection
+- Customizable session templates with `${WORKING_DIR}` placeholder
+- Template priority: project-level > repo-level > global settings > defaults
 - Two tabs: Claude CLI + regular bash shell
 - Session files stored temporarily in `~/.grove/tmp/` and cleaned up after launch
 
 **Key Methods**:
 
-- `detectTerminal()` - Find available terminal (konsole or kitty)
-- `openSession(workingDir)` - Open Claude session in directory
+- `detectAvailableTerminals()` - Find all available terminals (konsole, kitty)
+- `detectTerminal()` - Find first available terminal (deprecated)
+- `getDefaultTemplate(terminalType)` - Get built-in default template
+- `getEffectiveTemplate(terminalType)` - Get template from settings or default
+- `getTemplateForRepo(terminalType, repositoryPath, projectPath?)` - Get repo-specific template with priority fallback
+- `applyTemplate(template, workingDir)` - Replace `${WORKING_DIR}` placeholder
+- `openSession(workingDir, repositoryPath, projectPath?, terminalType?)` - Open Claude session with terminal selection and template support
 
 **Dependencies** (via DI):
 
-- `ISettingsService` - For storage config to get tmp directory path
+- `ISettingsService` - For storage config and template settings
+- `IGroveConfigService` - For repository-level template lookup
 
-**Session File Formats**:
+**Template Priority** (highest to lowest):
 
-- **Konsole**: `title: Claude ;; workdir: /path ;; command: claude`
-- **Kitty**: `layout tall` + `launch --title "claude" claude`
+1. Project-level `.grove.json` (for monorepos)
+2. Repository-level `.grove.json`
+3. Global settings (`~/.grove/settings.json`)
+4. Built-in defaults
+
+**Default Session File Formats**:
+
+- **Konsole**: `title: Claude ;; workdir: ${WORKING_DIR} ;; command: claude`
+- **Kitty**: `layout tall` + `cd ${WORKING_DIR}` + `launch --title "claude" claude`
 
 #### src/services/interfaces.ts
 
@@ -522,11 +543,12 @@ The services layer uses **dependency injection** for testability. Services imple
 - `closeGrove` - Grove closing confirmation (groveId param)
 - `openTerminal` - Terminal launcher (groveId param)
 - `openIDE` - IDE launcher (groveId param)
-- `openClaude` - Claude session launcher (groveId param)
+- `openClaude` - Claude session launcher with terminal selection (groveId param)
 - `settings` - Settings screen (optional section param)
 - `workingFolder` - Working folder config (no params)
 - `repositories` - Repository list (no params)
 - `ideSettings` - IDE configuration (no params)
+- `claudeTerminalSettings` - Claude terminal configuration (no params)
 
 #### src/navigation/NavigationContext.tsx
 
@@ -674,7 +696,7 @@ Extracted components for the home screen panel layout:
 
 ### Screens Layer (`src/screens/`)
 
-The screens layer contains the 11 main screen components that make up the Grove UI. Each screen is a full-page view that users navigate between.
+The screens layer contains the 12 main screen components that make up the Grove UI. Each screen is a full-page view that users navigate between.
 
 **Screens**:
 
@@ -685,8 +707,9 @@ The screens layer contains the 11 main screen components that make up the Grove 
 - `CloseGroveScreen.tsx` - Grove closing confirmation with worktree cleanup
 - `OpenTerminalScreen.tsx` - Terminal launcher for grove worktrees
 - `OpenIDEScreen.tsx` - IDE launcher for grove worktrees
-- `OpenClaudeScreen.tsx` - Claude CLI session launcher for grove worktrees
+- `OpenClaudeScreen.tsx` - Claude CLI session launcher with terminal selection for grove worktrees
 - `IDESettingsScreen.tsx` - IDE configuration (select default IDE)
+- `ClaudeTerminalSettingsScreen.tsx` - Claude terminal configuration (select terminal and customize templates)
 - `SettingsScreen.tsx` - Settings management hub
 - `WorkingFolderScreen.tsx` - Working folder configuration
 - `RepositoriesScreen.tsx` - Repository list and management (with monorepo toggle)
@@ -1168,6 +1191,7 @@ The pre-commit hook automatically runs:
 - **Open IDE**: Edit `src/screens/OpenIDEScreen.tsx`
 - **Open Claude**: Edit `src/screens/OpenClaudeScreen.tsx`
 - **IDE Settings**: Edit `src/screens/IDESettingsScreen.tsx`
+- **Claude Terminal Settings**: Edit `src/screens/ClaudeTerminalSettingsScreen.tsx`
 - **Settings**: Edit `src/screens/SettingsScreen.tsx`
 - **Working Folder**: Edit `src/screens/WorkingFolderScreen.tsx`
 - **Repositories**: Edit `src/screens/RepositoriesScreen.tsx`
@@ -1285,11 +1309,13 @@ Current organization follows a **modular, feature-based architecture with depend
 - **Grove Configuration**: ✅ Per-repo `.grove.json` for branch naming, file copying, and IDE selection
 - **Monorepo Support**: ✅ Select specific project folders within monorepos
 - **External Tools**: ✅ Open worktrees in terminal, IDE (VS Code, JetBrains with auto-detect, PyCharm, Vim), or Claude
-- **Navigation**: ✅ 11-screen UI with type-safe routing
+- **Claude Terminal Selection**: ✅ User-selectable terminal (Konsole, Kitty) with customizable session templates
+- **Session Templates**: ✅ Customizable Claude session templates (global, per-repo, per-project)
+- **Navigation**: ✅ 12-screen UI with type-safe routing
 - **Dependency Injection**: ✅ DI container for testable architecture
 - **Testing**: ✅ Vitest with comprehensive coverage of services and storage layers
 - **AI Integration**: ⚠️ Chat screen exists but AI/LLM integration not yet connected
-- **Architecture**: Mature modular structure with 10 distinct layers (~7,700 lines)
+- **Architecture**: Mature modular structure with 10 distinct layers (~8,200 lines)
 
 ### Development Priorities
 
@@ -1389,9 +1415,12 @@ grove
 ✅ **Open in Terminal** - Launch terminal windows for worktrees
 ✅ **Open in IDE** - Launch VS Code, JetBrains IDEs, PyCharm, or Vim for worktrees
 ✅ **JetBrains Auto-Detect** - Automatically select IDE based on project files (composer.json, package.json, etc.)
-✅ **Open in Claude** - Launch Claude CLI sessions with terminal tabs (Konsole, Kitty)
+✅ **Open in Claude** - Launch Claude CLI sessions with configurable terminal selection (Konsole, Kitty)
+✅ **Claude Terminal Selection** - Choose preferred terminal and customize session templates
+✅ **Session Templates** - Customize Claude session files with `${WORKING_DIR}` placeholder (global/per-repo/per-project)
 ✅ **IDE Settings** - Configure default IDE and custom commands
-✅ **Navigation System** - Type-safe 11-screen routing with history
+✅ **Claude Terminal Settings** - Configure Claude terminal and manage templates
+✅ **Navigation System** - Type-safe 12-screen routing with history
 ✅ **Dependency Injection** - DI container with React hooks for testability
 ✅ **Recent Selections** - Track recently used repo/project selections
 ✅ **Settings Management** - Configure working folder, terminal, IDE
@@ -1526,5 +1555,5 @@ Refer to:
 **Last Updated**: 2026-01-05
 **Document Version**: 3.3.0
 **Codebase State**: Active development (v1.0.0) with mature feature set and testing framework
-**Lines of Code**: ~7,700 lines
-**Key Milestones**: Storage ✅ | Git Operations ✅ | Navigation ✅ | Repository Tracking ✅ | Grove Management ✅ | Monorepo Support ✅ | DI Container ✅ | External Tool Integration ✅ | JetBrains Auto-Detect ✅ | Claude Integration ✅ | Testing Framework ✅
+**Lines of Code**: ~8,200 lines
+**Key Milestones**: Storage ✅ | Git Operations ✅ | Navigation ✅ | Repository Tracking ✅ | Grove Management ✅ | Monorepo Support ✅ | DI Container ✅ | External Tool Integration ✅ | JetBrains Auto-Detect ✅ | Claude Integration ✅ | Claude Terminal Selection ✅ | Session Templates ✅ | Testing Framework ✅

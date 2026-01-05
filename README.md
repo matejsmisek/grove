@@ -11,8 +11,10 @@ Grove is a modern command-line tool that makes managing Git worktrees effortless
 - **Monorepo Support** - Select specific project folders within monorepos for grove creation
 - **Smart IDE Integration** - Auto-detect and launch the right IDE (VS Code, JetBrains IDEs, Vim) for each project
 - **JetBrains Auto-Detection** - Automatically selects the appropriate JetBrains IDE based on project files
-- **Custom Configuration** - Per-repository `.grove.json` for branch naming, file copying, and IDE preferences
-- **Claude Integration** - Launch Claude CLI sessions with terminal tabs for AI-assisted development
+- **Custom Configuration** - Per-repository `.grove.json` for branch naming, file copying, IDE preferences, and Claude session templates
+- **Claude Integration** - Launch Claude CLI sessions with configurable terminal selection (Konsole, Kitty)
+- **Claude Terminal Selection** - Choose your preferred terminal and customize session templates
+- **Session Templates** - Customize Claude session files globally or per-repository with `${WORKING_DIR}` placeholder
 - **Terminal Launcher** - Open terminal windows directly in your grove worktrees
 - **Git Status Tracking** - See uncommitted changes and unpushed commits at a glance
 
@@ -105,16 +107,22 @@ For monorepos, you can also place `.grove.json` files in project subdirectories 
 {
 	"branchNameTemplate": "grove/${GROVE_NAME}",
 	"fileCopyPatterns": [".env.example", "*.config.js"],
-	"ide": "@webstorm"
+	"ide": "@webstorm",
+	"claudeSessionTemplates": {
+		"konsole": {
+			"content": "title: Claude ;; workdir: ${WORKING_DIR} ;; command: claude\n"
+		}
+	}
 }
 ```
 
-| Option               | Type                 | Description                                                         |
-| -------------------- | -------------------- | ------------------------------------------------------------------- |
-| `branchNameTemplate` | `string`             | Template for worktree branch names. Must contain `${GROVE_NAME}`.   |
-| `fileCopyPatterns`   | `string[]`           | Glob patterns for files to copy to worktrees during grove creation. |
-| `ide`                | `string` or `object` | IDE to use when opening this project (see below).                   |
-| `initActions`        | `string[]`           | Commands to run after grove creation (not yet implemented).         |
+| Option                   | Type                 | Description                                                                      |
+| ------------------------ | -------------------- | -------------------------------------------------------------------------------- |
+| `branchNameTemplate`     | `string`             | Template for worktree branch names. Must contain `${GROVE_NAME}`.                |
+| `fileCopyPatterns`       | `string[]`           | Glob patterns for files to copy to worktrees during grove creation.              |
+| `ide`                    | `string` or `object` | IDE to use when opening this project (see below).                                |
+| `claudeSessionTemplates` | `object`             | Custom session templates for Claude terminals with `${WORKING_DIR}` placeholder. |
+| `initActions`            | `string[]`           | Commands to run after grove creation (not yet implemented).                      |
 
 #### IDE Configuration
 
@@ -150,6 +158,41 @@ Available IDE references:
 ```
 
 The `{path}` placeholder will be replaced with the worktree path.
+
+#### Claude Session Templates
+
+The `claudeSessionTemplates` option allows you to customize the session/tabs files used when opening Claude in a terminal. Templates use the `${WORKING_DIR}` placeholder which gets replaced with the worktree path.
+
+**Template Priority** (highest to lowest):
+
+1. Project-level `.grove.json` (for monorepos)
+2. Repository-level `.grove.json`
+3. Global settings (`~/.grove/settings.json` via Settings → Claude Terminal Settings)
+4. Built-in defaults
+
+**Example templates**:
+
+```json
+{
+	"claudeSessionTemplates": {
+		"konsole": {
+			"content": "title: Claude ;; workdir: ${WORKING_DIR} ;; command: claude\ntitle: Tests ;; workdir: ${WORKING_DIR} ;; command: npm test\n"
+		},
+		"kitty": {
+			"content": "layout tall\ncd ${WORKING_DIR}\nlayout tall:bias=65;full_size=1\nlaunch --title \"claude\" claude\nlaunch --title \"tests\" npm test\n"
+		}
+	}
+}
+```
+
+This example creates a Konsole session with two tabs (Claude and Tests) or a Kitty session with the same layout.
+
+**Accessing Global Settings:**
+
+- Navigate to **Settings → Claude Terminal Settings**
+- Select your preferred terminal (Konsole or Kitty)
+- Press `c` to configure templates
+- Templates configured here apply globally unless overridden by repository configs
 
 #### Monorepo Example
 
