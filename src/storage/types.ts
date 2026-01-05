@@ -193,7 +193,7 @@ export interface InitActionsStatus {
 	success: boolean;
 	/** Timestamp when initActions were executed */
 	executedAt: string;
-	/** Log file path (relative to worktree) */
+	/** Log file name (stored in grove directory next to CONTEXT.md) */
 	logFile: string;
 	/** Number of actions that were configured */
 	totalActions: number;

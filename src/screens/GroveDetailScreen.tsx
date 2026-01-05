@@ -220,10 +220,8 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 			return;
 		}
 
-		const logPath = path.join(
-			selectedWorktree.worktreePath,
-			selectedWorktree.initActionsStatus.logFile
-		);
+		// Log file is now stored in the grove directory (next to CONTEXT.md)
+		const logPath = path.join(grovePath, selectedWorktree.initActionsStatus.logFile);
 
 		try {
 			const content = fs.readFileSync(logPath, 'utf-8');

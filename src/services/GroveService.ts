@@ -74,17 +74,21 @@ export class GroveService implements IGroveService {
 	/**
 	 * Execute initActions for a worktree
 	 * @param actions - Array of bash commands to execute
+	 * @param grovePath - Path to the grove directory (where log will be stored)
+	 * @param worktreeName - Name of the worktree (for log file naming)
 	 * @param worktreePath - Path to the worktree directory
 	 * @param projectPath - Optional project path for monorepos
 	 * @returns Status of initActions execution
 	 */
 	private async executeInitActions(
 		actions: string[],
+		grovePath: string,
+		worktreeName: string,
 		worktreePath: string,
 		projectPath?: string
 	): Promise<InitActionsStatus> {
-		const logFileName = '.grove-init.log';
-		const logFilePath = path.join(worktreePath, logFileName);
+		const logFileName = `grove-init-${worktreeName}.log`;
+		const logFilePath = path.join(grovePath, logFileName);
 		const executedAt = new Date().toISOString();
 
 		// Determine the working directory (project path if monorepo, otherwise worktree root)
@@ -334,6 +338,8 @@ Completed at: ${new Date().toISOString()}
 					try {
 						initActionsStatus = await this.executeInitActions(
 							initActions,
+							grovePath,
+							worktreeName,
 							worktreePath,
 							selection.projectPath
 						);
