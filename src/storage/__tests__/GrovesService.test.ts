@@ -36,7 +36,6 @@ vi.mock('os', () => ({
 describe('GrovesService', () => {
 	let service: GrovesService;
 	let settingsService: SettingsService;
-	let mockGroveFolder: string;
 
 	beforeEach(() => {
 		// Create fresh in-memory filesystem
@@ -46,7 +45,6 @@ describe('GrovesService', () => {
 		// Setup mock home directory
 		mockHomeDir = '/home/testuser';
 		setupMockHomeDir(vol, mockHomeDir);
-		mockGroveFolder = path.join(mockHomeDir, '.grove');
 
 		settingsService = new SettingsService();
 		settingsService.initializeStorage();
