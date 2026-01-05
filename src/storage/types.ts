@@ -177,6 +177,30 @@ export interface Worktree {
 	 * When set, indicates this worktree is for a specific project within a monorepo
 	 */
 	projectPath?: string;
+	/**
+	 * Status of initActions execution (if any were configured)
+	 */
+	initActionsStatus?: InitActionsStatus;
+}
+
+/**
+ * Status of initActions execution for a worktree
+ */
+export interface InitActionsStatus {
+	/** Whether initActions were executed */
+	executed: boolean;
+	/** Whether all initActions succeeded */
+	success: boolean;
+	/** Timestamp when initActions were executed */
+	executedAt: string;
+	/** Log file path (relative to worktree) */
+	logFile: string;
+	/** Number of actions that were configured */
+	totalActions: number;
+	/** Number of actions that succeeded */
+	successfulActions: number;
+	/** Error message if execution failed */
+	errorMessage?: string;
 }
 
 /**

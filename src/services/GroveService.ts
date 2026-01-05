@@ -1,8 +1,15 @@
+import { spawn } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-import type { GroveMetadata, Repository, RepositorySelection, Worktree } from '../storage/types.js';
+import type {
+	GroveMetadata,
+	InitActionsStatus,
+	Repository,
+	RepositorySelection,
+	Worktree,
+} from '../storage/types.js';
 import { normalizeGroveName } from '../utils/index.js';
 import type {
 	CloseGroveResult,
@@ -62,6 +69,148 @@ export class GroveService implements IGroveService {
 
 		existingNames.add(name);
 		return name;
+	}
+
+	/**
+	 * Execute initActions for a worktree
+	 * @param actions - Array of bash commands to execute
+	 * @param worktreePath - Path to the worktree directory
+	 * @param projectPath - Optional project path for monorepos
+	 * @returns Status of initActions execution
+	 */
+	private async executeInitActions(
+		actions: string[],
+		worktreePath: string,
+		projectPath?: string
+	): Promise<InitActionsStatus> {
+		const logFileName = '.grove-init.log';
+		const logFilePath = path.join(worktreePath, logFileName);
+		const executedAt = new Date().toISOString();
+
+		// Determine the working directory (project path if monorepo, otherwise worktree root)
+		const workingDir = projectPath ? path.join(worktreePath, projectPath) : worktreePath;
+
+		// Create log file with header
+		const logHeader = `Grove InitActions Execution Log
+Executed at: ${executedAt}
+Working directory: ${workingDir}
+Total actions: ${actions.length}
+
+${'='.repeat(80)}
+
+`;
+		fs.writeFileSync(logFilePath, logHeader);
+
+		let successfulActions = 0;
+		let errorMessage: string | undefined;
+
+		// Execute each action sequentially
+		for (let i = 0; i < actions.length; i++) {
+			const action = actions[i];
+			const actionHeader = `[Action ${i + 1}/${actions.length}] ${action}\n${'-'.repeat(80)}\n`;
+
+			// Append action header to log
+			fs.appendFileSync(logFilePath, actionHeader);
+
+			try {
+				// Execute the command
+				const { success, stdout, stderr, exitCode } = await this.executeCommand(action, workingDir);
+
+				// Append output to log
+				if (stdout) {
+					fs.appendFileSync(logFilePath, `STDOUT:\n${stdout}\n`);
+				}
+				if (stderr) {
+					fs.appendFileSync(logFilePath, `STDERR:\n${stderr}\n`);
+				}
+				fs.appendFileSync(logFilePath, `Exit code: ${exitCode}\n\n`);
+
+				if (!success) {
+					errorMessage = `Action ${i + 1} failed with exit code ${exitCode}: ${action}`;
+					fs.appendFileSync(logFilePath, `\n${'='.repeat(80)}\nEXECUTION STOPPED: ${errorMessage}\n`);
+					break;
+				}
+
+				successfulActions++;
+			} catch (error) {
+				const errMsg = error instanceof Error ? error.message : 'Unknown error';
+				errorMessage = `Action ${i + 1} failed: ${errMsg}`;
+				fs.appendFileSync(logFilePath, `ERROR: ${errMsg}\n\n`);
+				fs.appendFileSync(logFilePath, `\n${'='.repeat(80)}\nEXECUTION STOPPED: ${errorMessage}\n`);
+				break;
+			}
+		}
+
+		// Append summary to log
+		const success = successfulActions === actions.length;
+		const summary = `
+${'='.repeat(80)}
+EXECUTION SUMMARY
+${'='.repeat(80)}
+Total actions: ${actions.length}
+Successful: ${successfulActions}
+Status: ${success ? 'SUCCESS' : 'FAILED'}
+${errorMessage ? `Error: ${errorMessage}` : ''}
+Completed at: ${new Date().toISOString()}
+`;
+		fs.appendFileSync(logFilePath, summary);
+
+		return {
+			executed: true,
+			success,
+			executedAt,
+			logFile: logFileName,
+			totalActions: actions.length,
+			successfulActions,
+			errorMessage,
+		};
+	}
+
+	/**
+	 * Execute a single bash command
+	 * @param command - The command to execute
+	 * @param cwd - Working directory
+	 * @returns Execution result
+	 */
+	private async executeCommand(
+		command: string,
+		cwd: string
+	): Promise<{ success: boolean; stdout: string; stderr: string; exitCode: number }> {
+		return new Promise((resolve) => {
+			const childProcess = spawn('bash', ['-c', command], {
+				cwd,
+				stdio: ['ignore', 'pipe', 'pipe'],
+			});
+
+			let stdout = '';
+			let stderr = '';
+
+			childProcess.stdout.on('data', (data) => {
+				stdout += data.toString();
+			});
+
+			childProcess.stderr.on('data', (data) => {
+				stderr += data.toString();
+			});
+
+			childProcess.on('close', (code) => {
+				resolve({
+					success: code === 0,
+					stdout,
+					stderr,
+					exitCode: code ?? 1,
+				});
+			});
+
+			childProcess.on('error', (error) => {
+				resolve({
+					success: false,
+					stdout,
+					stderr: stderr + error.message,
+					exitCode: 1,
+				});
+			});
+		});
 	}
 
 	/**
@@ -177,6 +326,32 @@ export class GroveService implements IGroveService {
 					}
 				}
 
+				// Execute initActions if configured
+				// Combine root and project initActions (root first, then project)
+				let initActionsStatus: InitActionsStatus | undefined;
+				const initActions = [...mergedConfig.rootInitActions, ...mergedConfig.projectInitActions];
+				if (initActions.length > 0) {
+					try {
+						initActionsStatus = await this.executeInitActions(
+							initActions,
+							worktreePath,
+							selection.projectPath
+						);
+
+						// If initActions failed, add a warning
+						if (!initActionsStatus.success) {
+							console.warn(
+								`Warning: InitActions failed for ${repo.name}${selection.projectPath ? `/${selection.projectPath}` : ''}: ${initActionsStatus.errorMessage}`
+							);
+						}
+					} catch (error) {
+						const errMsg = error instanceof Error ? error.message : 'Unknown error';
+						console.warn(
+							`Warning: Failed to execute initActions for ${repo.name}${selection.projectPath ? `/${selection.projectPath}` : ''}: ${errMsg}`
+						);
+					}
+				}
+
 				// Create worktree entry
 				const worktree: Worktree = {
 					repositoryName: repo.name,
@@ -184,6 +359,7 @@ export class GroveService implements IGroveService {
 					worktreePath,
 					branch: branchName,
 					projectPath: selection.projectPath,
+					initActionsStatus,
 				};
 
 				worktrees.push(worktree);

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
+import fs from 'fs';
 import path from 'path';
 
 import { useService } from '../di/index.js';
@@ -95,6 +96,8 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	const [showActions, setShowActions] = useState(false);
 	const [selectedActionIndex, setSelectedActionIndex] = useState(0);
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
+	const [showInitLog, setShowInitLog] = useState(false);
+	const [initLogContent, setInitLogContent] = useState<string>('');
 
 	// Load grove details on mount
 	useEffect(() => {
@@ -209,7 +212,32 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 		}
 	};
 
-	// Worktree action options
+	const handleViewInitLog = () => {
+		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
+		if (!selectedWorktree.initActionsStatus) {
+			setShowActions(false);
+			setError('No init actions were executed for this worktree');
+			return;
+		}
+
+		const logPath = path.join(
+			selectedWorktree.worktreePath,
+			selectedWorktree.initActionsStatus.logFile
+		);
+
+		try {
+			const content = fs.readFileSync(logPath, 'utf-8');
+			setInitLogContent(content);
+			setShowActions(false);
+			setShowInitLog(true);
+		} catch (err) {
+			setShowActions(false);
+			setError(`Failed to read init log: ${err instanceof Error ? err.message : 'Unknown error'}`);
+		}
+	};
+
+	// Worktree action options (dynamically built based on worktree state)
+	const selectedWorktree = worktreeDetails[selectedIndex]?.worktree;
 	const worktreeActions = [
 		{
 			label: 'Open in Claude',
@@ -223,12 +251,27 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 			label: 'Open in IDE',
 			action: handleOpenInIDE,
 		},
+		// Conditionally add "View Init Log" if initActions were executed
+		...(selectedWorktree?.initActionsStatus
+			? [
+					{
+						label: 'View Init Log',
+						action: handleViewInitLog,
+					},
+				]
+			: []),
 	];
 
 	// Handle keyboard navigation
 	useInput(
 		(input, key) => {
-			if (showActions) {
+			if (showInitLog) {
+				// Init log viewer navigation
+				if (key.escape) {
+					setShowInitLog(false);
+					setInitLogContent('');
+				}
+			} else if (showActions) {
 				// Actions menu navigation
 				if (key.escape) {
 					setShowActions(false);
@@ -297,6 +340,40 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Text color="green">{resultMessage}</Text>
+			</Box>
+		);
+	}
+
+	if (showInitLog) {
+		return (
+			<Box flexDirection="column" padding={1}>
+				{/* Header */}
+				<Box marginBottom={1} flexDirection="column">
+					<Text bold color="green">
+						Init Actions Log
+					</Text>
+					{worktreeDetails[selectedIndex] && (
+						<Box>
+							<Text dimColor>
+								{worktreeDetails[selectedIndex].worktree.repositoryName}
+								{worktreeDetails[selectedIndex].worktree.projectPath &&
+									` / ${worktreeDetails[selectedIndex].worktree.projectPath}`}
+							</Text>
+						</Box>
+					)}
+				</Box>
+
+				{/* Log Content */}
+				<Box flexDirection="column" borderStyle="single" borderColor="gray" padding={1}>
+					{initLogContent.split('\n').map((line, index) => (
+						<Text key={index}>{line}</Text>
+					))}
+				</Box>
+
+				{/* Help text */}
+				<Box marginTop={1}>
+					<Text dimColor>ESC Close</Text>
+				</Box>
 			</Box>
 		);
 	}
@@ -405,6 +482,18 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 										{detail.hasUnpushedCommits && (
 											<Box>
 												<Text color="yellow">⚠ Unpushed commits</Text>
+											</Box>
+										)}
+
+										{/* InitActions Status */}
+										{detail.worktree.initActionsStatus && (
+											<Box>
+												<Text dimColor>Init Actions: </Text>
+												<Text color={detail.worktree.initActionsStatus.success ? 'green' : 'red'}>
+													{detail.worktree.initActionsStatus.success ? '✓' : '✗'}{' '}
+													{detail.worktree.initActionsStatus.successfulActions}/
+													{detail.worktree.initActionsStatus.totalActions} succeeded
+												</Text>
 											</Box>
 										)}
 									</Box>
