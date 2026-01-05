@@ -27,7 +27,7 @@ This document provides comprehensive information about the Grove codebase for AI
 ### Project Metadata
 
 - **Name**: grove
-- **Version**: 0.0.1
+- **Version**: 1.0.0
 - **License**: MIT
 - **Node Version**: >=18.0.0
 - **Type**: ES Module (ESM)
@@ -50,11 +50,20 @@ This document provides comprehensive information about the Grove codebase for AI
 - **TypeScript Compiler** - Builds and type-checks the codebase
 - **tsx** - TypeScript execution for development
 
+### Testing Tools
+
+- **Vitest** (v4.0.16) - Fast unit test framework with Vite integration
+- **@vitest/ui** (v4.0.16) - Web-based UI for test visualization
+- **memfs** (v4.51.1) - In-memory file system for testing file operations
+- **c8** (v10.1.3) - Code coverage reporting
+
 ## Codebase Structure
 
 ```
 grove/
 ├── src/                    # Source files (~7,300 lines total)
+│   ├── __tests__/         # Test helpers and utilities
+│   │   └── helpers.ts     # Test helper functions (createMockFs, setupMockHomeDir, etc.)
 │   ├── commands/          # Command handlers
 │   │   ├── index.ts       # Command exports
 │   │   ├── register.ts    # Repository registration command
@@ -98,6 +107,9 @@ grove/
 │   │   ├── WorkingFolderScreen.tsx # Working folder configuration
 │   │   └── RepositoriesScreen.tsx # Repository list screen
 │   ├── services/          # Service layer (business logic)
+│   │   ├── __tests__/         # Service tests
+│   │   │   ├── ContextService.test.ts  # ContextService tests
+│   │   │   └── FileService.test.ts     # FileService tests
 │   │   ├── GitService.ts      # Git worktree operations
 │   │   ├── GroveService.ts    # Grove lifecycle (create/close)
 │   │   ├── ContextService.ts  # CONTEXT.md file management
@@ -111,6 +123,11 @@ grove/
 │   │   ├── types.ts           # Service type definitions
 │   │   └── index.ts           # Service exports
 │   ├── storage/           # Persistent storage layer
+│   │   ├── __tests__/         # Storage tests
+│   │   │   ├── SettingsService.test.ts     # SettingsService tests
+│   │   │   ├── RepositoryService.test.ts   # RepositoryService tests
+│   │   │   ├── GrovesService.test.ts       # GrovesService tests
+│   │   │   └── GroveConfigService.test.ts  # GroveConfigService tests
 │   │   ├── SettingsService.ts    # Settings service (DI-compatible)
 │   │   ├── RepositoryService.ts  # Repository service (DI-compatible)
 │   │   ├── GrovesService.ts      # Groves service (DI-compatible)
@@ -137,6 +154,7 @@ grove/
 ├── package.json           # Project metadata and scripts
 ├── package-lock.json      # Locked dependency versions
 ├── tsconfig.json          # TypeScript configuration
+├── vitest.config.ts       # Vitest test configuration
 ├── eslint.config.js       # ESLint configuration
 ├── .prettierrc            # Prettier configuration
 ├── .prettierignore        # Prettier ignore patterns
@@ -736,15 +754,19 @@ npm install
 
 ### Available Scripts
 
-| Command                | Purpose                        | When to Use                                |
-| ---------------------- | ------------------------------ | ------------------------------------------ |
-| `npm run build`        | Compile TypeScript to dist/    | Before testing final build, before commits |
-| `npm run dev`          | Watch mode compilation         | During active development                  |
-| `npm run lint`         | Check for linting errors       | Before commits, in CI                      |
-| `npm run lint:fix`     | Auto-fix linting issues        | When linting errors occur                  |
-| `npm run format`       | Format all files with Prettier | After making changes                       |
-| `npm run format:check` | Check if files are formatted   | To verify formatting without changes       |
-| `npm run typecheck`    | Type-check without emitting    | Quick validation without build             |
+| Command                  | Purpose                          | When to Use                                |
+| ------------------------ | -------------------------------- | ------------------------------------------ |
+| `npm run build`          | Compile TypeScript to dist/      | Before testing final build, before commits |
+| `npm run dev`            | Watch mode compilation           | During active development                  |
+| `npm test`               | Run all tests once               | Before commits, in CI                      |
+| `npm run test:watch`     | Run tests in watch mode          | During test development                    |
+| `npm run test:ui`        | Open Vitest web UI               | Visual test debugging and exploration      |
+| `npm run test:coverage`  | Run tests with coverage report   | To check code coverage                     |
+| `npm run lint`           | Check for linting errors         | Before commits, in CI                      |
+| `npm run lint:fix`       | Auto-fix linting issues          | When linting errors occur                  |
+| `npm run format`         | Format all files with Prettier   | After making changes                       |
+| `npm run format:check`   | Check if files are formatted     | To verify formatting without changes       |
+| `npm run typecheck`      | Type-check without emitting      | Quick validation without build             |
 
 ### Development Cycle
 
@@ -773,14 +795,21 @@ npm install
    ```
 
 2. **Run TypeScript type check**:
+
    ```bash
    npm run typecheck
+   ```
+
+3. **Run tests** (especially when modifying services or storage):
+   ```bash
+   npm test
    ```
 
 **Why This Is Mandatory**:
 
 - Pre-commit hooks will block commits if checks fail
 - CI will fail if code doesn't pass checks
+- Tests ensure code changes don't break existing functionality
 - Ensures code quality before committing
 - Catches errors early in the development process
 
@@ -790,11 +819,13 @@ npm install
 - Before attempting to commit
 - After adding or modifying imports
 - After changing type definitions
+- **ALWAYS when modifying service or storage layer code**
 
 **What the Checks Do**:
 
 - **ESLint**: Catches code style issues, potential bugs, and anti-patterns
 - **TypeScript**: Validates types, catches type errors, ensures type safety
+- **Tests**: Verify that code changes don't break existing functionality and new code works as expected
 
 **Note**: The pre-commit hook (managed by Husky) will automatically run:
 
@@ -910,15 +941,167 @@ function ComponentName() {
 
 ## Testing and Quality Assurance
 
-### Current State
+### Testing Framework
 
-- **No test framework** installed yet
-- **No test files** present
-- **Type checking** via TypeScript compiler
-- **Linting** via ESLint
-- **Code formatting** via Prettier
-- **Pre-commit hooks** via Husky and lint-staged
-- **CI/CD** via GitHub Actions
+Grove uses **Vitest** as its testing framework, providing fast unit tests with excellent TypeScript support and an intuitive API.
+
+**Test Coverage**:
+
+- ✅ **SettingsService** - Full coverage of settings management
+- ✅ **RepositoryService** - Repository tracking and management
+- ✅ **GrovesService** - Grove index and metadata operations
+- ✅ **GroveConfigService** - Grove configuration reading and merging
+- ✅ **ContextService** - CONTEXT.md file generation and management
+- ✅ **FileService** - File operations with glob pattern matching
+
+### Testing Patterns
+
+**File System Mocking**:
+
+All tests use `memfs` (in-memory file system) to mock file operations, ensuring:
+
+- Fast test execution (no real disk I/O)
+- Test isolation (each test gets a fresh file system)
+- Cross-platform compatibility
+- No cleanup required
+
+**Test Structure**:
+
+```typescript
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Volume } from 'memfs';
+import { createMockFs, setupMockHomeDir } from '../../__tests__/helpers.js';
+
+let vol: Volume;
+
+vi.mock('fs', () => {
+  // Mock filesystem implementation
+});
+
+describe('ServiceName', () => {
+  beforeEach(() => {
+    const mockFs = createMockFs();
+    vol = mockFs.vol;
+    // Setup test environment
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('methodName', () => {
+    it('should do something specific', () => {
+      // Arrange, Act, Assert
+    });
+  });
+});
+```
+
+**Test Helpers** (`src/__tests__/helpers.ts`):
+
+- `createMockFs()` - Create in-memory file system volume
+- `setupMockHomeDir(vol, homeDir)` - Setup mock home directory structure
+- `createMockGitRepo(vol, basePath)` - Create mock git repository
+- `createFile(vol, filePath, content)` - Create file with content
+- `readFile(vol, filePath)` - Read file contents
+- `fileExists(vol, filePath)` - Check file existence
+- `createMockGroveConfig(vol, repoPath, config)` - Create .grove.json config
+
+### Running Tests
+
+**Basic Commands**:
+
+```bash
+# Run all tests once
+npm test
+
+# Run tests in watch mode (auto-rerun on changes)
+npm run test:watch
+
+# Open interactive web UI
+npm run test:ui
+
+# Run tests with coverage report
+npm run test:coverage
+```
+
+**Coverage Configuration** (`vitest.config.ts`):
+
+- **Included**: Service and storage layers
+- **Excluded**: UI components, screens, navigation, entry point
+- **Reporter**: text, json, html
+- **Provider**: c8
+
+### Writing Tests for Services
+
+**CRITICAL**: When adding or modifying service code, you MUST write tests to cover the changes.
+
+**Guidelines for Writing Service Tests**:
+
+1. **Test File Location**: Place test files in `__tests__/` directory next to the service:
+   - `src/services/MyService.ts` → `src/services/__tests__/MyService.test.ts`
+   - `src/storage/MyStorage.ts` → `src/storage/__tests__/MyStorage.test.ts`
+
+2. **Mock File System**: Always use `memfs` for file operations:
+
+   ```typescript
+   import { Volume } from 'memfs';
+   import { createMockFs } from '../../__tests__/helpers.js';
+
+   let vol: Volume;
+
+   beforeEach(() => {
+     const mockFs = createMockFs();
+     vol = mockFs.vol;
+   });
+   ```
+
+3. **Test Organization**: Group tests by method using `describe` blocks:
+
+   ```typescript
+   describe('ServiceName', () => {
+     describe('methodName', () => {
+       it('should handle normal case', () => {});
+       it('should handle edge case', () => {});
+       it('should handle error case', () => {});
+     });
+   });
+   ```
+
+4. **Test Coverage Requirements**:
+
+   - Test happy paths (normal operation)
+   - Test edge cases (empty inputs, missing files, etc.)
+   - Test error handling (invalid JSON, missing directories, etc.)
+   - Test all public methods
+   - Aim for >80% coverage for services
+
+5. **Naming Conventions**:
+
+   - Test files: `ServiceName.test.ts`
+   - Test descriptions: `should <expected behavior>` (e.g., "should create settings file if it does not exist")
+
+6. **Example Test**:
+   ```typescript
+   it('should update specific fields without overwriting others', () => {
+     // Arrange: Setup initial state
+     const initialSettings = { workingFolder: '/initial/path' };
+     service.writeSettings(initialSettings);
+     // Act: Perform the operation
+     const updated = service.updateSettings({ selectedIDE: 'vscode' });
+     // Assert: Verify the results
+     expect(updated.workingFolder).toBe('/initial/path');
+     expect(updated.selectedIDE).toBe('vscode');
+   });
+   ```
+
+**When to Write Tests**:
+
+- ✅ **When creating a new service** - Write comprehensive tests covering all methods
+- ✅ **When modifying service logic** - Update existing tests and add new ones for new behavior
+- ✅ **When fixing bugs** - Add a test that reproduces the bug, then fix it
+- ✅ **When adding new methods** - Write tests for all new public methods
+- ⚠️ **UI Components** - Currently excluded from test coverage (may be added later)
 
 ### Quality Checks Before Committing
 
@@ -926,8 +1109,9 @@ function ComponentName() {
 
 1. `npx eslint <changed-files>` - Check changed files for linting errors
 2. `npm run typecheck` - Ensure no TypeScript errors
-3. `npm run build` - Ensure successful compilation
-4. Manual testing of the CLI application
+3. `npm test` - Run all tests (MANDATORY for service changes)
+4. `npm run build` - Ensure successful compilation
+5. Manual testing of the CLI application
 
 **Automatic Checks (Run on Commit)**:
 
@@ -940,7 +1124,8 @@ The pre-commit hook automatically runs:
 
 1. `npm run lint` - Full ESLint check
 2. `npm run typecheck` - Full TypeScript type check
-3. `npm run build` - Build verification
+3. `npm test` - Run all tests
+4. `npm run build` - Build verification
 
 **Note**: Commits will be blocked if any automatic checks fail. Fix errors before committing.
 
@@ -952,12 +1137,14 @@ The pre-commit hook automatically runs:
 2. Identify if new files are needed or modifications to existing files
 3. Follow React/Ink patterns for UI components
 4. Update types/interfaces as needed
-5. Test the feature in the CLI
-6. **MANDATORY: Run ESLint on changed files** - `npx eslint <changed-files>`
-7. **MANDATORY: Run typecheck** - `npm run typecheck`
-8. Fix any errors found by ESLint or TypeScript
-9. Commit changes (pre-commit hook will auto-format and run checks)
-10. Push changes
+5. **If adding/modifying a service**: Write comprehensive tests (see "Writing Tests for Services")
+6. Test the feature in the CLI
+7. **MANDATORY: Run ESLint on changed files** - `npx eslint <changed-files>`
+8. **MANDATORY: Run typecheck** - `npm run typecheck`
+9. **MANDATORY: Run tests** - `npm test` (especially for service changes)
+10. Fix any errors found by ESLint, TypeScript, or tests
+11. Commit changes (pre-commit hook will auto-format and run checks)
+12. Push changes
 
 ### Modifying Different Parts of Grove
 
@@ -989,8 +1176,8 @@ The pre-commit hook automatically runs:
 
 - **Git Operations**: Edit `src/services/GitService.ts`
 - **Grove Lifecycle**: Edit `src/services/GroveService.ts`
-- **Context Files**: Edit `src/services/ContextService.ts`
-- **File Operations**: Edit `src/services/FileService.ts`
+- **Context Files**: Edit `src/services/ContextService.ts` (✅ has tests)
+- **File Operations**: Edit `src/services/FileService.ts` (✅ has tests)
 - **Terminal Launcher**: Edit `src/services/TerminalService.ts`
 - **IDE Launcher**: Edit `src/services/IDEService.ts`
 - **Claude Session Launcher**: Edit `src/services/ClaudeSessionService.ts`
@@ -998,15 +1185,19 @@ The pre-commit hook automatically runs:
 - **DI Tokens**: Edit `src/services/tokens.ts`
 - **Service Registration**: Edit `src/services/registration.ts`
 
+**⚠️ IMPORTANT**: When modifying services, you MUST update or add tests in `src/services/__tests__/`
+
 **Storage & Data**:
 
-- **Settings Service**: Edit `src/storage/SettingsService.ts`
-- **Repository Service**: Edit `src/storage/RepositoryService.ts`
-- **Groves Service**: Edit `src/storage/GrovesService.ts`
-- **Grove Config**: Edit `src/storage/GroveConfigService.ts`
+- **Settings Service**: Edit `src/storage/SettingsService.ts` (✅ has tests)
+- **Repository Service**: Edit `src/storage/RepositoryService.ts` (✅ has tests)
+- **Groves Service**: Edit `src/storage/GrovesService.ts` (✅ has tests)
+- **Grove Config**: Edit `src/storage/GroveConfigService.ts` (✅ has tests)
 - **Recent Selections**: Edit `src/storage/recentSelections.ts`
 - **Storage Types**: Edit `src/storage/types.ts`
 - **Legacy Functions**: Edit `src/storage/storage.ts`, `repositories.ts`, `groves.ts`
+
+**⚠️ IMPORTANT**: When modifying storage services, you MUST update or add tests in `src/storage/__tests__/`
 
 **Dependency Injection**:
 
@@ -1086,7 +1277,7 @@ Current organization follows a **modular, feature-based architecture with depend
 
 ### Project Context
 
-- **Development Stage**: Active development (v0.0.1) with mature feature set
+- **Development Stage**: Active development (v1.0.0) with mature feature set and testing framework
 - **Git Integration**: ✅ Full GitService with worktree operations and status queries
 - **Storage System**: ✅ Complete JSON-based persistence with DI-compatible services
 - **Repository Tracking**: ✅ Register repositories with monorepo support
@@ -1096,6 +1287,7 @@ Current organization follows a **modular, feature-based architecture with depend
 - **External Tools**: ✅ Open worktrees in terminal, IDE (VS Code, JetBrains with auto-detect, PyCharm, Vim), or Claude
 - **Navigation**: ✅ 11-screen UI with type-safe routing
 - **Dependency Injection**: ✅ DI container for testable architecture
+- **Testing**: ✅ Vitest with comprehensive coverage of services and storage layers
 - **AI Integration**: ⚠️ Chat screen exists but AI/LLM integration not yet connected
 - **Architecture**: Mature modular structure with 10 distinct layers (~7,700 lines)
 
@@ -1103,8 +1295,9 @@ Current organization follows a **modular, feature-based architecture with depend
 
 1. Maintaining type safety (strict TypeScript)
 2. Following established patterns (React/Ink conventions)
-3. Keeping code clean and linted
-4. Building toward AI-powered Git operations
+3. Writing tests for all service and storage layer changes
+4. Keeping code clean and linted
+5. Building toward AI-powered Git operations
 
 ### When Making Changes
 
@@ -1114,6 +1307,8 @@ Current organization follows a **modular, feature-based architecture with depend
 - **Test** changes by running the compiled CLI
 - **MANDATORY: Run ESLint on changed files** - `npx eslint <changed-files>`
 - **MANDATORY: Run typecheck after changes** - `npm run typecheck`
+- **MANDATORY: Run tests after changes** - `npm test` (especially for service/storage changes)
+- **Write tests for new services** - See "Writing Tests for Services" section
 - **Maintain** the modular component structure (one component per file)
 - **Format code** with Prettier (automatic via pre-commit hook, or run `npm run format`)
 
@@ -1139,6 +1334,18 @@ npm run dev
 # MANDATORY: Check types after making changes
 npm run typecheck
 
+# MANDATORY: Run tests (especially after service changes)
+npm test
+
+# Run tests in watch mode during development
+npm run test:watch
+
+# Open interactive test UI
+npm run test:ui
+
+# Run tests with coverage report
+npm run test:coverage
+
 # MANDATORY: Check specific files with ESLint
 npx eslint src/components/App.tsx src/components/StatusBar.tsx
 
@@ -1151,8 +1358,8 @@ npm run format
 # Check if files are formatted
 npm run format:check
 
-# Run all checks (what pre-commit hook does)
-npx lint-staged && npm run typecheck
+# Run all checks (what pre-commit hook does + tests)
+npx lint-staged && npm run typecheck && npm test
 
 # Install as global command for testing
 npm link
@@ -1163,7 +1370,7 @@ grove
 
 1. **No AI/LLM Integration**: Chat screen UI exists but not connected to actual LLM
 2. **Limited CLI Commands**: Only `--register` flag implemented
-3. **No Testing Framework**: No unit tests or integration tests yet (but DI enables easy mocking)
+3. **Partial Test Coverage**: Services and storage layers have tests, UI components do not yet
 4. **No Git Operations in Chat**: Chat doesn't execute git commands yet
 5. **Init Actions Not Implemented**: `.grove.json` `initActions` field is parsed but not executed
 
@@ -1189,6 +1396,7 @@ grove
 ✅ **Recent Selections** - Track recently used repo/project selections
 ✅ **Settings Management** - Configure working folder, terminal, IDE
 ✅ **CLI Commands** - `grove --register` for repository registration
+✅ **Testing Framework** - Vitest with memfs for testing services and storage layers
 
 ### Future Expansion Areas
 
@@ -1201,7 +1409,7 @@ grove
 
 **Medium Priority**:
 
-- Testing framework (Jest or Vitest) - DI architecture enables easy testing
+- Expand test coverage to UI components (screens, navigation)
 - Command history in chat
 - Git operations beyond worktrees (commit, push, pull, etc.)
 - Batch operations on multiple worktrees
@@ -1316,7 +1524,7 @@ Refer to:
 ---
 
 **Last Updated**: 2026-01-05
-**Document Version**: 3.2.0
-**Codebase State**: Active development (v0.0.1) with mature feature set
+**Document Version**: 3.3.0
+**Codebase State**: Active development (v1.0.0) with mature feature set and testing framework
 **Lines of Code**: ~7,700 lines
-**Key Milestones**: Storage ✅ | Git Operations ✅ | Navigation ✅ | Repository Tracking ✅ | Grove Management ✅ | Monorepo Support ✅ | DI Container ✅ | External Tool Integration ✅ | JetBrains Auto-Detect ✅ | Claude Integration ✅
+**Key Milestones**: Storage ✅ | Git Operations ✅ | Navigation ✅ | Repository Tracking ✅ | Grove Management ✅ | Monorepo Support ✅ | DI Container ✅ | External Tool Integration ✅ | JetBrains Auto-Detect ✅ | Claude Integration ✅ | Testing Framework ✅
