@@ -282,7 +282,7 @@ The storage layer provides persistent JSON-based storage in `~/.grove` for all G
 - `fileCopyPatterns` - Glob patterns for files to copy to worktrees
 - `ide` - IDE to use: reference (`"@vscode"`, `"@phpstorm"`) or custom config object
 - `claudeSessionTemplates` - Custom session templates for Konsole/Kitty with `${WORKING_DIR}` placeholder
-- `initActions` - Post-creation actions (not yet implemented)
+- `initActions` - Array of bash commands to execute after worktree creation (runs sequentially, stops on first failure)
 
 #### src/storage/recentSelections.ts
 
@@ -354,12 +354,24 @@ The services layer uses **dependency injection** for testability. Services imple
 - Orchestrates grove creation with multiple worktrees
 - Handles monorepo project selections
 - Copies files based on `.grove.json` patterns
+- Executes initActions (post-creation bash commands) with live log streaming
 - Cleans up worktrees when closing groves
 
 **Key Methods**:
 
-- `createGrove(name, selections)` - Create grove with worktrees for selected repos/projects
+- `createGrove(name, selections, onLog?)` - Create grove with worktrees for selected repos/projects, optional callback for live progress logging
 - `closeGrove(groveId)` - Remove worktrees and delete grove folder
+- `executeInitActions(actions, grovePath, worktreeName, worktreePath, projectPath?, onLog?)` - Execute bash commands sequentially (private)
+- `executeCommand(command, cwd)` - Execute single bash command with output capture (private)
+
+**InitActions Execution**:
+
+- Commands execute sequentially in the worktree directory (or project directory for monorepos)
+- Execution stops on first failure (non-zero exit code)
+- Both stdout and stderr are captured
+- Results logged to `{grovePath}/grove-init-{worktreeName}.log` (next to CONTEXT.md)
+- Live progress streamed via optional callback
+- Status tracked in `Worktree.initActionsStatus` with success/failure counts
 
 **Dependencies** (via DI):
 
@@ -1398,7 +1410,6 @@ grove
 2. **Limited CLI Commands**: Only `--register` flag implemented
 3. **Partial Test Coverage**: Services and storage layers have tests, UI components do not yet
 4. **No Git Operations in Chat**: Chat doesn't execute git commands yet
-5. **Init Actions Not Implemented**: `.grove.json` `initActions` field is parsed but not executed
 
 ### Implemented Features (Recently Added)
 
@@ -1408,9 +1419,11 @@ grove
 ✅ **Grove Creation** - Create collections of worktrees with project selection
 ✅ **Grove Detail View** - View grove worktrees with git status (uncommitted/unpushed)
 ✅ **Grove Closing** - Clean up worktrees and delete grove folders
-✅ **Grove Configuration** - Per-repo `.grove.json` for custom branch names, file copying, and IDE selection
-✅ **Project-Level Config** - Monorepo projects can have their own `.grove.json` with IDE overrides
+✅ **Grove Configuration** - Per-repo `.grove.json` for custom branch names, file copying, IDE selection, and initActions
+✅ **Project-Level Config** - Monorepo projects can have their own `.grove.json` with IDE and initActions overrides
 ✅ **File Copying** - Copy files matching glob patterns to worktrees during creation
+✅ **InitActions Execution** - Execute bash commands after worktree creation with live log streaming
+✅ **InitActions Logging** - Detailed logs stored in grove directory, viewable from Grove Detail screen
 ✅ **Git Worktree Operations** - Full GitService with add/list/remove/prune/status
 ✅ **Open in Terminal** - Launch terminal windows for worktrees
 ✅ **Open in IDE** - Launch VS Code, JetBrains IDEs, PyCharm, or Vim for worktrees
@@ -1488,11 +1501,12 @@ grove
 - `~/.grove/repositories.json` - List of registered repositories (with isMonorepo flag)
 - `~/.grove/groves.json` - Global grove index
 - `~/.grove/recent.json` - Recent repository/project selections
-- `<grove-folder>/grove.json` - Per-grove metadata (worktrees list)
+- `<grove-folder>/grove.json` - Per-grove metadata (worktrees list with initActions status)
 - `<grove-folder>/CONTEXT.md` - Human-readable grove description
-- `<repo>/.grove.json` - Per-repository configuration (branchNameTemplate, fileCopyPatterns, ide)
+- `<grove-folder>/grove-init-{worktreeName}.log` - InitActions execution logs (per worktree)
+- `<repo>/.grove.json` - Per-repository configuration (branchNameTemplate, fileCopyPatterns, ide, initActions)
 - `<repo>/.grove.local.json` - Local config overrides (gitignored)
-- `<repo>/<project>/.grove.json` - Project-level config for monorepos (can override ide)
+- `<repo>/<project>/.grove.json` - Project-level config for monorepos (can override ide, initActions)
 
 ### Why Service Layer Pattern?
 
