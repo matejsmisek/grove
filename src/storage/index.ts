@@ -40,6 +40,8 @@ export {
 	getRecentSelections,
 } from './recentSelections.js';
 export type {
+	AgentSession,
+	AgentType,
 	ClaudeSessionTemplate,
 	ClaudeSessionTemplates,
 	ClaudeTerminalType,
@@ -55,6 +57,9 @@ export type {
 	Repository,
 	RepositoriesData,
 	RepositorySelection,
+	SessionsData,
+	SessionsIndex,
+	SessionStatus,
 	Settings,
 	StorageConfig,
 	TerminalConfig,
@@ -70,3 +75,4 @@ export { SettingsService } from './SettingsService.js';
 export { RepositoryService } from './RepositoryService.js';
 export { GrovesService } from './GrovesService.js';
 export { GroveConfigService } from './GroveConfigService.js';
+export { SessionsService, type ISessionsService } from './SessionsService.js';

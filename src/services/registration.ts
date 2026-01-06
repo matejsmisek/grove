@@ -4,10 +4,12 @@
  */
 import type { IMutableContainer } from '../di/index.js';
 import { Container, getContainer } from '../di/index.js';
+import { AdapterRegistry, ClaudeAdapter } from '../agents/index.js';
 import {
 	GroveConfigService,
 	GrovesService,
 	RepositoryService,
+	SessionsService,
 	SettingsService,
 } from '../storage/index.js';
 import type { WorkspaceContext } from '../storage/types.js';
@@ -17,6 +19,7 @@ import { FileService } from './FileService.js';
 import { GitService } from './GitService.js';
 import { GroveService } from './GroveService.js';
 import { LLMService } from './LLMService.js';
+import { SessionTrackingService } from './SessionTrackingService.js';
 import { WorkspaceService } from './WorkspaceService.js';
 import {
 	ClaudeSessionServiceToken,
@@ -28,6 +31,8 @@ import {
 	GrovesServiceToken,
 	LLMServiceToken,
 	RepositoryServiceToken,
+	SessionsServiceToken,
+	SessionTrackingServiceToken,
 	SettingsServiceToken,
 	WorkspaceServiceToken,
 } from './tokens.js';
@@ -42,12 +47,14 @@ import {
  * - RepositoryService: depends on SettingsService
  * - GrovesService: depends on SettingsService
  * - GroveConfigService: no dependencies
+ * - SessionsService: depends on SettingsService (for sessions path)
  * - GitService: no dependencies
  * - ContextService: no dependencies
  * - FileService: no dependencies
  * - ClaudeSessionService: depends on SettingsService, GroveConfigService
  * - LLMService: depends on SettingsService
  * - GroveService: depends on SettingsService, GrovesService, GroveConfigService, GitService, ContextService, FileService
+ * - SessionTrackingService: depends on SessionsService, GrovesService, AdapterRegistry (ClaudeAdapter)
  *
  * @param container - Container to register services in (defaults to global container)
  * @param workspaceContext - Optional workspace context to use for storage paths
@@ -80,6 +87,16 @@ export function registerServices(
 	// GroveConfigService has no dependencies
 	c.registerSingleton(GroveConfigServiceToken, () => new GroveConfigService());
 
+	// SessionsService depends on SettingsService (for sessions path)
+	c.registerSingleton(
+		SessionsServiceToken,
+		(cont) => {
+			const settingsService = cont.resolve(SettingsServiceToken);
+			const config = settingsService.getStorageConfig();
+			return new SessionsService({ sessionsPath: config.sessionsPath });
+		}
+	);
+
 	// Register utility services (no dependencies)
 	c.registerSingleton(GitServiceToken, () => new GitService());
 	c.registerSingleton(ContextServiceToken, () => new ContextService());
@@ -110,6 +127,23 @@ export function registerServices(
 				cont.resolve(ContextServiceToken),
 				cont.resolve(FileServiceToken)
 			)
+	);
+
+	// SessionTrackingService depends on SessionsService, GrovesService, and AdapterRegistry
+	c.registerSingleton(
+		SessionTrackingServiceToken,
+		(cont) => {
+			// Create and configure adapter registry
+			const adapterRegistry = new AdapterRegistry();
+			adapterRegistry.register(new ClaudeAdapter());
+			// Future: Add more adapters here (Gemini, Codex, etc.)
+
+			return new SessionTrackingService(
+				cont.resolve(SessionsServiceToken),
+				cont.resolve(GrovesServiceToken),
+				adapterRegistry
+			);
+		}
 	);
 }
 

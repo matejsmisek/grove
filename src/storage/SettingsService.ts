@@ -36,6 +36,7 @@ export class SettingsService implements ISettingsService {
 		const repositoriesPath = path.join(groveFolder, 'repositories.json');
 		const grovesIndexPath = path.join(groveFolder, 'groves.json');
 		const recentSelectionsPath = path.join(groveFolder, 'recent.json');
+		const sessionsPath = path.join(groveFolder, 'sessions.json');
 
 		return {
 			groveFolder,
@@ -43,6 +44,7 @@ export class SettingsService implements ISettingsService {
 			repositoriesPath,
 			grovesIndexPath,
 			recentSelectionsPath,
+			sessionsPath,
 		};
 	}
 
