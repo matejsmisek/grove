@@ -6,8 +6,7 @@ import TextInput from 'ink-text-input';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { GitServiceToken, GroveServiceToken } from '../services/tokens.js';
-import { getGroveById, readGroveMetadata } from '../storage/index.js';
+import { GitServiceToken, GroveServiceToken, GrovesServiceToken } from '../services/tokens.js';
 
 interface WorktreeCheck {
 	repositoryName: string;
@@ -24,6 +23,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 	const { goBack, navigate } = useNavigation();
 	const gitService = useService(GitServiceToken);
 	const groveService = useService(GroveServiceToken);
+	const grovesService = useService(GrovesServiceToken);
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
 	const [checks, setChecks] = useState<WorktreeCheck[]>([]);
@@ -38,7 +38,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 	useEffect(() => {
 		async function runChecks() {
 			try {
-				const groveRef = getGroveById(groveId);
+				const groveRef = grovesService.getGroveById(groveId);
 				if (!groveRef) {
 					setError('Grove not found');
 					setLoading(false);
@@ -47,7 +47,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 
 				setGroveName(groveRef.name);
 
-				const metadata = readGroveMetadata(groveRef.path);
+				const metadata = grovesService.readGroveMetadata(groveRef.path);
 				if (!metadata) {
 					setError('Grove metadata not found');
 					setLoading(false);

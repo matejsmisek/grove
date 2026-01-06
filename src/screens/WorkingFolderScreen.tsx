@@ -4,12 +4,14 @@ import { Box, Text, useInput } from 'ink';
 
 import TextInput from 'ink-text-input';
 
+import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { readSettings, updateSettings } from '../storage/index.js';
+import { SettingsServiceToken } from '../services/tokens.js';
 
 export function WorkingFolderScreen() {
 	const { goBack, canGoBack } = useNavigation();
-	const [settings] = useState(() => readSettings());
+	const settingsService = useService(SettingsServiceToken);
+	const [settings] = useState(() => settingsService.readSettings());
 	const [value, setValue] = useState(settings.workingFolder);
 	const [isSaved, setIsSaved] = useState(false);
 
@@ -20,7 +22,7 @@ export function WorkingFolderScreen() {
 	});
 
 	const handleSubmit = () => {
-		updateSettings({ workingFolder: value });
+		settingsService.updateSettings({ workingFolder: value });
 		setIsSaved(true);
 		// Show saved message briefly then go back
 		setTimeout(() => {

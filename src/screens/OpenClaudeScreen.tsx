@@ -4,9 +4,12 @@ import { Box, Text, useInput } from 'ink';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { ClaudeSessionServiceToken, SettingsServiceToken } from '../services/tokens.js';
-import { getGroveById, readGroveMetadata } from '../storage/index.js';
-import type { ClaudeTerminalType, Worktree } from '../storage/index.js';
+import {
+	ClaudeSessionServiceToken,
+	GrovesServiceToken,
+	SettingsServiceToken,
+} from '../services/tokens.js';
+import type { ClaudeTerminalType, Worktree } from '../storage/types.js';
 
 interface OpenClaudeScreenProps {
 	groveId: string;
@@ -22,6 +25,7 @@ const TERMINAL_DISPLAY_NAMES: Record<ClaudeTerminalType, string> = {
 export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 	const { goBack, navigate } = useNavigation();
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
+	const grovesService = useService(GrovesServiceToken);
 	const settingsService = useService(SettingsServiceToken);
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
@@ -56,7 +60,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 			terminalToUse = terminals[0];
 		}
 
-		const groveRef = getGroveById(groveId);
+		const groveRef = grovesService.getGroveById(groveId);
 		if (!groveRef) {
 			setError('Grove not found');
 			setLoading(false);
@@ -65,7 +69,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 
 		setGroveName(groveRef.name);
 
-		const metadata = readGroveMetadata(groveRef.path);
+		const metadata = grovesService.readGroveMetadata(groveRef.path);
 		if (!metadata) {
 			setError('Grove metadata not found');
 			setLoading(false);
