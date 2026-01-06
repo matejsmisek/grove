@@ -33,11 +33,6 @@ export class ClaudeAdapter implements IAgentAdapter {
 		}
 	}
 
-	private encodePathForClaude(workspacePath: string): string {
-		// Claude encodes paths like: /home/user/grove -> -home-user-grove
-		return workspacePath.replace(/\//g, '-');
-	}
-
 	private async getProjectDirs(): Promise<string[]> {
 		const projectsDir = path.join(this.claudeDir, 'projects');
 		if (!fs.existsSync(projectsDir)) return [];

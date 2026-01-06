@@ -51,7 +51,8 @@ export class SessionsService implements ISessionsService {
 		data.sessions = data.sessions.filter((s) => s.sessionId !== session.sessionId);
 		data.sessions.push({
 			...session,
-			lastUpdate: new Date().toISOString(),
+			// Only update lastUpdate if not provided
+			lastUpdate: session.lastUpdate || new Date().toISOString(),
 		});
 		this.writeSessions(data);
 	}
