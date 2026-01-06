@@ -1,8 +1,7 @@
+import { AdapterRegistry } from '../agents/AdapterRegistry.js';
+import { SessionUpdateResult } from '../agents/types.js';
 import { ISessionsService } from '../storage/SessionsService.js';
 import { IGrovesService } from './interfaces.js';
-import { AdapterRegistry } from '../agents/AdapterRegistry.js';
-import { AgentSession } from '../storage/types.js';
-import { SessionUpdateResult } from '../agents/types.js';
 
 export interface ISessionTrackingService {
 	/**
@@ -36,7 +35,7 @@ export class SessionTrackingService implements ISessionTrackingService {
 	constructor(
 		private sessionsService: ISessionsService,
 		private grovesService: IGrovesService,
-		private adapterRegistry: AdapterRegistry,
+		private adapterRegistry: AdapterRegistry
 	) {}
 
 	async updateAllSessions(): Promise<SessionUpdateResult> {
@@ -66,13 +65,22 @@ export class SessionTrackingService implements ISessionTrackingService {
 				}
 			} catch (error) {
 				result.errors.push(
-					`${adapter.agentType}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+					`${adapter.agentType}: ${error instanceof Error ? error.message : 'Unknown error'}`
 				);
 			}
 		}
 
 		// Map sessions to groves after detection
 		await this.mapSessionsToGroves();
+
+		// Remove sessions that are not associated with any grove
+		const allSessions = this.sessionsService.readSessions().sessions;
+		for (const session of allSessions) {
+			if (session.groveId === null) {
+				this.sessionsService.removeSession(session.sessionId);
+				result.removed++;
+			}
+		}
 
 		return result;
 	}

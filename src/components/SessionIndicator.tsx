@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+
 import { Box, Text } from 'ink';
 
 interface SessionIndicatorProps {
@@ -35,12 +36,32 @@ export function SessionIndicator({
 	return (
 		<Box gap={1}>
 			{activeCount > 0 && (
-				<Text color="green">
-					{LOADER_FRAMES[frameIndex]} {activeCount}
-				</Text>
+				<Box flexDirection="row">
+					{Array.from({ length: activeCount }).map((_, i) => (
+						<Box key={i} minWidth={2} flexShrink={0}>
+							<Text color="green">{LOADER_FRAMES[frameIndex]}</Text>
+						</Box>
+					))}
+				</Box>
 			)}
-			{idleCount > 0 && <Text color="gray">· {idleCount}</Text>}
-			{attentionCount > 0 && <Text color="yellow">⚠ {attentionCount}</Text>}
+			{idleCount > 0 && (
+				<Box flexDirection="row">
+					{Array.from({ length: idleCount }).map((_, i) => (
+						<Box key={i} minWidth={2} flexShrink={0}>
+							<Text color="gray">·</Text>
+						</Box>
+					))}
+				</Box>
+			)}
+			{attentionCount > 0 && (
+				<Box flexDirection="row">
+					{Array.from({ length: attentionCount }).map((_, i) => (
+						<Box key={i} minWidth={2} flexShrink={0}>
+							<Text color="yellow">⚠</Text>
+						</Box>
+					))}
+				</Box>
+			)}
 		</Box>
 	);
 }

@@ -1,13 +1,9 @@
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import path from 'path';
 
-import { IAgentAdapter } from './types.js';
 import { AgentSession, SessionStatus } from '../storage/types.js';
-
-const execAsync = promisify(exec);
+import { IAgentAdapter } from './types.js';
 
 interface ClaudeSessionEvent {
 	sessionId?: string;
@@ -84,15 +80,6 @@ export class ClaudeAdapter implements IAgentAdapter {
 		}
 	}
 
-	private async isProcessRunning(sessionId: string): Promise<boolean> {
-		try {
-			const { stdout } = await execAsync('ps aux');
-			return stdout.includes(sessionId);
-		} catch {
-			return false;
-		}
-	}
-
 	private async determineStatus(sessionId: string, filePath: string): Promise<SessionStatus> {
 		try {
 			const content = fs.readFileSync(filePath, 'utf8');
@@ -134,17 +121,17 @@ export class ClaudeAdapter implements IAgentAdapter {
 		for (const projectDir of projectDirs) {
 			try {
 				const files = fs.readdirSync(projectDir);
-				const sessionFiles = files.filter(
-					(f) => f.endsWith('.jsonl') && !f.startsWith('agent-'),
-				);
+				const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'));
 
 				for (const file of sessionFiles) {
 					const filePath = path.join(projectDir, file);
 					const sessionData = this.parseSessionFile(filePath);
 					if (!sessionData || !sessionData.sessionId) continue;
 
-					const isRunning = await this.isProcessRunning(sessionData.sessionId);
 					const status = await this.determineStatus(sessionData.sessionId, filePath);
+
+					// Session is considered running if status is not 'finished' or 'error'
+					const isRunning = status !== 'finished' && status !== 'error';
 
 					sessions.push({
 						sessionId: sessionData.sessionId,
@@ -152,7 +139,7 @@ export class ClaudeAdapter implements IAgentAdapter {
 						groveId: null, // Will be determined by matching workspacePath
 						workspacePath: sessionData.workspacePath!,
 						worktreePath: null,
-						status: isRunning ? status : 'finished',
+						status,
 						isRunning,
 						lastUpdate: new Date().toISOString(),
 						metadata: sessionData.metadata,
