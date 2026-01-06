@@ -9,6 +9,7 @@ import { CreateGroveScreen } from '../screens/CreateGroveScreen.js';
 import { GroveDetailScreen } from '../screens/GroveDetailScreen.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
 import { IDESettingsScreen } from '../screens/IDESettingsScreen.js';
+import { LLMSettingsScreen } from '../screens/LLMSettingsScreen.js';
 import { OpenClaudeScreen } from '../screens/OpenClaudeScreen.js';
 import { OpenIDEScreen } from '../screens/OpenIDEScreen.js';
 import { OpenTerminalScreen } from '../screens/OpenTerminalScreen.js';
@@ -52,6 +53,8 @@ export function Router() {
 			return <IDESettingsScreen />;
 		case 'claudeTerminalSettings':
 			return <ClaudeTerminalSettingsScreen />;
+		case 'llmSettings':
+			return <LLMSettingsScreen />;
 		case 'settings':
 			// Type narrowing: we know params is { section?: string } here
 			return (

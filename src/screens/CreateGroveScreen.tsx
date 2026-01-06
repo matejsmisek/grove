@@ -7,7 +7,7 @@ import TextInput from 'ink-text-input';
 import { useService } from '../di/index.js';
 import { getMonorepoProjects } from '../git/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { GroveServiceToken } from '../services/tokens.js';
+import { GroveServiceToken, LLMServiceToken } from '../services/tokens.js';
 import {
 	addRecentSelections,
 	getAllRepositories,
@@ -17,7 +17,16 @@ import {
 } from '../storage/index.js';
 import type { RecentSelection, Repository, RepositorySelection } from '../storage/index.js';
 
-type CreateStep = 'name' | 'repositories' | 'projects' | 'creating' | 'done' | 'error';
+type CreateStep =
+	| 'description'
+	| 'generating'
+	| 'generated'
+	| 'name'
+	| 'repositories'
+	| 'projects'
+	| 'creating'
+	| 'done'
+	| 'error';
 
 /**
  * Represents an item in the combined list (recent or repository)
@@ -36,7 +45,13 @@ interface ListItem {
 export function CreateGroveScreen() {
 	const { replace, goBack } = useNavigation();
 	const groveService = useService(GroveServiceToken);
-	const [step, setStep] = useState<CreateStep>('name');
+	const llmService = useService(LLMServiceToken);
+
+	// Start at 'description' if LLM is configured, otherwise start at 'name' (offline mode)
+	const [step, setStep] = useState<CreateStep>(() =>
+		llmService.isConfigured() ? 'description' : 'name'
+	);
+	const [description, setDescription] = useState('');
 	const [groveName, setGroveName] = useState('');
 	const [repositories] = useState<Repository[]>(() => {
 		initializeStorage();
@@ -285,6 +300,28 @@ export function CreateGroveScreen() {
 		{ isActive: step === 'projects' }
 	);
 
+	// Handle input for generated name confirmation
+	useInput(
+		(input, key) => {
+			if (step !== 'generated') return;
+
+			if (input === 'e') {
+				// Edit the name manually
+				setStep('name');
+			} else if (input === 'r') {
+				// Regenerate with same description
+				handleDescriptionSubmit(description);
+			} else if (key.return) {
+				// Accept the name
+				proceedToRepositorySelection();
+			} else if (key.escape) {
+				// Go back to description
+				setStep('description');
+			}
+		},
+		{ isActive: step === 'generated' }
+	);
+
 	// Handle escape key for other steps
 	useInput(
 		(_input, key) => {
@@ -292,8 +329,60 @@ export function CreateGroveScreen() {
 				goBack();
 			}
 		},
-		{ isActive: step === 'name' || step === 'error' || step === 'done' }
+		{ isActive: step === 'description' || step === 'name' || step === 'error' || step === 'done' }
 	);
+
+	const handleDescriptionSubmit = (value: string) => {
+		const trimmed = value.trim();
+
+		// Allow empty description to skip to manual name entry
+		if (!trimmed) {
+			setStep('name');
+			return;
+		}
+
+		setDescription(trimmed);
+
+		// Generate name using LLM
+		setStep('generating');
+		llmService
+			.generateGroveName(trimmed)
+			.then((result) => {
+				setGroveName(result.name);
+				setStep('generated');
+			})
+			.catch((err) => {
+				setError(err instanceof Error ? err.message : 'Failed to generate grove name');
+				setStep('error');
+			});
+	};
+
+	const proceedToRepositorySelection = () => {
+		if (!groveName.trim()) {
+			setError('Grove name cannot be empty');
+			setStep('error');
+			return;
+		}
+
+		if (repositories.length === 0) {
+			setError('No repositories registered. Please add repositories in Settings first.');
+			setStep('error');
+			return;
+		}
+
+		setStep('repositories');
+	};
+
+	const handleNameSubmit = (value: string) => {
+		if (!value.trim()) {
+			setError('Grove name cannot be empty');
+			setStep('error');
+			return;
+		}
+
+		setGroveName(value.trim());
+		proceedToRepositorySelection();
+	};
 
 	const createGrove = () => {
 		setStep('creating');
@@ -320,23 +409,82 @@ export function CreateGroveScreen() {
 			});
 	};
 
-	const handleNameSubmit = (value: string) => {
-		if (!value.trim()) {
-			setError('Grove name cannot be empty');
-			setStep('error');
-			return;
-		}
+	if (step === 'description') {
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="green">
+						Create New Grove
+					</Text>
+				</Box>
 
-		setGroveName(value.trim());
+				<Box marginBottom={1}>
+					<Text>Describe what you'll be working on:</Text>
+					<Text dimColor>(or press Enter with empty input to enter name manually)</Text>
+				</Box>
 
-		if (repositories.length === 0) {
-			setError('No repositories registered. Please add repositories in Settings first.');
-			setStep('error');
-			return;
-		}
+				<Box marginBottom={1}>
+					<Text color="cyan">Description: </Text>
+					<TextInput
+						value={description}
+						onChange={setDescription}
+						onSubmit={handleDescriptionSubmit}
+					/>
+				</Box>
 
-		setStep('repositories');
-	};
+				<Box marginTop={1}>
+					<Text dimColor>AI will generate a grove name from your description</Text>
+					<Text dimColor>Press Enter to continue, Esc to cancel</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	if (step === 'generating') {
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="green">
+						Generating Grove Name...
+					</Text>
+				</Box>
+				<Text>AI is generating a name based on your description...</Text>
+				<Box marginTop={1}>
+					<Text dimColor>"{description}"</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	if (step === 'generated') {
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="green">
+						Grove Name Generated
+					</Text>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Text>AI generated this name:</Text>
+				</Box>
+
+				<Box marginBottom={1} marginLeft={2}>
+					<Text bold color="cyan">
+						{groveName}
+					</Text>
+				</Box>
+
+				<Box marginTop={1} flexDirection="column">
+					<Text>What would you like to do?</Text>
+					<Text dimColor>  • Press Enter to accept this name</Text>
+					<Text dimColor>  • Press 'e' to edit manually</Text>
+					<Text dimColor>  • Press 'r' to regenerate</Text>
+					<Text dimColor>  • Press Esc to go back</Text>
+				</Box>
+			</Box>
+		);
+	}
 
 	if (step === 'name') {
 		return (

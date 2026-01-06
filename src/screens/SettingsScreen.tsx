@@ -35,8 +35,8 @@ export function SettingsScreen({ section }: SettingsScreenProps) {
 			action: () => navigate('claudeTerminalSettings', {}),
 		},
 		{
-			label: 'AI Provider Configuration (coming soon)',
-			action: () => {}, // Placeholder
+			label: 'LLM Settings (OpenRouter)',
+			action: () => navigate('llmSettings', {}),
 		},
 		{
 			label: 'Display Preferences (coming soon)',

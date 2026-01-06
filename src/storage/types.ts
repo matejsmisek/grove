@@ -87,6 +87,29 @@ export interface Settings {
 	 * If not set for a terminal type, default template will be used.
 	 */
 	claudeSessionTemplates?: ClaudeSessionTemplates;
+	/**
+	 * OpenRouter API key for LLM features (grove name generation, etc.)
+	 * Get your key at: https://openrouter.ai/keys
+	 */
+	openrouterApiKey?: string;
+	/**
+	 * LLM model to use for AI features
+	 * Default: "anthropic/claude-3.5-haiku"
+	 * Options: "anthropic/claude-3.5-sonnet", "openai/gpt-4o", etc.
+	 */
+	llmModel?: string;
+	/**
+	 * Site URL for OpenRouter tracking (optional)
+	 * Only sent if explicitly configured - not sent by default
+	 * Used for HTTP-Referer header
+	 */
+	llmSiteUrl?: string;
+	/**
+	 * App name for OpenRouter tracking (optional)
+	 * Only sent if explicitly configured - not sent by default
+	 * Used for X-Title header
+	 */
+	llmAppName?: string;
 }
 
 export interface StorageConfig {
