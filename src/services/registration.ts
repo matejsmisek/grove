@@ -10,12 +10,14 @@ import {
 	RepositoryService,
 	SettingsService,
 } from '../storage/index.js';
+import type { WorkspaceContext } from '../storage/types.js';
 import { ClaudeSessionService } from './ClaudeSessionService.js';
 import { ContextService } from './ContextService.js';
 import { FileService } from './FileService.js';
 import { GitService } from './GitService.js';
 import { GroveService } from './GroveService.js';
 import { LLMService } from './LLMService.js';
+import { WorkspaceService } from './WorkspaceService.js';
 import {
 	ClaudeSessionServiceToken,
 	ContextServiceToken,
@@ -27,6 +29,7 @@ import {
 	LLMServiceToken,
 	RepositoryServiceToken,
 	SettingsServiceToken,
+	WorkspaceServiceToken,
 } from './tokens.js';
 
 /**
@@ -34,7 +37,8 @@ import {
  * Services are registered as singletons by default
  *
  * Dependency graph:
- * - SettingsService: no dependencies
+ * - WorkspaceService: no dependencies
+ * - SettingsService: optional workspace context
  * - RepositoryService: depends on SettingsService
  * - GrovesService: depends on SettingsService
  * - GroveConfigService: no dependencies
@@ -46,13 +50,20 @@ import {
  * - GroveService: depends on SettingsService, GrovesService, GroveConfigService, GitService, ContextService, FileService
  *
  * @param container - Container to register services in (defaults to global container)
+ * @param workspaceContext - Optional workspace context to use for storage paths
  */
-export function registerServices(container?: IMutableContainer): void {
+export function registerServices(
+	container?: IMutableContainer,
+	workspaceContext?: WorkspaceContext
+): void {
 	const c = container ?? getContainer();
 
+	// Register workspace service (no dependencies)
+	c.registerSingleton(WorkspaceServiceToken, () => new WorkspaceService());
+
 	// Register storage services
-	// SettingsService has no dependencies
-	c.registerSingleton(SettingsServiceToken, () => new SettingsService());
+	// SettingsService with optional workspace context
+	c.registerSingleton(SettingsServiceToken, () => new SettingsService(workspaceContext));
 
 	// RepositoryService depends on SettingsService
 	c.registerSingleton(
@@ -85,10 +96,7 @@ export function registerServices(container?: IMutableContainer): void {
 	);
 
 	// LLMService depends on SettingsService
-	c.registerSingleton(
-		LLMServiceToken,
-		(cont) => new LLMService(cont.resolve(SettingsServiceToken))
-	);
+	c.registerSingleton(LLMServiceToken, (cont) => new LLMService(cont.resolve(SettingsServiceToken)));
 
 	// Register GroveService with all its dependencies
 	c.registerSingleton(
@@ -110,19 +118,24 @@ export function registerServices(container?: IMutableContainer): void {
  * This sets up the DI container and registers all services
  *
  * @param container - Optional container to use (defaults to global container)
+ * @param workspaceContext - Optional workspace context to use for storage paths
  */
-export function initializeServices(container?: IMutableContainer): void {
-	registerServices(container);
+export function initializeServices(
+	container?: IMutableContainer,
+	workspaceContext?: WorkspaceContext
+): void {
+	registerServices(container, workspaceContext);
 }
 
 /**
  * Create a new container with all services registered
  * Useful for testing or creating isolated service scopes
  *
+ * @param workspaceContext - Optional workspace context to use for storage paths
  * @returns A new Container with all services registered
  */
-export function createServiceContainer(): Container {
+export function createServiceContainer(workspaceContext?: WorkspaceContext): Container {
 	const container = new Container();
-	registerServices(container);
+	registerServices(container, workspaceContext);
 	return container;
 }

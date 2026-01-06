@@ -2,10 +2,30 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import type { Settings, StorageConfig } from './types.js';
+import type { Settings, StorageConfig, WorkspaceContext } from './types.js';
 
 /**
- * Get the storage configuration paths
+ * Get the storage configuration paths for a specific workspace context
+ * @param context - Workspace context (workspace or global)
+ */
+export function getStorageConfigForContext(context: WorkspaceContext): StorageConfig {
+	const groveFolder = context.groveFolder;
+	const settingsPath = path.join(groveFolder, 'settings.json');
+	const repositoriesPath = path.join(groveFolder, 'repositories.json');
+	const grovesIndexPath = path.join(groveFolder, 'groves.json');
+	const recentSelectionsPath = path.join(groveFolder, 'recent.json');
+
+	return {
+		groveFolder,
+		settingsPath,
+		repositoriesPath,
+		grovesIndexPath,
+		recentSelectionsPath,
+	};
+}
+
+/**
+ * Get the storage configuration paths (defaults to global ~/.grove)
  */
 export function getStorageConfig(): StorageConfig {
 	const homeDir = os.homedir();

@@ -14,6 +14,7 @@ import type {
 	ILLMService,
 	IRepositoryService,
 	ISettingsService,
+	IWorkspaceService,
 } from './interfaces.js';
 
 // Storage service tokens
@@ -29,3 +30,4 @@ export const FileServiceToken = createToken<IFileService>('FileService');
 export const GroveServiceToken = createToken<IGroveService>('GroveService');
 export const ClaudeSessionServiceToken = createToken<IClaudeSessionService>('ClaudeSessionService');
 export const LLMServiceToken = createToken<ILLMService>('LLMService');
+export const WorkspaceServiceToken = createToken<IWorkspaceService>('WorkspaceService');
