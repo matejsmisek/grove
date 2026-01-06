@@ -5,8 +5,9 @@ import { Box, Text, useApp, useInput } from 'ink';
 import { GroveGrid } from '../components/home/GroveGrid.js';
 import type { MenuOption } from '../components/home/MenuModal.js';
 import { MenuModal } from '../components/home/MenuModal.js';
+import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { getAllGroves, initializeStorage } from '../storage/index.js';
+import { GrovesServiceToken, WorkspaceServiceToken } from '../services/tokens.js';
 
 export function HomeScreen() {
 	const { navigate } = useNavigation();
@@ -15,9 +16,15 @@ export function HomeScreen() {
 	const [showMenu, setShowMenu] = useState(false);
 	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
 
-	// Initialize storage and get groves
-	initializeStorage();
-	const groves = getAllGroves();
+	// Get workspace-aware groves service
+	const grovesService = useService(GrovesServiceToken);
+	const groves = grovesService.getAllGroves();
+
+	// Get workspace context to display workspace name
+	const workspaceService = useService(WorkspaceServiceToken);
+	const workspaceContext = workspaceService.getCurrentContext();
+	const workspaceName =
+		workspaceContext?.type === 'workspace' ? workspaceContext.config?.name : null;
 
 	// Menu options
 	const menuOptions: MenuOption[] = [
@@ -90,6 +97,12 @@ export function HomeScreen() {
 						<Text bold color="green">
 							🌳 Grove
 						</Text>
+						{workspaceName && (
+							<Text bold color="cyan">
+								{' '}
+								→ {workspaceName}
+							</Text>
+						)}
 					</Box>
 
 					<Box marginBottom={1}>

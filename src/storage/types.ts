@@ -334,3 +334,81 @@ export interface GroveRepoConfig {
 	 */
 	claudeSessionTemplates?: ClaudeSessionTemplates;
 }
+
+/**
+ * Workspace configuration stored in .grove.workspace.json
+ * Defines a localized grove workspace with its own repositories and groves
+ */
+export interface WorkspaceConfig {
+	/**
+	 * Workspace name (for display and tracking)
+	 */
+	name: string;
+	/**
+	 * Version of the workspace config format
+	 */
+	version: string;
+	/**
+	 * Path to folder where groves are stored (relative to workspace root or absolute)
+	 * Default: "./groves"
+	 */
+	grovesFolder: string;
+}
+
+/**
+ * Reference to a workspace stored in global ~/.grove/workspaces.json
+ * Used to track all available workspaces on the system
+ */
+export interface WorkspaceReference {
+	/**
+	 * Workspace name
+	 */
+	name: string;
+	/**
+	 * Absolute path to workspace root (where .grove.workspace.json is located)
+	 */
+	path: string;
+	/**
+	 * Timestamp when the workspace was last used/accessed
+	 */
+	lastUsedAt: string;
+}
+
+/**
+ * Global workspace tracking stored in ~/.grove/workspaces.json
+ */
+export interface WorkspacesData {
+	/**
+	 * List of workspace references
+	 */
+	workspaces: WorkspaceReference[];
+}
+
+/**
+ * Resolved workspace context
+ * Represents either a workspace or global context
+ */
+export interface WorkspaceContext {
+	/**
+	 * Type of context: 'workspace' or 'global'
+	 */
+	type: 'workspace' | 'global';
+	/**
+	 * Workspace configuration (only when type is 'workspace')
+	 */
+	config?: WorkspaceConfig;
+	/**
+	 * Absolute path to workspace root (only when type is 'workspace')
+	 */
+	workspacePath?: string;
+	/**
+	 * Absolute path to .grove folder (workspace/.grove or ~/.grove)
+	 */
+	groveFolder: string;
+	/**
+	 * Absolute path to groves storage folder
+	 * For workspace: resolved from workspace config's grovesFolder
+	 * For global: from settings.workingFolder
+	 */
+	grovesFolder?: string;
+}

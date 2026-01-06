@@ -4,9 +4,10 @@ import { Box, Text, useInput } from 'ink';
 
 import path from 'path';
 
+import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { openTerminalInPath } from '../services/index.js';
-import { getGroveById, readGroveMetadata, readSettings } from '../storage/index.js';
+import { GrovesServiceToken, SettingsServiceToken } from '../services/tokens.js';
 import type { TerminalConfig, Worktree } from '../storage/index.js';
 
 interface OpenTerminalScreenProps {
@@ -25,6 +26,8 @@ function getTerminalPath(worktree: Worktree): string {
 
 export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 	const { goBack } = useNavigation();
+	const grovesService = useService(GrovesServiceToken);
+	const settingsService = useService(SettingsServiceToken);
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
 	const [worktrees, setWorktrees] = useState<Worktree[]>([]);
@@ -35,7 +38,7 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 
 	useEffect(() => {
 		// Read terminal config from settings
-		const settings = readSettings();
+		const settings = settingsService.readSettings();
 		if (!settings.terminal) {
 			setError('No terminal configured. Please restart Grove to detect available terminals.');
 			setLoading(false);
@@ -43,7 +46,7 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 		}
 		setTerminalConfig(settings.terminal);
 
-		const groveRef = getGroveById(groveId);
+		const groveRef = grovesService.getGroveById(groveId);
 		if (!groveRef) {
 			setError('Grove not found');
 			setLoading(false);
@@ -52,7 +55,7 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 
 		setGroveName(groveRef.name);
 
-		const metadata = readGroveMetadata(groveRef.path);
+		const metadata = grovesService.readGroveMetadata(groveRef.path);
 		if (!metadata) {
 			setError('Grove metadata not found');
 			setLoading(false);

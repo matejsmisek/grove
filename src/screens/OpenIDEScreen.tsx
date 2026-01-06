@@ -4,15 +4,12 @@ import { Box, Text, useInput } from 'ink';
 
 import path from 'path';
 
+import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { getIDEDisplayName, openIDEInPath, resolveIDEForPath } from '../services/index.js';
-import {
-	GroveConfigService,
-	getGroveById,
-	readGroveMetadata,
-	readSettings,
-} from '../storage/index.js';
-import type { IDEConfig, IDEType, Settings, Worktree } from '../storage/index.js';
+import { GrovesServiceToken, SettingsServiceToken } from '../services/tokens.js';
+import { GroveConfigService } from '../storage/index.js';
+import type { IDEConfig, IDEType, Settings, Worktree } from '../storage/types.js';
 
 interface OpenIDEScreenProps {
 	groveId: string;
@@ -78,6 +75,8 @@ function getIDEConfigForWorktree(
 
 export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 	const { goBack } = useNavigation();
+	const grovesService = useService(GrovesServiceToken);
+	const settingsService = useService(SettingsServiceToken);
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
 	const [worktrees, setWorktrees] = useState<Worktree[]>([]);
@@ -97,10 +96,10 @@ export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 
 	useEffect(() => {
 		// Read settings
-		const currentSettings = readSettings();
+		const currentSettings = settingsService.readSettings();
 		setSettings(currentSettings);
 
-		const groveRef = getGroveById(groveId);
+		const groveRef = grovesService.getGroveById(groveId);
 		if (!groveRef) {
 			setError('Grove not found');
 			setLoading(false);
@@ -109,7 +108,7 @@ export function OpenIDEScreen({ groveId }: OpenIDEScreenProps) {
 
 		setGroveName(groveRef.name);
 
-		const metadata = readGroveMetadata(groveRef.path);
+		const metadata = grovesService.readGroveMetadata(groveRef.path);
 		if (!metadata) {
 			setError('Grove metadata not found');
 			setLoading(false);

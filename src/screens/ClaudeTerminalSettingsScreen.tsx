@@ -6,13 +6,12 @@ import TextInput from 'ink-text-input';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { ClaudeSessionServiceToken } from '../services/tokens.js';
-import { readSettings, updateSettings } from '../storage/index.js';
+import { ClaudeSessionServiceToken, SettingsServiceToken } from '../services/tokens.js';
 import type {
 	ClaudeSessionTemplate,
 	ClaudeSessionTemplates,
 	ClaudeTerminalType,
-} from '../storage/index.js';
+} from '../storage/types.js';
 
 type ViewMode = 'select' | 'configure';
 
@@ -24,7 +23,8 @@ const TERMINAL_DISPLAY_NAMES: Record<ClaudeTerminalType, string> = {
 export function ClaudeTerminalSettingsScreen() {
 	const { goBack, canGoBack } = useNavigation();
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
-	const settings = readSettings();
+	const settingsService = useService(SettingsServiceToken);
+	const settings = settingsService.readSettings();
 
 	const [viewMode, setViewMode] = useState<ViewMode>('select');
 	const [selectedIndex, setSelectedIndex] = useState(0);
@@ -41,7 +41,7 @@ export function ClaudeTerminalSettingsScreen() {
 
 	// Handle terminal selection
 	const handleSelectTerminal = (terminalType: ClaudeTerminalType) => {
-		updateSettings({ selectedClaudeTerminal: terminalType });
+		settingsService.updateSettings({ selectedClaudeTerminal: terminalType });
 		setSavedMessage(`Selected ${TERMINAL_DISPLAY_NAMES[terminalType]} as default terminal`);
 		setTimeout(() => setSavedMessage(null), 2000);
 	};
@@ -70,7 +70,7 @@ export function ClaudeTerminalSettingsScreen() {
 		};
 		newTemplates[configuringTerminal] = newTemplate;
 
-		updateSettings({
+		settingsService.updateSettings({
 			claudeSessionTemplates: newTemplates,
 		});
 
@@ -86,7 +86,7 @@ export function ClaudeTerminalSettingsScreen() {
 		const newTemplates = { ...currentTemplates };
 		delete newTemplates[configuringTerminal];
 
-		updateSettings({ claudeSessionTemplates: newTemplates });
+		settingsService.updateSettings({ claudeSessionTemplates: newTemplates });
 
 		const defaultTemplate = claudeSessionService.getDefaultTemplate(configuringTerminal);
 		setTempTemplate(defaultTemplate);

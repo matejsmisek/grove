@@ -1,2 +1,3 @@
 export { registerRepository } from './register.js';
-export type { RegisterResult } from './types.js';
+export { initWorkspace } from './workspace.js';
+export type { RegisterResult, WorkspaceInitResult } from './types.js';

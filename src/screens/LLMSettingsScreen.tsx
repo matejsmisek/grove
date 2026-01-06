@@ -4,8 +4,9 @@ import { Box, Text, useInput } from 'ink';
 
 import TextInput from 'ink-text-input';
 
+import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { readSettings, updateSettings } from '../storage/index.js';
+import { SettingsServiceToken } from '../services/tokens.js';
 
 type FieldType = 'apiKey' | 'model' | 'siteUrl' | 'appName' | null;
 
@@ -21,7 +22,8 @@ const SUGGESTED_MODELS = [
 
 export function LLMSettingsScreen() {
 	const { goBack, canGoBack } = useNavigation();
-	const settings = readSettings();
+	const settingsService = useService(SettingsServiceToken);
+	const settings = settingsService.readSettings();
 
 	const [fieldIndex, setFieldIndex] = useState(0); // 0 = apiKey, 1 = model, 2 = siteUrl, 3 = appName
 	const [editingField, setEditingField] = useState<FieldType>(null);
@@ -33,7 +35,7 @@ export function LLMSettingsScreen() {
 
 	// Save API key
 	const saveApiKey = () => {
-		updateSettings({ openrouterApiKey: tempApiKey });
+		settingsService.updateSettings({ openrouterApiKey: tempApiKey });
 		setEditingField(null);
 		setSavedMessage('API key saved');
 		setTimeout(() => setSavedMessage(null), 2000);
@@ -41,7 +43,7 @@ export function LLMSettingsScreen() {
 
 	// Save model
 	const saveModel = () => {
-		updateSettings({ llmModel: tempModel });
+		settingsService.updateSettings({ llmModel: tempModel });
 		setEditingField(null);
 		setSavedMessage('Model saved');
 		setTimeout(() => setSavedMessage(null), 2000);
@@ -49,7 +51,7 @@ export function LLMSettingsScreen() {
 
 	// Save site URL
 	const saveSiteUrl = () => {
-		updateSettings({ llmSiteUrl: tempSiteUrl || undefined });
+		settingsService.updateSettings({ llmSiteUrl: tempSiteUrl || undefined });
 		setEditingField(null);
 		setSavedMessage('Site URL saved');
 		setTimeout(() => setSavedMessage(null), 2000);
@@ -57,7 +59,7 @@ export function LLMSettingsScreen() {
 
 	// Save app name
 	const saveAppName = () => {
-		updateSettings({ llmAppName: tempAppName || undefined });
+		settingsService.updateSettings({ llmAppName: tempAppName || undefined });
 		setEditingField(null);
 		setSavedMessage('App name saved');
 		setTimeout(() => setSavedMessage(null), 2000);
@@ -111,9 +113,7 @@ export function LLMSettingsScreen() {
 
 			<Box flexDirection="column" marginBottom={1}>
 				<Box>
-					<Text color={fieldIndex === 0 ? 'cyan' : undefined}>
-						{fieldIndex === 0 ? '> ' : '  '}
-					</Text>
+					<Text color={fieldIndex === 0 ? 'cyan' : undefined}>{fieldIndex === 0 ? '> ' : '  '}</Text>
 					<Text bold={fieldIndex === 0}>API Key: </Text>
 					{editingField === 'apiKey' ? (
 						<TextInput value={tempApiKey} onChange={setTempApiKey} onSubmit={saveApiKey} />
@@ -124,9 +124,7 @@ export function LLMSettingsScreen() {
 					)}
 				</Box>
 				<Box marginTop={1}>
-					<Text color={fieldIndex === 1 ? 'cyan' : undefined}>
-						{fieldIndex === 1 ? '> ' : '  '}
-					</Text>
+					<Text color={fieldIndex === 1 ? 'cyan' : undefined}>{fieldIndex === 1 ? '> ' : '  '}</Text>
 					<Text bold={fieldIndex === 1}>Model: </Text>
 					{editingField === 'model' ? (
 						<TextInput value={tempModel} onChange={setTempModel} onSubmit={saveModel} />
@@ -135,9 +133,7 @@ export function LLMSettingsScreen() {
 					)}
 				</Box>
 				<Box marginTop={1}>
-					<Text color={fieldIndex === 2 ? 'cyan' : undefined}>
-						{fieldIndex === 2 ? '> ' : '  '}
-					</Text>
+					<Text color={fieldIndex === 2 ? 'cyan' : undefined}>{fieldIndex === 2 ? '> ' : '  '}</Text>
 					<Text bold={fieldIndex === 2}>Site URL (optional): </Text>
 					{editingField === 'siteUrl' ? (
 						<TextInput value={tempSiteUrl} onChange={setTempSiteUrl} onSubmit={saveSiteUrl} />
@@ -146,9 +142,7 @@ export function LLMSettingsScreen() {
 					)}
 				</Box>
 				<Box marginTop={1}>
-					<Text color={fieldIndex === 3 ? 'cyan' : undefined}>
-						{fieldIndex === 3 ? '> ' : '  '}
-					</Text>
+					<Text color={fieldIndex === 3 ? 'cyan' : undefined}>{fieldIndex === 3 ? '> ' : '  '}</Text>
 					<Text bold={fieldIndex === 3}>App Name (optional): </Text>
 					{editingField === 'appName' ? (
 						<TextInput value={tempAppName} onChange={setTempAppName} onSubmit={saveAppName} />
@@ -160,9 +154,7 @@ export function LLMSettingsScreen() {
 
 			<Box marginTop={1} flexDirection="column">
 				<Text dimColor>Get your API key at: https://openrouter.ai/keys</Text>
-				<Text dimColor>
-					Suggested models: {SUGGESTED_MODELS.slice(0, 3).join(', ')}, or custom
-				</Text>
+				<Text dimColor>Suggested models: {SUGGESTED_MODELS.slice(0, 3).join(', ')}, or custom</Text>
 				<Text dimColor>Optional: Site URL and App Name are not sent by default</Text>
 			</Box>
 

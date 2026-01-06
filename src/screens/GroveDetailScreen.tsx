@@ -14,13 +14,14 @@ import {
 	resolveIDEForPath,
 } from '../services/index.js';
 import type { FileChangeStats } from '../services/interfaces.js';
-import { ClaudeSessionServiceToken, GitServiceToken } from '../services/tokens.js';
 import {
-	GroveConfigService,
-	getGroveById,
-	readGroveMetadata,
-	readSettings,
-} from '../storage/index.js';
+	ClaudeSessionServiceToken,
+	GitServiceToken,
+	GrovesServiceToken,
+	SettingsServiceToken,
+	WorkspaceServiceToken,
+} from '../services/tokens.js';
+import { GroveConfigService } from '../storage/index.js';
 import type { Settings, Worktree } from '../storage/types.js';
 
 interface WorktreeDetails {
@@ -87,6 +88,9 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	const { goBack, navigate } = useNavigation();
 	const gitService = useService(GitServiceToken);
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
+	const grovesService = useService(GrovesServiceToken);
+	const settingsService = useService(SettingsServiceToken);
+	const workspaceService = useService(WorkspaceServiceToken);
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
 	const [grovePath, setGrovePath] = useState('');
@@ -96,6 +100,11 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	const [showActions, setShowActions] = useState(false);
 	const [selectedActionIndex, setSelectedActionIndex] = useState(0);
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
+
+	// Get workspace context to display workspace name
+	const workspaceContext = workspaceService.getCurrentContext();
+	const workspaceName =
+		workspaceContext?.type === 'workspace' ? workspaceContext.config?.name : null;
 	const [showInitLog, setShowInitLog] = useState(false);
 	const [initLogContent, setInitLogContent] = useState<string>('');
 
@@ -103,7 +112,7 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	useEffect(() => {
 		async function loadDetails() {
 			try {
-				const groveRef = getGroveById(groveId);
+				const groveRef = grovesService.getGroveById(groveId);
 				if (!groveRef) {
 					setError('Grove not found');
 					setLoading(false);
@@ -113,7 +122,7 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 				setGroveName(groveRef.name);
 				setGrovePath(groveRef.path);
 
-				const metadata = readGroveMetadata(groveRef.path);
+				const metadata = grovesService.readGroveMetadata(groveRef.path);
 				if (!metadata) {
 					setError('Grove metadata not found');
 					setLoading(false);
@@ -168,7 +177,7 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	};
 
 	const handleOpenInTerminal = () => {
-		const settings = readSettings();
+		const settings = settingsService.readSettings();
 		if (!settings.terminal) {
 			setShowActions(false);
 			setError('No terminal configured. Please restart Grove to detect available terminals.');
@@ -188,7 +197,7 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	};
 
 	const handleOpenInIDE = () => {
-		const settings = readSettings();
+		const settings = settingsService.readSettings();
 		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selectedWorktree);
 
@@ -421,9 +430,17 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 				<>
 					{/* Header */}
 					<Box marginBottom={1} flexDirection="column">
-						<Text bold color="green">
-							🌳 {groveName}
-						</Text>
+						<Box>
+							<Text bold color="green">
+								🌳 {groveName}
+							</Text>
+							{workspaceName && (
+								<Text bold color="cyan">
+									{' '}
+									→ {workspaceName}
+								</Text>
+							)}
+						</Box>
 						<Text dimColor>{grovePath}</Text>
 					</Box>
 

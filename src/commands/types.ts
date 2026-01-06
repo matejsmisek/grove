@@ -6,3 +6,13 @@ export interface RegisterResult {
 	message: string;
 	path?: string;
 }
+
+/**
+ * Result of workspace initialization command
+ */
+export interface WorkspaceInitResult {
+	success: boolean;
+	message: string;
+	workspacePath?: string;
+	grovesFolder?: string;
+}

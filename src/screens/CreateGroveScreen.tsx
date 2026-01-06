@@ -7,13 +7,11 @@ import TextInput from 'ink-text-input';
 import { useService } from '../di/index.js';
 import { getMonorepoProjects } from '../git/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { GroveServiceToken, LLMServiceToken } from '../services/tokens.js';
+import { GroveServiceToken, LLMServiceToken, RepositoryServiceToken } from '../services/tokens.js';
 import {
 	addRecentSelections,
-	getAllRepositories,
 	getRecentSelectionDisplayName,
 	getRecentSelections,
-	initializeStorage,
 } from '../storage/index.js';
 import type { RecentSelection, Repository, RepositorySelection } from '../storage/index.js';
 
@@ -46,6 +44,7 @@ export function CreateGroveScreen() {
 	const { replace, goBack } = useNavigation();
 	const groveService = useService(GroveServiceToken);
 	const llmService = useService(LLMServiceToken);
+	const repositoryService = useService(RepositoryServiceToken);
 
 	// Start at 'description' if LLM is configured, otherwise start at 'name' (offline mode)
 	const [step, setStep] = useState<CreateStep>(() =>
@@ -53,10 +52,7 @@ export function CreateGroveScreen() {
 	);
 	const [description, setDescription] = useState('');
 	const [groveName, setGroveName] = useState('');
-	const [repositories] = useState<Repository[]>(() => {
-		initializeStorage();
-		return getAllRepositories();
-	});
+	const [repositories] = useState<Repository[]>(() => repositoryService.getAllRepositories());
 	const [selectedRepoIndices, setSelectedRepoIndices] = useState<Set<number>>(new Set());
 	const [cursorIndex, setCursorIndex] = useState(0);
 	const [error, setError] = useState<string>('');
@@ -425,11 +421,7 @@ export function CreateGroveScreen() {
 
 				<Box marginBottom={1}>
 					<Text color="cyan">Description: </Text>
-					<TextInput
-						value={description}
-						onChange={setDescription}
-						onSubmit={handleDescriptionSubmit}
-					/>
+					<TextInput value={description} onChange={setDescription} onSubmit={handleDescriptionSubmit} />
 				</Box>
 
 				<Box marginTop={1}>
@@ -477,10 +469,10 @@ export function CreateGroveScreen() {
 
 				<Box marginTop={1} flexDirection="column">
 					<Text>What would you like to do?</Text>
-					<Text dimColor>  • Press Enter to accept this name</Text>
-					<Text dimColor>  • Press 'e' to edit manually</Text>
-					<Text dimColor>  • Press 'r' to regenerate</Text>
-					<Text dimColor>  • Press Esc to go back</Text>
+					<Text dimColor> • Press Enter to accept this name</Text>
+					<Text dimColor> • Press 'e' to edit manually</Text>
+					<Text dimColor> • Press 'r' to regenerate</Text>
+					<Text dimColor> • Press Esc to go back</Text>
 				</Box>
 			</Box>
 		);

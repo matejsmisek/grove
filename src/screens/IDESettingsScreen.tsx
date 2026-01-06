@@ -4,6 +4,7 @@ import { Box, Text, useInput } from 'ink';
 
 import TextInput from 'ink-text-input';
 
+import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
 	ALL_IDE_TYPES,
@@ -12,14 +13,15 @@ import {
 	getIDEDisplayName,
 	isCommandAvailable,
 } from '../services/index.js';
-import { readSettings, updateSettings } from '../storage/index.js';
-import type { IDEConfig, IDEType } from '../storage/index.js';
+import { SettingsServiceToken } from '../services/tokens.js';
+import type { IDEConfig, IDEType } from '../storage/types.js';
 
 type ViewMode = 'select' | 'configure';
 
 export function IDESettingsScreen() {
 	const { goBack, canGoBack } = useNavigation();
-	const settings = readSettings();
+	const settingsService = useService(SettingsServiceToken);
+	const settings = settingsService.readSettings();
 
 	const [viewMode, setViewMode] = useState<ViewMode>('select');
 	const [selectedIndex, setSelectedIndex] = useState(0);
@@ -42,7 +44,7 @@ export function IDESettingsScreen() {
 
 	// Handle IDE selection
 	const handleSelectIDE = (ideType: IDEType) => {
-		updateSettings({ selectedIDE: ideType });
+		settingsService.updateSettings({ selectedIDE: ideType });
 		setSavedMessage(`Selected ${getIDEDisplayName(ideType)} as default IDE`);
 		setTimeout(() => setSavedMessage(null), 2000);
 	};
@@ -68,7 +70,7 @@ export function IDESettingsScreen() {
 		};
 
 		const currentConfigs = settings.ideConfigs || {};
-		updateSettings({
+		settingsService.updateSettings({
 			ideConfigs: {
 				...currentConfigs,
 				[configuringIDE]: newConfig,
@@ -87,7 +89,7 @@ export function IDESettingsScreen() {
 		const newConfigs = { ...currentConfigs };
 		delete newConfigs[configuringIDE];
 
-		updateSettings({ ideConfigs: newConfigs });
+		settingsService.updateSettings({ ideConfigs: newConfigs });
 
 		const defaultConfig = getDefaultIDEConfig(configuringIDE);
 		setTempCommand(defaultConfig.command);

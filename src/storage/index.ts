@@ -1,6 +1,7 @@
 export {
 	getDefaultSettings,
 	getStorageConfig,
+	getStorageConfigForContext,
 	initializeStorage,
 	readSettings,
 	updateSettings,
@@ -57,6 +58,10 @@ export type {
 	Settings,
 	StorageConfig,
 	TerminalConfig,
+	WorkspaceConfig,
+	WorkspaceContext,
+	WorkspaceReference,
+	WorkspacesData,
 	Worktree,
 } from './types.js';
 

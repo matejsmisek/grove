@@ -3,17 +3,33 @@ import os from 'os';
 import path from 'path';
 
 import type { ISettingsService } from '../services/interfaces.js';
-import type { Settings, StorageConfig } from './types.js';
+import { getStorageConfigForContext } from './storage.js';
+import type { Settings, StorageConfig, WorkspaceContext } from './types.js';
 
 /**
  * Service for managing application settings
- * Stores settings in ~/.grove/settings.json
+ * Stores settings in ~/.grove/settings.json (global) or workspace/.grove/settings.json (workspace)
  */
 export class SettingsService implements ISettingsService {
+	private context?: WorkspaceContext;
+
+	/**
+	 * Create a new SettingsService
+	 * @param context - Optional workspace context. If provided, uses workspace paths instead of global ~/.grove
+	 */
+	constructor(context?: WorkspaceContext) {
+		this.context = context;
+	}
+
 	/**
 	 * Get the storage configuration paths
 	 */
 	getStorageConfig(): StorageConfig {
+		if (this.context) {
+			return getStorageConfigForContext(this.context);
+		}
+
+		// Default to global ~/.grove
 		const homeDir = os.homedir();
 		const groveFolder = path.join(homeDir, '.grove');
 		const settingsPath = path.join(groveFolder, 'settings.json');
@@ -34,6 +50,14 @@ export class SettingsService implements ISettingsService {
 	 * Get default settings
 	 */
 	getDefaultSettings(): Settings {
+		// If in a workspace context and grovesFolder is set, use that
+		if (this.context?.grovesFolder) {
+			return {
+				workingFolder: this.context.grovesFolder,
+			};
+		}
+
+		// Default to global ~/grove-worktrees
 		const homeDir = os.homedir();
 		return {
 			workingFolder: path.join(homeDir, 'grove-worktrees'),
