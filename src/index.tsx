@@ -3,16 +3,26 @@ import React from 'react';
 
 import { render } from 'ink';
 
-import { initWorkspace, registerRepository } from './commands/index.js';
+import {
+	handleSessionAttention,
+	handleSessionEnd,
+	handleSessionIdle,
+	handleSessionStart,
+	initWorkspace,
+	registerRepository,
+	setupAgentHooks,
+	verifyAgentHooks,
+} from './commands/index.js';
 import { App } from './components/App.js';
 import { getContainer } from './di/index.js';
 import {
+	SessionsServiceToken,
 	WorkspaceService,
 	WorkspaceServiceToken,
 	detectTerminal,
 	initializeServices,
 } from './services/index.js';
-import { SettingsService } from './storage/index.js';
+import { AgentType, SettingsService } from './storage/index.js';
 
 // Discover workspace context
 const workspaceService = new WorkspaceService();
@@ -81,7 +91,120 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 		console.error('✗', result.message);
 		process.exit(1);
 	}
+} else if (args.includes('session-start')) {
+	// Handle session-start command from hooks
+	(async () => {
+		const sessionId = getArgValue('--session-id');
+		const cwd = getArgValue('--cwd') || process.cwd();
+		const agentType = (getArgValue('--agent-type') || 'claude') as AgentType;
+
+		const sessionsService = container.resolve(SessionsServiceToken);
+		const result = await handleSessionStart(sessionsService, {
+			sessionId,
+			cwd,
+			agentType,
+		});
+
+		if (result.success) {
+			// Silent success for hooks - don't clutter output
+			process.exit(0);
+		} else {
+			console.error('✗', result.message);
+			process.exit(1);
+		}
+	})();
+} else if (args.includes('session-idle')) {
+	// Handle session-idle command from Stop hook
+	(async () => {
+		const sessionId = getArgValue('--session-id');
+		const sessionsService = container.resolve(SessionsServiceToken);
+		const result = await handleSessionIdle(sessionsService, sessionId);
+
+		if (result.success) {
+			process.exit(0);
+		} else {
+			console.error('✗', result.message);
+			process.exit(1);
+		}
+	})();
+} else if (args.includes('session-attention')) {
+	// Handle session-attention command from Notification hook
+	(async () => {
+		const sessionId = getArgValue('--session-id');
+		const sessionsService = container.resolve(SessionsServiceToken);
+		const result = await handleSessionAttention(sessionsService, sessionId);
+
+		if (result.success) {
+			process.exit(0);
+		} else {
+			console.error('✗', result.message);
+			process.exit(1);
+		}
+	})();
+} else if (args.includes('session-end')) {
+	// Handle session-end command from SessionEnd hook
+	(async () => {
+		const sessionId = getArgValue('--session-id');
+		const sessionsService = container.resolve(SessionsServiceToken);
+		const result = await handleSessionEnd(sessionsService, sessionId);
+
+		if (result.success) {
+			process.exit(0);
+		} else {
+			console.error('✗', result.message);
+			process.exit(1);
+		}
+	})();
+} else if (args.includes('--setup-hooks')) {
+	// Handle setup-hooks command
+	(async () => {
+		const agentType = (getArgValue('--agent') || 'claude') as AgentType;
+		const result = await setupAgentHooks(agentType);
+
+		if (result.success) {
+			console.log('✓', result.message);
+			if (result.details && result.details.length > 0) {
+				result.details.forEach((detail) => console.log('  ', detail));
+			}
+			process.exit(0);
+		} else {
+			console.error('✗', result.message);
+			if (result.details && result.details.length > 0) {
+				result.details.forEach((detail) => console.error('  ', detail));
+			}
+			process.exit(1);
+		}
+	})();
+} else if (args.includes('--verify-hooks')) {
+	// Handle verify-hooks command
+	(async () => {
+		const agentType = (getArgValue('--agent') || 'claude') as AgentType;
+		const result = await verifyAgentHooks(agentType);
+
+		console.log(`Agent: ${agentType}`);
+		console.log(`Configured: ${result.configured ? 'Yes' : 'No'}`);
+		if (result.hooks.length > 0) {
+			console.log(`Active hooks: ${result.hooks.join(', ')}`);
+		}
+		if (result.missing.length > 0) {
+			console.log(`Missing hooks: ${result.missing.join(', ')}`);
+		}
+
+		process.exit(result.configured ? 0 : 1);
+	})();
 } else {
 	// Start the interactive UI
 	render(<App />);
+}
+
+/**
+ * Helper function to get argument value
+ */
+function getArgValue(flag: string): string {
+	const index = args.indexOf(flag);
+	if (index === -1 || index === args.length - 1) {
+		console.error(`Missing value for ${flag}`);
+		process.exit(1);
+	}
+	return args[index + 1];
 }
