@@ -1,9 +1,7 @@
 /**
  * LLM Service
- * Provides AI-powered features using OpenRouter/Anthropic SDK
+ * Provides AI-powered features using OpenRouter API
  */
-import Anthropic from '@anthropic-ai/sdk';
-
 import type { ILLMService, ISettingsService, GroveNameGenerationResult } from './interfaces.js';
 
 /**
@@ -12,10 +10,42 @@ import type { ILLMService, ISettingsService, GroveNameGenerationResult } from '.
 const DEFAULT_MODEL = 'anthropic/claude-3.5-haiku';
 const DEFAULT_SITE_URL = 'https://github.com/matejsmisek/grove';
 const DEFAULT_APP_NAME = 'Grove';
-const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 /**
- * LLM Service implementation using Anthropic SDK with OpenRouter
+ * OpenRouter API request body (OpenAI-compatible format)
+ */
+interface OpenRouterRequest {
+	model: string;
+	messages: Array<{
+		role: 'user' | 'assistant' | 'system';
+		content: string;
+	}>;
+	max_tokens?: number;
+	temperature?: number;
+}
+
+/**
+ * OpenRouter API response (OpenAI-compatible format)
+ */
+interface OpenRouterResponse {
+	id: string;
+	choices: Array<{
+		message: {
+			role: string;
+			content: string;
+		};
+		finish_reason: string;
+	}>;
+	usage?: {
+		prompt_tokens: number;
+		completion_tokens: number;
+		total_tokens: number;
+	};
+}
+
+/**
+ * LLM Service implementation using OpenRouter API
  */
 export class LLMService implements ILLMService {
 	private settingsService: ISettingsService;
@@ -41,26 +71,6 @@ export class LLMService implements ILLMService {
 	}
 
 	/**
-	 * Create an Anthropic client configured for OpenRouter
-	 */
-	private createClient(): Anthropic {
-		const settings = this.settingsService.readSettings();
-
-		if (!settings.openrouterApiKey) {
-			throw new Error('OpenRouter API key not configured. Please set it in Settings.');
-		}
-
-		return new Anthropic({
-			apiKey: settings.openrouterApiKey,
-			baseURL: OPENROUTER_BASE_URL,
-			defaultHeaders: {
-				'HTTP-Referer': settings.llmSiteUrl || DEFAULT_SITE_URL,
-				'X-Title': settings.llmAppName || DEFAULT_APP_NAME,
-			},
-		});
-	}
-
-	/**
 	 * Generate a grove name from a description
 	 */
 	async generateGroveName(description: string): Promise<GroveNameGenerationResult> {
@@ -68,17 +78,17 @@ export class LLMService implements ILLMService {
 			throw new Error('OpenRouter API key not configured. Please set it in Settings.');
 		}
 
-		const client = this.createClient();
+		const settings = this.settingsService.readSettings();
 		const model = this.getModel();
 
-		try {
-			const response = await client.messages.create({
-				model,
-				max_tokens: 100,
-				messages: [
-					{
-						role: 'user',
-						content: `You are a helpful assistant that generates concise, descriptive names for git worktree collections (called "groves").
+		const requestBody: OpenRouterRequest = {
+			model,
+			max_tokens: 100,
+			temperature: 0.7,
+			messages: [
+				{
+					role: 'user',
+					content: `You are a helpful assistant that generates concise, descriptive names for git worktree collections (called "groves").
 
 User's description: "${description}"
 
@@ -92,17 +102,42 @@ Rules:
 - Examples: "auth-bug-fix", "add-user-dashboard", "refactor-payment-flow"
 
 Respond with ONLY the name, no explanation or extra text.`,
-					},
-				],
+				},
+			],
+		};
+
+		try {
+			const response = await fetch(OPENROUTER_API_URL, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${settings.openrouterApiKey}`,
+					'HTTP-Referer': settings.llmSiteUrl || DEFAULT_SITE_URL,
+					'X-Title': settings.llmAppName || DEFAULT_APP_NAME,
+				},
+				body: JSON.stringify(requestBody),
 			});
 
-			// Extract the generated name from the response
-			const textContent = response.content.find((block) => block.type === 'text');
-			if (!textContent || textContent.type !== 'text') {
-				throw new Error('No text response from LLM');
+			if (!response.ok) {
+				const errorText = await response.text();
+				if (response.status === 401) {
+					throw new Error('Invalid OpenRouter API key. Please check your configuration.');
+				}
+				if (response.status === 429) {
+					throw new Error('Rate limit reached. Please try again later.');
+				}
+				if (response.status === 402) {
+					throw new Error('Insufficient credits. Please add credits to your OpenRouter account.');
+				}
+				throw new Error(
+					`OpenRouter API error (${response.status}): ${errorText || response.statusText}`
+				);
 			}
 
-			const generatedName = textContent.text.trim();
+			const data = (await response.json()) as OpenRouterResponse;
+
+			// Extract the generated name from the response
+			const generatedName = data.choices[0]?.message?.content?.trim();
 
 			// Validate the generated name
 			if (!generatedName || generatedName.length === 0) {
@@ -114,13 +149,16 @@ Respond with ONLY the name, no explanation or extra text.`,
 			};
 		} catch (error) {
 			if (error instanceof Error) {
-				// Check for common API errors
-				if (error.message.includes('401') || error.message.includes('authentication')) {
-					throw new Error('Invalid OpenRouter API key. Please check your configuration.');
+				// Re-throw our custom errors
+				if (
+					error.message.includes('OpenRouter') ||
+					error.message.includes('Invalid') ||
+					error.message.includes('Rate limit') ||
+					error.message.includes('credits')
+				) {
+					throw error;
 				}
-				if (error.message.includes('429') || error.message.includes('rate limit')) {
-					throw new Error('Rate limit reached. Please try again later.');
-				}
+				// Network or other errors
 				throw new Error(`LLM API error: ${error.message}`);
 			}
 			throw new Error('Unknown error occurred while generating grove name');
