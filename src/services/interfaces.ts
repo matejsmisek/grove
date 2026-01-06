@@ -608,8 +608,13 @@ export interface IGroveService {
 	 * Create a new grove with worktrees for selected repositories
 	 * @param name - Name of the grove
 	 * @param selections - Array of repository selections, each optionally with a project path
+	 * @param onLog - Optional callback for progress logging during creation
 	 */
-	createGrove(name: string, selections: RepositorySelection[]): Promise<GroveMetadata>;
+	createGrove(
+		name: string,
+		selections: RepositorySelection[],
+		onLog?: (message: string) => void
+	): Promise<GroveMetadata>;
 
 	/**
 	 * Close a grove - removes worktrees and deletes folder

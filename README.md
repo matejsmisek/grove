@@ -11,7 +11,8 @@ Grove is a modern command-line tool that makes managing Git worktrees effortless
 - **Monorepo Support** - Select specific project folders within monorepos for grove creation
 - **Smart IDE Integration** - Auto-detect and launch the right IDE (VS Code, JetBrains IDEs, Vim) for each project
 - **JetBrains Auto-Detection** - Automatically selects the appropriate JetBrains IDE based on project files
-- **Custom Configuration** - Per-repository `.grove.json` for branch naming, file copying, IDE preferences, and Claude session templates
+- **Custom Configuration** - Per-repository `.grove.json` for branch naming, file copying, IDE preferences, init actions, and Claude session templates
+- **Init Actions** - Automatically run bash commands (install dependencies, build, etc.) after worktree creation with live log streaming
 - **Claude Integration** - Launch Claude CLI sessions with configurable terminal selection (Konsole, Kitty)
 - **Claude Terminal Selection** - Choose your preferred terminal and customize session templates
 - **Session Templates** - Customize Claude session files globally or per-repository with `${WORKING_DIR}` placeholder
@@ -108,6 +109,7 @@ For monorepos, you can also place `.grove.json` files in project subdirectories 
 	"branchNameTemplate": "grove/${GROVE_NAME}",
 	"fileCopyPatterns": [".env.example", "*.config.js"],
 	"ide": "@webstorm",
+	"initActions": ["npm install", "npm run build"],
 	"claudeSessionTemplates": {
 		"konsole": {
 			"content": "title: Claude ;; workdir: ${WORKING_DIR} ;; command: claude\n"
@@ -116,13 +118,13 @@ For monorepos, you can also place `.grove.json` files in project subdirectories 
 }
 ```
 
-| Option                   | Type                 | Description                                                                      |
-| ------------------------ | -------------------- | -------------------------------------------------------------------------------- |
-| `branchNameTemplate`     | `string`             | Template for worktree branch names. Must contain `${GROVE_NAME}`.                |
-| `fileCopyPatterns`       | `string[]`           | Glob patterns for files to copy to worktrees during grove creation.              |
-| `ide`                    | `string` or `object` | IDE to use when opening this project (see below).                                |
-| `claudeSessionTemplates` | `object`             | Custom session templates for Claude terminals with `${WORKING_DIR}` placeholder. |
-| `initActions`            | `string[]`           | Commands to run after grove creation (not yet implemented).                      |
+| Option                   | Type                 | Description                                                                                  |
+| ------------------------ | -------------------- | -------------------------------------------------------------------------------------------- |
+| `branchNameTemplate`     | `string`             | Template for worktree branch names. Must contain `${GROVE_NAME}`.                            |
+| `fileCopyPatterns`       | `string[]`           | Glob patterns for files to copy to worktrees during grove creation.                          |
+| `ide`                    | `string` or `object` | IDE to use when opening this project (see below).                                            |
+| `initActions`            | `string[]`           | Bash commands to execute after worktree creation. Runs sequentially, stops on first failure. |
+| `claudeSessionTemplates` | `object`             | Custom session templates for Claude terminals with `${WORKING_DIR}` placeholder.             |
 
 #### IDE Configuration
 
@@ -194,16 +196,70 @@ This example creates a Konsole session with two tabs (Claude and Tests) or a Kit
 - Press `c` to configure templates
 - Templates configured here apply globally unless overridden by repository configs
 
+#### Init Actions
+
+The `initActions` option allows you to automatically run bash commands after a worktree is created. This is useful for:
+
+- Installing dependencies (`npm install`, `composer install`, etc.)
+- Building the project (`npm run build`, `make`, etc.)
+- Setting up development environments
+- Running database migrations
+- Any other setup tasks
+
+**Key Features**:
+
+- Commands execute sequentially in order
+- Execution stops on first failure (non-zero exit code)
+- Live progress displayed during grove creation
+- Full logs saved to `{grove-folder}/grove-init-{worktree}.log`
+- Logs viewable from Grove Detail screen via "View Init Log" action
+- For monorepos, commands run in the project directory
+
+**Example**:
+
+```json
+{
+	"initActions": [
+		"echo 'Setting up project...'",
+		"npm install --silent",
+		"npm run build",
+		"echo 'Setup complete!'"
+	]
+}
+```
+
+**Log Output**:
+
+During grove creation, you'll see live output:
+
+```
+Creating worktree for my-app...
+[my-app] Starting initActions (4 commands)...
+[my-app] Running: echo 'Setting up project...'
+[my-app] Setting up project...
+[my-app] ✓ Command completed successfully
+[my-app] Running: npm install --silent
+[my-app] added 340 packages...
+[my-app] ✓ Command completed successfully
+[my-app] Running: npm run build
+[my-app] > build
+[my-app] ✓ Command completed successfully
+[my-app] ✓ SUCCESS: 4/4 actions completed
+```
+
+Full logs are saved to the grove directory for later review.
+
 #### Monorepo Example
 
-For a monorepo with different projects requiring different IDEs:
+For a monorepo with different projects requiring different IDEs and init actions:
 
 **Root `.grove.json`**:
 
 ```json
 {
 	"branchNameTemplate": "feature/${GROVE_NAME}",
-	"ide": "@vscode"
+	"ide": "@vscode",
+	"fileCopyPatterns": [".env.example"]
 }
 ```
 
@@ -211,7 +267,12 @@ For a monorepo with different projects requiring different IDEs:
 
 ```json
 {
-	"ide": "@pycharm"
+	"ide": "@pycharm",
+	"initActions": [
+		"python -m venv venv",
+		"source venv/bin/activate",
+		"pip install -r requirements.txt"
+	]
 }
 ```
 
@@ -219,11 +280,17 @@ For a monorepo with different projects requiring different IDEs:
 
 ```json
 {
-	"ide": "@webstorm"
+	"ide": "@webstorm",
+	"initActions": ["npm install", "npm run build"]
 }
 ```
 
-Project-level settings override root settings, so the API package will open in PyCharm while the web package opens in WebStorm.
+Project-level settings override root settings, so:
+
+- The API package will open in PyCharm and run Python setup commands
+- The web package will open in WebStorm and run npm commands
+- Both inherit the branch template from root
+- InitActions run in their respective project directories
 
 ## Requirements
 

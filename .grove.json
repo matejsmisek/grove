@@ -1,0 +1,11 @@
+{
+	"branchNameTemplate": "grove/${GROVE_NAME}",
+	"fileCopyPatterns": [".gitignore", "*.config.js"],
+	"initActions": [
+		"echo 'Installing dependencies...'",
+		"npm install --silent",
+		"echo 'Dependencies installed successfully!'",
+		"npm run build"
+	],
+	"ide": "@vscode"
+}

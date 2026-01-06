@@ -45,6 +45,7 @@ export function CreateGroveScreen() {
 	const [selectedRepoIndices, setSelectedRepoIndices] = useState<Set<number>>(new Set());
 	const [cursorIndex, setCursorIndex] = useState(0);
 	const [error, setError] = useState<string>('');
+	const [logMessages, setLogMessages] = useState<string[]>([]);
 
 	// Project selection state for monorepos
 	const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
@@ -296,11 +297,17 @@ export function CreateGroveScreen() {
 
 	const createGrove = () => {
 		setStep('creating');
+		setLogMessages([]); // Clear previous logs
 
 		const selections = buildSelections();
 
+		// Callback for live log streaming
+		const handleLog = (message: string) => {
+			setLogMessages((prev) => [...prev, message]);
+		};
+
 		groveService
-			.createGrove(groveName, selections)
+			.createGrove(groveName, selections, handleLog)
 			.then((metadata) => {
 				// Save selections to recent history
 				addRecentSelections(selections);
@@ -504,13 +511,23 @@ export function CreateGroveScreen() {
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
 					<Text bold color="green">
-						Creating Grove...
+						Creating Grove: {groveName}
 					</Text>
 				</Box>
-				<Text>Setting up "{groveName}"</Text>
-				<Box marginTop={1}>
+				<Box marginBottom={1}>
 					<Text dimColor>Creating {selections.length} worktree(s)...</Text>
 				</Box>
+
+				{/* Live log output */}
+				{logMessages.length > 0 && (
+					<Box flexDirection="column" borderStyle="single" borderColor="gray" padding={1} marginTop={1}>
+						{logMessages.slice(-15).map((msg, index) => (
+							<Text key={index} dimColor>
+								{msg}
+							</Text>
+						))}
+					</Box>
+				)}
 			</Box>
 		);
 	}
