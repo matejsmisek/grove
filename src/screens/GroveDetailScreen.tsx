@@ -19,6 +19,7 @@ import {
 	GitServiceToken,
 	GrovesServiceToken,
 	SettingsServiceToken,
+	WorkspaceServiceToken,
 } from '../services/tokens.js';
 import { GroveConfigService } from '../storage/index.js';
 import type { Settings, Worktree } from '../storage/types.js';
@@ -89,6 +90,7 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
 	const grovesService = useService(GrovesServiceToken);
 	const settingsService = useService(SettingsServiceToken);
+	const workspaceService = useService(WorkspaceServiceToken);
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
 	const [grovePath, setGrovePath] = useState('');
@@ -98,6 +100,11 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	const [showActions, setShowActions] = useState(false);
 	const [selectedActionIndex, setSelectedActionIndex] = useState(0);
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
+
+	// Get workspace context to display workspace name
+	const workspaceContext = workspaceService.getCurrentContext();
+	const workspaceName =
+		workspaceContext?.type === 'workspace' ? workspaceContext.config?.name : null;
 	const [showInitLog, setShowInitLog] = useState(false);
 	const [initLogContent, setInitLogContent] = useState<string>('');
 
@@ -423,9 +430,17 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 				<>
 					{/* Header */}
 					<Box marginBottom={1} flexDirection="column">
-						<Text bold color="green">
-							🌳 {groveName}
-						</Text>
+						<Box>
+							<Text bold color="green">
+								🌳 {groveName}
+							</Text>
+							{workspaceName && (
+								<Text bold color="cyan">
+									{' '}
+									→ {workspaceName}
+								</Text>
+							)}
+						</Box>
 						<Text dimColor>{grovePath}</Text>
 					</Box>
 

@@ -5,7 +5,13 @@ import { render } from 'ink';
 
 import { initWorkspace, registerRepository } from './commands/index.js';
 import { App } from './components/App.js';
-import { WorkspaceService, detectTerminal, initializeServices } from './services/index.js';
+import { getContainer } from './di/index.js';
+import {
+	WorkspaceService,
+	WorkspaceServiceToken,
+	detectTerminal,
+	initializeServices,
+} from './services/index.js';
 import { SettingsService } from './storage/index.js';
 
 // Discover workspace context
@@ -23,6 +29,12 @@ settingsService.initializeStorage();
 // Initialize DI services with workspace context FIRST
 // This must happen before any commands are executed
 initializeServices(undefined, workspaceContext);
+
+// Set the workspace context in the DI container's WorkspaceService
+// so it can be accessed by components
+const container = getContainer();
+const workspaceServiceFromDI = container.resolve(WorkspaceServiceToken);
+workspaceServiceFromDI.setCurrentContext(workspaceContext);
 
 // Detect terminal on first startup if not already configured
 const settings = settingsService.readSettings();

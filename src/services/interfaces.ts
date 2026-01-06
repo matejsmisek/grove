@@ -722,4 +722,16 @@ export interface IWorkspaceService {
 	 * Check if a directory is a workspace root
 	 */
 	isWorkspaceRoot(dirPath: string): boolean;
+
+	/**
+	 * Set the current workspace context
+	 * Should be called after resolving context in the application entry point
+	 */
+	setCurrentContext(context: WorkspaceContext): void;
+
+	/**
+	 * Get the current workspace context
+	 * Returns the workspace context set during application initialization
+	 */
+	getCurrentContext(): WorkspaceContext | undefined;
 }

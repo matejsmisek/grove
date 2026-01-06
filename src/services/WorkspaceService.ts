@@ -18,6 +18,8 @@ const GLOBAL_WORKSPACES_FILENAME = 'workspaces.json';
  * Handles workspace discovery, initialization, and context resolution
  */
 export class WorkspaceService {
+	private currentContext?: WorkspaceContext;
+
 	/**
 	 * Discover workspace by walking up directory tree from startDir
 	 * Returns workspace path if found, undefined otherwise
@@ -265,5 +267,21 @@ export class WorkspaceService {
 	isWorkspaceRoot(dirPath: string): boolean {
 		const configPath = path.join(dirPath, WORKSPACE_CONFIG_FILENAME);
 		return fs.existsSync(configPath);
+	}
+
+	/**
+	 * Set the current workspace context
+	 * Should be called after resolving context in the application entry point
+	 */
+	setCurrentContext(context: WorkspaceContext): void {
+		this.currentContext = context;
+	}
+
+	/**
+	 * Get the current workspace context
+	 * Returns the workspace context set during application initialization
+	 */
+	getCurrentContext(): WorkspaceContext | undefined {
+		return this.currentContext;
 	}
 }

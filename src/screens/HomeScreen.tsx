@@ -7,7 +7,7 @@ import type { MenuOption } from '../components/home/MenuModal.js';
 import { MenuModal } from '../components/home/MenuModal.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { GrovesServiceToken } from '../services/tokens.js';
+import { GrovesServiceToken, WorkspaceServiceToken } from '../services/tokens.js';
 
 export function HomeScreen() {
 	const { navigate } = useNavigation();
@@ -19,6 +19,12 @@ export function HomeScreen() {
 	// Get workspace-aware groves service
 	const grovesService = useService(GrovesServiceToken);
 	const groves = grovesService.getAllGroves();
+
+	// Get workspace context to display workspace name
+	const workspaceService = useService(WorkspaceServiceToken);
+	const workspaceContext = workspaceService.getCurrentContext();
+	const workspaceName =
+		workspaceContext?.type === 'workspace' ? workspaceContext.config?.name : null;
 
 	// Menu options
 	const menuOptions: MenuOption[] = [
@@ -91,6 +97,12 @@ export function HomeScreen() {
 						<Text bold color="green">
 							🌳 Grove
 						</Text>
+						{workspaceName && (
+							<Text bold color="cyan">
+								{' '}
+								→ {workspaceName}
+							</Text>
+						)}
 					</Box>
 
 					<Box marginBottom={1}>
