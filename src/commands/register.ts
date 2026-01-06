@@ -1,17 +1,23 @@
+import { getContainer } from '../di/index.js';
 import { verifyValidRepository } from '../git/index.js';
-import { addRepository, isRepositoryRegistered } from '../storage/index.js';
+import { RepositoryServiceToken } from '../services/tokens.js';
 import type { RegisterResult } from './types.js';
 
 /**
  * Register the current directory as a repository
+ * Uses the DI container to get the workspace-aware RepositoryService
  */
 export function registerRepository(cwd?: string): RegisterResult {
 	try {
 		// Verify this is a valid git repository (not a worktree)
 		const repoPath = verifyValidRepository(cwd);
 
+		// Get workspace-aware repository service from DI container
+		const container = getContainer();
+		const repositoryService = container.resolve(RepositoryServiceToken);
+
 		// Check if already registered
-		if (isRepositoryRegistered(repoPath)) {
+		if (repositoryService.isRepositoryRegistered(repoPath)) {
 			return {
 				success: false,
 				message: `Repository is already registered: ${repoPath}`,
@@ -19,7 +25,7 @@ export function registerRepository(cwd?: string): RegisterResult {
 		}
 
 		// Add the repository
-		const repository = addRepository(repoPath);
+		const repository = repositoryService.addRepository(repoPath);
 
 		return {
 			success: true,

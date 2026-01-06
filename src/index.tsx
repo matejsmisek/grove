@@ -6,28 +6,32 @@ import { render } from 'ink';
 import { initWorkspace, registerRepository } from './commands/index.js';
 import { App } from './components/App.js';
 import { WorkspaceService, detectTerminal, initializeServices } from './services/index.js';
-import { initializeStorage, readSettings, updateSettings } from './storage/index.js';
+import { SettingsService } from './storage/index.js';
 
 // Discover workspace context
 const workspaceService = new WorkspaceService();
 const workspaceContext = workspaceService.resolveContext(process.cwd());
 
+// Create workspace-aware settings service
+const settingsService = new SettingsService(workspaceContext);
+
 // Initialize storage before rendering the app
 // If in a workspace, this will initialize the workspace's .grove folder
 // If global, this will initialize ~/.grove
-initializeStorage();
+settingsService.initializeStorage();
+
+// Initialize DI services with workspace context FIRST
+// This must happen before any commands are executed
+initializeServices(undefined, workspaceContext);
 
 // Detect terminal on first startup if not already configured
-const settings = readSettings();
+const settings = settingsService.readSettings();
 if (!settings.terminal) {
 	const terminalConfig = detectTerminal();
 	if (terminalConfig) {
-		updateSettings({ terminal: terminalConfig });
+		settingsService.updateSettings({ terminal: terminalConfig });
 	}
 }
-
-// Initialize DI services with workspace context
-initializeServices(undefined, workspaceContext);
 
 // Parse command-line arguments
 const args = process.argv.slice(2);
