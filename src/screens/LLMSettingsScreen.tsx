@@ -7,7 +7,7 @@ import TextInput from 'ink-text-input';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { readSettings, updateSettings } from '../storage/index.js';
 
-type FieldType = 'apiKey' | 'model' | null;
+type FieldType = 'apiKey' | 'model' | 'siteUrl' | 'appName' | null;
 
 const DEFAULT_MODEL = 'anthropic/claude-3.5-haiku';
 const SUGGESTED_MODELS = [
@@ -23,10 +23,12 @@ export function LLMSettingsScreen() {
 	const { goBack, canGoBack } = useNavigation();
 	const settings = readSettings();
 
-	const [fieldIndex, setFieldIndex] = useState(0); // 0 = apiKey, 1 = model
+	const [fieldIndex, setFieldIndex] = useState(0); // 0 = apiKey, 1 = model, 2 = siteUrl, 3 = appName
 	const [editingField, setEditingField] = useState<FieldType>(null);
 	const [tempApiKey, setTempApiKey] = useState(settings.openrouterApiKey || '');
 	const [tempModel, setTempModel] = useState(settings.llmModel || DEFAULT_MODEL);
+	const [tempSiteUrl, setTempSiteUrl] = useState(settings.llmSiteUrl || '');
+	const [tempAppName, setTempAppName] = useState(settings.llmAppName || '');
 	const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
 	// Save API key
@@ -45,6 +47,22 @@ export function LLMSettingsScreen() {
 		setTimeout(() => setSavedMessage(null), 2000);
 	};
 
+	// Save site URL
+	const saveSiteUrl = () => {
+		updateSettings({ llmSiteUrl: tempSiteUrl || undefined });
+		setEditingField(null);
+		setSavedMessage('Site URL saved');
+		setTimeout(() => setSavedMessage(null), 2000);
+	};
+
+	// Save app name
+	const saveAppName = () => {
+		updateSettings({ llmAppName: tempAppName || undefined });
+		setEditingField(null);
+		setSavedMessage('App name saved');
+		setTimeout(() => setSavedMessage(null), 2000);
+	};
+
 	// Mask API key for display (show only first 8 and last 4 characters)
 	const maskApiKey = (key: string): string => {
 		if (key.length <= 12) {
@@ -60,11 +78,14 @@ export function LLMSettingsScreen() {
 			if (key.escape && canGoBack) {
 				goBack();
 			} else if (key.upArrow) {
-				setFieldIndex((prev) => (prev > 0 ? prev - 1 : 1));
+				setFieldIndex((prev) => (prev > 0 ? prev - 1 : 3));
 			} else if (key.downArrow) {
-				setFieldIndex((prev) => (prev < 1 ? prev + 1 : 0));
+				setFieldIndex((prev) => (prev < 3 ? prev + 1 : 0));
 			} else if (key.return) {
-				setEditingField(fieldIndex === 0 ? 'apiKey' : 'model');
+				if (fieldIndex === 0) setEditingField('apiKey');
+				else if (fieldIndex === 1) setEditingField('model');
+				else if (fieldIndex === 2) setEditingField('siteUrl');
+				else if (fieldIndex === 3) setEditingField('appName');
 			}
 		},
 		{ isActive: editingField === null }
@@ -113,6 +134,28 @@ export function LLMSettingsScreen() {
 						<Text color="cyan">{tempModel}</Text>
 					)}
 				</Box>
+				<Box marginTop={1}>
+					<Text color={fieldIndex === 2 ? 'cyan' : undefined}>
+						{fieldIndex === 2 ? '> ' : '  '}
+					</Text>
+					<Text bold={fieldIndex === 2}>Site URL (optional): </Text>
+					{editingField === 'siteUrl' ? (
+						<TextInput value={tempSiteUrl} onChange={setTempSiteUrl} onSubmit={saveSiteUrl} />
+					) : (
+						<Text color="cyan">{tempSiteUrl || <Text dimColor>(not set)</Text>}</Text>
+					)}
+				</Box>
+				<Box marginTop={1}>
+					<Text color={fieldIndex === 3 ? 'cyan' : undefined}>
+						{fieldIndex === 3 ? '> ' : '  '}
+					</Text>
+					<Text bold={fieldIndex === 3}>App Name (optional): </Text>
+					{editingField === 'appName' ? (
+						<TextInput value={tempAppName} onChange={setTempAppName} onSubmit={saveAppName} />
+					) : (
+						<Text color="cyan">{tempAppName || <Text dimColor>(not set)</Text>}</Text>
+					)}
+				</Box>
 			</Box>
 
 			<Box marginTop={1} flexDirection="column">
@@ -120,6 +163,7 @@ export function LLMSettingsScreen() {
 				<Text dimColor>
 					Suggested models: {SUGGESTED_MODELS.slice(0, 3).join(', ')}, or custom
 				</Text>
+				<Text dimColor>Optional: Site URL and App Name are not sent by default</Text>
 			</Box>
 
 			<Box marginTop={1} flexDirection="column">

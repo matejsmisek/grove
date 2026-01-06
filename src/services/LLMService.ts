@@ -8,8 +8,6 @@ import type { ILLMService, ISettingsService, GroveNameGenerationResult } from '.
  * Default LLM configuration
  */
 const DEFAULT_MODEL = 'anthropic/claude-3.5-haiku';
-const DEFAULT_SITE_URL = 'https://github.com/matejsmisek/grove';
-const DEFAULT_APP_NAME = 'Grove';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 /**
@@ -107,14 +105,23 @@ Respond with ONLY the name, no explanation or extra text.`,
 		};
 
 		try {
+			// Build headers, only including optional tracking headers if configured
+			const headers: Record<string, string> = {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${settings.openrouterApiKey}`,
+			};
+
+			// Only add tracking headers if explicitly configured
+			if (settings.llmSiteUrl) {
+				headers['HTTP-Referer'] = settings.llmSiteUrl;
+			}
+			if (settings.llmAppName) {
+				headers['X-Title'] = settings.llmAppName;
+			}
+
 			const response = await fetch(OPENROUTER_API_URL, {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${settings.openrouterApiKey}`,
-					'HTTP-Referer': settings.llmSiteUrl || DEFAULT_SITE_URL,
-					'X-Title': settings.llmAppName || DEFAULT_APP_NAME,
-				},
+				headers,
 				body: JSON.stringify(requestBody),
 			});
 
