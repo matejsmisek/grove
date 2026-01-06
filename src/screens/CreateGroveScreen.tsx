@@ -46,7 +46,11 @@ export function CreateGroveScreen() {
 	const { replace, goBack } = useNavigation();
 	const groveService = useService(GroveServiceToken);
 	const llmService = useService(LLMServiceToken);
-	const [step, setStep] = useState<CreateStep>('description');
+
+	// Start at 'description' if LLM is configured, otherwise start at 'name' (offline mode)
+	const [step, setStep] = useState<CreateStep>(() =>
+		llmService.isConfigured() ? 'description' : 'name'
+	);
 	const [description, setDescription] = useState('');
 	const [groveName, setGroveName] = useState('');
 	const [repositories] = useState<Repository[]>(() => {
@@ -338,15 +342,6 @@ export function CreateGroveScreen() {
 		}
 
 		setDescription(trimmed);
-
-		// Check if LLM is configured
-		if (!llmService.isConfigured()) {
-			setError(
-				'OpenRouter API key not configured. Please configure it in Settings, or press Esc and Enter to skip AI generation.'
-			);
-			setStep('error');
-			return;
-		}
 
 		// Generate name using LLM
 		setStep('generating');
