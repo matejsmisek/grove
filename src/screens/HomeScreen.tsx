@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 import { Box, Text, useApp, useInput } from 'ink';
 
@@ -7,7 +7,11 @@ import type { MenuOption } from '../components/home/MenuModal.js';
 import { MenuModal } from '../components/home/MenuModal.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { GrovesServiceToken, WorkspaceServiceToken } from '../services/tokens.js';
+import {
+	GrovesServiceToken,
+	SessionTrackingServiceToken,
+	WorkspaceServiceToken,
+} from '../services/tokens.js';
 
 export function HomeScreen() {
 	const { navigate } = useNavigation();
@@ -15,10 +19,39 @@ export function HomeScreen() {
 	const [selectedGroveIndex, setSelectedGroveIndex] = useState(0);
 	const [showMenu, setShowMenu] = useState(false);
 	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
+	const [isUpdatingSessions, setIsUpdatingSessions] = useState(false);
 
 	// Get workspace-aware groves service
 	const grovesService = useService(GrovesServiceToken);
 	const groves = grovesService.getAllGroves();
+
+	// Get session tracking service
+	const sessionTrackingService = useService(SessionTrackingServiceToken);
+
+	// Background session update on mount
+	useEffect(() => {
+		let isMounted = true;
+
+		async function updateSessions() {
+			setIsUpdatingSessions(true);
+			try {
+				await sessionTrackingService.updateAllSessions();
+				await sessionTrackingService.cleanupStale();
+			} catch (error) {
+				// Silent fail - don't block UI
+			} finally {
+				if (isMounted) {
+					setIsUpdatingSessions(false);
+				}
+			}
+		}
+
+		updateSessions();
+
+		return () => {
+			isMounted = false;
+		};
+	}, [sessionTrackingService]);
 
 	// Get workspace context to display workspace name
 	const workspaceService = useService(WorkspaceServiceToken);
@@ -109,13 +142,24 @@ export function HomeScreen() {
 						<Text dimColor>AI-powered Git worktree management</Text>
 					</Box>
 
+					{/* Session update status */}
+					{isUpdatingSessions && (
+						<Box marginBottom={1}>
+							<Text dimColor>Updating Claude sessions...</Text>
+						</Box>
+					)}
+
 					{/* Groves Grid */}
 					<Box flexDirection="column" marginTop={1}>
 						<Box marginBottom={1}>
 							<Text bold>Your Groves</Text>
 						</Box>
 
-						<GroveGrid groves={groves} selectedIndex={selectedGroveIndex} />
+						<GroveGrid
+							groves={groves}
+							selectedIndex={selectedGroveIndex}
+							sessionTrackingService={sessionTrackingService}
+						/>
 					</Box>
 
 					{/* Help text */}

@@ -2,6 +2,7 @@ import React from 'react';
 
 import { Box } from 'ink';
 
+import type { ISessionTrackingService } from '../../services/SessionTrackingService.js';
 import type { GroveReference } from '../../storage/index.js';
 import { CreateGrovePanel } from './CreateGrovePanel.js';
 import { GrovePanel } from './GrovePanel.js';
@@ -9,9 +10,10 @@ import { GrovePanel } from './GrovePanel.js';
 type GroveGridProps = {
 	groves: GroveReference[];
 	selectedIndex: number;
+	sessionTrackingService: ISessionTrackingService;
 };
 
-export function GroveGrid({ groves, selectedIndex }: GroveGridProps) {
+export function GroveGrid({ groves, selectedIndex, sessionTrackingService }: GroveGridProps) {
 	// Total items = 1 (create button) + groves.length
 	const totalItems = 1 + groves.length;
 	const rowCount = Math.ceil(totalItems / 4);
@@ -40,9 +42,16 @@ export function GroveGrid({ groves, selectedIndex }: GroveGridProps) {
 						// Remaining items are groves (offset by 1)
 						const grove = groves[itemIndex - 1];
 						if (grove) {
+							// Get session counts for this grove
+							const sessionCounts = sessionTrackingService.getGroveSessionCounts(grove.id);
+
 							items.push(
 								<Box key={grove.id} marginLeft={marginLeft}>
-									<GrovePanel grove={grove} isSelected={isSelected} />
+									<GrovePanel
+										grove={grove}
+										isSelected={isSelected}
+										sessionCounts={sessionCounts}
+									/>
 								</Box>
 							);
 						}
