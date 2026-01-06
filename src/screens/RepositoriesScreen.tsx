@@ -2,15 +2,19 @@ import React, { useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
+import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { getAllRepositories, removeRepository, updateRepository } from '../storage/index.js';
+import { RepositoryServiceToken } from '../services/tokens.js';
 import type { Repository } from '../storage/index.js';
 
 type ScreenMode = 'list' | 'confirm-delete';
 
 export function RepositoriesScreen() {
 	const { goBack, canGoBack } = useNavigation();
-	const [repositories, setRepositories] = useState<Repository[]>(() => getAllRepositories());
+	const repositoryService = useService(RepositoryServiceToken);
+	const [repositories, setRepositories] = useState<Repository[]>(() =>
+		repositoryService.getAllRepositories()
+	);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [mode, setMode] = useState<ScreenMode>('list');
 	const [deleteSuccess, setDeleteSuccess] = useState(false);
@@ -37,9 +41,9 @@ export function RepositoriesScreen() {
 				if (repositories.length > 0) {
 					const repo = repositories[selectedIndex];
 					const newIsMonorepo = !repo.isMonorepo;
-					updateRepository(repo.path, { isMonorepo: newIsMonorepo });
+					repositoryService.updateRepository(repo.path, { isMonorepo: newIsMonorepo });
 					// Refresh the list
-					setRepositories(getAllRepositories());
+					setRepositories(repositoryService.getAllRepositories());
 					setMonorepoToggleSuccess(true);
 					setTimeout(() => {
 						setMonorepoToggleSuccess(false);
@@ -50,9 +54,9 @@ export function RepositoriesScreen() {
 			if (input === 'y') {
 				// Confirm deletion
 				const repoToDelete = repositories[selectedIndex];
-				const success = removeRepository(repoToDelete.path);
+				const success = repositoryService.removeRepository(repoToDelete.path);
 				if (success) {
-					const newRepos = getAllRepositories();
+					const newRepos = repositoryService.getAllRepositories();
 					setRepositories(newRepos);
 					setDeleteSuccess(true);
 					setMode('list');

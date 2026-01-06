@@ -5,8 +5,9 @@ import { Box, Text, useApp, useInput } from 'ink';
 import { GroveGrid } from '../components/home/GroveGrid.js';
 import type { MenuOption } from '../components/home/MenuModal.js';
 import { MenuModal } from '../components/home/MenuModal.js';
+import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { getAllGroves, initializeStorage } from '../storage/index.js';
+import { GrovesServiceToken } from '../services/tokens.js';
 
 export function HomeScreen() {
 	const { navigate } = useNavigation();
@@ -15,9 +16,9 @@ export function HomeScreen() {
 	const [showMenu, setShowMenu] = useState(false);
 	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
 
-	// Initialize storage and get groves
-	initializeStorage();
-	const groves = getAllGroves();
+	// Get workspace-aware groves service
+	const grovesService = useService(GrovesServiceToken);
+	const groves = grovesService.getAllGroves();
 
 	// Menu options
 	const menuOptions: MenuOption[] = [
