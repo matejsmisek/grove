@@ -79,7 +79,7 @@ export class SessionTrackingService implements ISessionTrackingService {
 
 	async mapSessionsToGroves(): Promise<void> {
 		const allSessions = this.sessionsService.readSessions().sessions;
-		const allGroves = this.grovesService.readGrovesIndex().groves;
+		const allGroves = this.grovesService.getAllGroves();
 
 		for (const session of allSessions) {
 			// Find matching grove by checking if workspace path is within any worktree
