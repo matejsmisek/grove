@@ -16,12 +16,15 @@ import type {
 	ISettingsService,
 	IWorkspaceService,
 } from './interfaces.js';
+import type { ISessionsService } from '../storage/SessionsService.js';
+import type { ISessionTrackingService } from './SessionTrackingService.js';
 
 // Storage service tokens
 export const SettingsServiceToken = createToken<ISettingsService>('SettingsService');
 export const RepositoryServiceToken = createToken<IRepositoryService>('RepositoryService');
 export const GrovesServiceToken = createToken<IGrovesService>('GrovesService');
 export const GroveConfigServiceToken = createToken<IGroveConfigService>('GroveConfigService');
+export const SessionsServiceToken = createToken<ISessionsService>('SessionsService');
 
 // Other service tokens
 export const GitServiceToken = createToken<IGitService>('GitService');
@@ -31,3 +34,4 @@ export const GroveServiceToken = createToken<IGroveService>('GroveService');
 export const ClaudeSessionServiceToken = createToken<IClaudeSessionService>('ClaudeSessionService');
 export const LLMServiceToken = createToken<ILLMService>('LLMService');
 export const WorkspaceServiceToken = createToken<IWorkspaceService>('WorkspaceService');
+export const SessionTrackingServiceToken = createToken<ISessionTrackingService>('SessionTrackingService');

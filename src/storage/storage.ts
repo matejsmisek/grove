@@ -14,6 +14,7 @@ export function getStorageConfigForContext(context: WorkspaceContext): StorageCo
 	const repositoriesPath = path.join(groveFolder, 'repositories.json');
 	const grovesIndexPath = path.join(groveFolder, 'groves.json');
 	const recentSelectionsPath = path.join(groveFolder, 'recent.json');
+	const sessionsPath = path.join(groveFolder, 'sessions.json');
 
 	return {
 		groveFolder,
@@ -21,6 +22,7 @@ export function getStorageConfigForContext(context: WorkspaceContext): StorageCo
 		repositoriesPath,
 		grovesIndexPath,
 		recentSelectionsPath,
+		sessionsPath,
 	};
 }
 
@@ -34,6 +36,7 @@ export function getStorageConfig(): StorageConfig {
 	const repositoriesPath = path.join(groveFolder, 'repositories.json');
 	const grovesIndexPath = path.join(groveFolder, 'groves.json');
 	const recentSelectionsPath = path.join(groveFolder, 'recent.json');
+	const sessionsPath = path.join(groveFolder, 'sessions.json');
 
 	return {
 		groveFolder,
@@ -41,6 +44,7 @@ export function getStorageConfig(): StorageConfig {
 		repositoriesPath,
 		grovesIndexPath,
 		recentSelectionsPath,
+		sessionsPath,
 	};
 }
 

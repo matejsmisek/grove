@@ -137,6 +137,11 @@ export interface StorageConfig {
 	 * The path to the recent selections file
 	 */
 	recentSelectionsPath: string;
+
+	/**
+	 * The path to the sessions file (AI agent session tracking)
+	 */
+	sessionsPath: string;
 }
 
 export interface Repository {
@@ -411,4 +416,85 @@ export interface WorkspaceContext {
 	 * For global: from settings.workingFolder
 	 */
 	grovesFolder?: string;
+}
+
+/**
+ * AI Agent Types
+ * Supported AI coding assistants that can report session status to Grove
+ */
+export type AgentType = 'claude' | 'gemini' | 'codex' | 'custom';
+
+/**
+ * Session Status
+ * Represents the current state of an AI agent session
+ * - active: Agent is currently processing/working
+ * - idle: Waiting for user input
+ * - attention: Needs user action (permission, input, etc.)
+ * - finished: Session completed/terminated
+ * - error: Session encountered an error
+ */
+export type SessionStatus = 'active' | 'idle' | 'attention' | 'finished' | 'error';
+
+/**
+ * Individual AI agent session
+ * Tracks a single AI coding session within a workspace/grove
+ */
+export interface AgentSession {
+	/** Unique session identifier (UUID or agent-specific ID) */
+	sessionId: string;
+	/** Which AI agent is running this session */
+	agentType: AgentType;
+	/** Which grove this session belongs to (null if not in a grove) */
+	groveId: string | null;
+	/** Absolute path where session is running */
+	workspacePath: string;
+	/** Specific worktree path if applicable */
+	worktreePath: string | null;
+	/** Current session status */
+	status: SessionStatus;
+	/** Last update timestamp (ISO format) */
+	lastUpdate: string;
+	/** Whether the process is currently running */
+	isRunning: boolean;
+	/** Additional agent-specific metadata */
+	metadata?: {
+		/** Git branch */
+		branch?: string;
+		/** Project name for display */
+		projectName?: string;
+		/** When session started (ISO timestamp) */
+		startedAt?: string;
+		/** Last user/agent activity (ISO timestamp) */
+		lastActivity?: string;
+		/** Agent-specific data */
+		[key: string]: unknown;
+	};
+}
+
+/**
+ * Session index grouped by workspace for fast lookup
+ * Provides multiple ways to query sessions efficiently
+ */
+export interface SessionsIndex {
+	/** Sessions indexed by workspace path */
+	byWorkspace: Record<string, AgentSession[]>;
+	/** Sessions indexed by grove ID */
+	byGrove: Record<string, AgentSession[]>;
+	/** Sessions indexed by session ID */
+	bySessionId: Record<string, AgentSession>;
+	/** When the index was last cleaned up */
+	lastCleanup: string;
+}
+
+/**
+ * Sessions data file structure
+ * Stored in ~/.grove/sessions.json
+ */
+export interface SessionsData {
+	/** List of all tracked sessions */
+	sessions: AgentSession[];
+	/** Data format version for future migrations */
+	version: string;
+	/** When the file was last updated (ISO timestamp) */
+	lastUpdated: string;
 }

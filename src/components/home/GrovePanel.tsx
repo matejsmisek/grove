@@ -2,6 +2,7 @@ import React from 'react';
 
 import { Box, Text } from 'ink';
 
+import { SessionIndicator } from '../SessionIndicator.js';
 import type { GroveReference } from '../../storage/index.js';
 import { readGroveMetadata } from '../../storage/index.js';
 import { formatTimeAgo } from '../../utils/time.js';
@@ -9,9 +10,14 @@ import { formatTimeAgo } from '../../utils/time.js';
 type GrovePanelProps = {
 	grove: GroveReference;
 	isSelected: boolean;
+	sessionCounts?: {
+		active: number;
+		idle: number;
+		attention: number;
+	};
 };
 
-export function GrovePanel({ grove, isSelected }: GrovePanelProps) {
+export function GrovePanel({ grove, isSelected, sessionCounts }: GrovePanelProps) {
 	// Get grove metadata to count worktrees
 	let worktreeCount = 0;
 	try {
@@ -50,6 +56,17 @@ export function GrovePanel({ grove, isSelected }: GrovePanelProps) {
 					{worktreeCount} worktree{worktreeCount !== 1 ? 's' : ''}
 				</Text>
 			</Box>
+
+			{/* Session indicators */}
+			{sessionCounts && (
+				<Box marginTop={1}>
+					<SessionIndicator
+						activeCount={sessionCounts.active}
+						idleCount={sessionCounts.idle}
+						attentionCount={sessionCounts.attention}
+					/>
+				</Box>
+			)}
 		</Box>
 	);
 }

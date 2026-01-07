@@ -9,6 +9,7 @@ export { ContextService } from './ContextService.js';
 export { FileService } from './FileService.js';
 export { GitService } from './GitService.js';
 export { GroveService } from './GroveService.js';
+export { SessionTrackingService, type ISessionTrackingService } from './SessionTrackingService.js';
 export { WorkspaceService } from './WorkspaceService.js';
 export { detectTerminal, openTerminalInPath } from './TerminalService.js';
 export type { TerminalResult } from './TerminalService.js';
@@ -61,6 +62,8 @@ export {
 	GroveServiceToken,
 	GrovesServiceToken,
 	RepositoryServiceToken,
+	SessionsServiceToken,
+	SessionTrackingServiceToken,
 	SettingsServiceToken,
 	WorkspaceServiceToken,
 } from './tokens.js';

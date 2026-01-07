@@ -9,6 +9,7 @@ Grove is a modern command-line tool that makes managing Git worktrees effortless
 - **Interactive Terminal UI** - Navigate with keyboard shortcuts in a beautiful CLI interface
 - **Grove Management** - Create and manage collections of git worktrees across multiple repositories
 - **Monorepo Support** - Select specific project folders within monorepos for grove creation
+- **AI Agent Session Tracking** - Monitor active Claude Code sessions across your groves with live animated indicators
 - **Smart IDE Integration** - Auto-detect and launch the right IDE (VS Code, JetBrains IDEs, Vim) for each project
 - **JetBrains Auto-Detection** - Automatically selects the appropriate JetBrains IDE based on project files
 - **Custom Configuration** - Per-repository `.grove.json` for branch naming, file copying, IDE preferences, init actions, and Claude session templates
@@ -50,6 +51,8 @@ npm install -g grove
 
 - `grove` - Launch the interactive UI
 - `grove --register` - Register the current directory as a repository
+- `grove --setup-hooks --agent <agent>` - Configure AI agent hooks for session tracking (e.g., `--agent claude`)
+- `grove --verify-hooks --agent <agent>` - Verify which hooks are configured for an AI agent
 
 ### Interactive UI Navigation
 
@@ -93,6 +96,86 @@ Once in the interactive UI:
 4. Open in your IDE, terminal, or Claude for development
 
 5. When done, close the grove to clean up worktrees
+
+## AI Agent Session Tracking
+
+Grove can monitor active AI agent sessions (like Claude Code) running in your groves and display their status with live animated indicators.
+
+### Setup
+
+Configure Grove to track Claude Code sessions:
+
+```bash
+grove --setup-hooks --agent claude
+```
+
+This automatically adds hooks to `~/.claude/settings.json` that notify Grove when:
+
+- A Claude session starts
+- Claude finishes responding (becomes idle)
+- Claude needs your attention (permissions, timeouts)
+- A session ends
+
+**What gets configured:**
+
+- Creates a backup of your Claude settings (`~/.claude/settings.json.backup`)
+- Adds non-invasive hooks that run silently in the background
+- Only adds hooks if they don't already exist (safe to run multiple times)
+
+### Verification
+
+Check if hooks are properly configured:
+
+```bash
+grove --verify-hooks --agent claude
+```
+
+This shows which hooks are active and which are missing.
+
+### How It Works
+
+1. **Automatic Detection** - When you open Grove's home screen, it automatically scans for active Claude sessions
+2. **Session Mapping** - Sessions are mapped to their corresponding groves based on working directory
+3. **Live Indicators** - Each grove displays session counts with animated indicators:
+   - `✻ 2` - Active sessions (animated loader with Grove-style frames: `·` `✻` `✽` `✶` `✳` `✢`)
+   - `· 1` - Idle sessions (waiting for input)
+   - `⚠ 1` - Sessions needing attention
+4. **Background Updates** - Status updates happen in the background without blocking the UI
+
+### Session Status Indicators
+
+| Indicator | Status             | Description                                   |
+| --------- | ------------------ | --------------------------------------------- |
+| `✻ 2`     | Active (animated)  | Claude is actively processing or working      |
+| `· 1`     | Idle               | Claude finished responding, waiting for input |
+| `⚠ 1`    | Needs Attention    | Claude needs user action (permission, etc.)   |
+| (none)    | No active sessions | No Claude sessions running in this grove      |
+
+### Data Storage
+
+Session data is stored in `~/.grove/sessions.json` and includes:
+
+- Session ID and agent type (claude, gemini, codex, etc.)
+- Grove and workspace mappings
+- Current status and running state
+- Metadata (branch, timestamps, etc.)
+
+Sessions are automatically cleaned up after 60 minutes of inactivity.
+
+### Privacy & Performance
+
+- **Non-invasive** - Hooks run silently and don't interfere with Claude's operation
+- **Lightweight** - Session detection happens in the background
+- **Local-only** - All data stored locally in `~/.grove/`
+- **Minimal overhead** - No impact on Claude Code performance
+
+### Future Agent Support
+
+Grove's session tracking is designed to be extensible. Future support planned for:
+
+- **Gemini Code** - Google's AI coding assistant
+- **Codex** - OpenAI's coding assistant
+- **Custom agents** - Extensible adapter system for any AI agent
 
 ## Configuration
 
@@ -299,6 +382,7 @@ Project-level settings override root settings, so:
 - **Supported Operating Systems**: Linux, macOS
 - **Optional**: IDEs (VS Code, JetBrains IDEs, Vim) for IDE integration
 - **Optional**: Konsole or Kitty terminal for Claude integration
+- **Optional**: Claude Code for AI session tracking
 
 ## Development
 
