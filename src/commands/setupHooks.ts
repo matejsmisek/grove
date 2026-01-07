@@ -1,6 +1,6 @@
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
 
 import { AgentType } from '../storage/types.js';
 
@@ -86,13 +86,14 @@ async function setupClaudeHooks(): Promise<SetupHooksResult> {
 	}
 
 	// Define the hooks we want to add
+	// Claude hooks receive JSON on stdin with session_id, cwd, hook_event_name, etc.
 	const hooksToAdd = {
 		SessionStart: {
 			matcher: '*',
 			hooks: [
 				{
 					type: 'command',
-					command: `${groveBin} session-start --agent-type claude --session-id "$CLAUDE_SESSION_ID" --cwd "$PWD"`,
+					command: `${groveBin} session-hook --agent-type claude`,
 				},
 			],
 		},
@@ -101,7 +102,7 @@ async function setupClaudeHooks(): Promise<SetupHooksResult> {
 			hooks: [
 				{
 					type: 'command',
-					command: `${groveBin} session-idle --session-id "$CLAUDE_SESSION_ID"`,
+					command: `${groveBin} session-hook --agent-type claude`,
 				},
 			],
 		},
@@ -110,7 +111,7 @@ async function setupClaudeHooks(): Promise<SetupHooksResult> {
 			hooks: [
 				{
 					type: 'command',
-					command: `${groveBin} session-attention --session-id "$CLAUDE_SESSION_ID"`,
+					command: `${groveBin} session-hook --agent-type claude`,
 				},
 			],
 		},
@@ -119,7 +120,7 @@ async function setupClaudeHooks(): Promise<SetupHooksResult> {
 			hooks: [
 				{
 					type: 'command',
-					command: `${groveBin} session-end --session-id "$CLAUDE_SESSION_ID"`,
+					command: `${groveBin} session-hook --agent-type claude`,
 				},
 			],
 		},
@@ -139,7 +140,7 @@ async function setupClaudeHooks(): Promise<SetupHooksResult> {
 
 		// Check if grove hook already exists
 		const alreadyExists = existingHooks.some((existing) =>
-			existing.hooks.some((h) => h.type === 'command' && h.command?.includes('grove session-')),
+			existing.hooks.some((h) => h.type === 'command' && h.command?.includes('grove session-'))
 		);
 
 		if (alreadyExists) {
@@ -258,7 +259,7 @@ export async function verifyAgentHooks(agentType: AgentType): Promise<{
 
 		for (const hookName of requiredHooks) {
 			const hookExists = config.hooks?.[hookName]?.some((existing) =>
-				existing.hooks.some((h) => h.type === 'command' && h.command?.includes('grove session-')),
+				existing.hooks.some((h) => h.type === 'command' && h.command?.includes('grove session-'))
 			);
 
 			if (hookExists) {

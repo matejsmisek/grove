@@ -4,10 +4,7 @@ import React from 'react';
 import { render } from 'ink';
 
 import {
-	handleSessionAttention,
-	handleSessionEnd,
-	handleSessionIdle,
-	handleSessionStart,
+	handleSessionHook,
 	initWorkspace,
 	registerRepository,
 	setupAgentHooks,
@@ -91,64 +88,15 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 		console.error('✗', result.message);
 		process.exit(1);
 	}
-} else if (args.includes('session-start')) {
-	// Handle session-start command from hooks
+} else if (args.includes('session-hook')) {
+	// Handle unified session-hook command (reads JSON from stdin)
 	(async () => {
-		const sessionId = getArgValue('--session-id');
-		const cwd = getArgValue('--cwd') || process.cwd();
 		const agentType = (getArgValue('--agent-type') || 'claude') as AgentType;
-
 		const sessionsService = container.resolve(SessionsServiceToken);
-		const result = await handleSessionStart(sessionsService, {
-			sessionId,
-			cwd,
-			agentType,
-		});
+		const result = await handleSessionHook(sessionsService, agentType);
 
 		if (result.success) {
 			// Silent success for hooks - don't clutter output
-			process.exit(0);
-		} else {
-			console.error('✗', result.message);
-			process.exit(1);
-		}
-	})();
-} else if (args.includes('session-idle')) {
-	// Handle session-idle command from Stop hook
-	(async () => {
-		const sessionId = getArgValue('--session-id');
-		const sessionsService = container.resolve(SessionsServiceToken);
-		const result = await handleSessionIdle(sessionsService, sessionId);
-
-		if (result.success) {
-			process.exit(0);
-		} else {
-			console.error('✗', result.message);
-			process.exit(1);
-		}
-	})();
-} else if (args.includes('session-attention')) {
-	// Handle session-attention command from Notification hook
-	(async () => {
-		const sessionId = getArgValue('--session-id');
-		const sessionsService = container.resolve(SessionsServiceToken);
-		const result = await handleSessionAttention(sessionsService, sessionId);
-
-		if (result.success) {
-			process.exit(0);
-		} else {
-			console.error('✗', result.message);
-			process.exit(1);
-		}
-	})();
-} else if (args.includes('session-end')) {
-	// Handle session-end command from SessionEnd hook
-	(async () => {
-		const sessionId = getArgValue('--session-id');
-		const sessionsService = container.resolve(SessionsServiceToken);
-		const result = await handleSessionEnd(sessionsService, sessionId);
-
-		if (result.success) {
 			process.exit(0);
 		} else {
 			console.error('✗', result.message);

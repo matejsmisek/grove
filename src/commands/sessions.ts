@@ -11,6 +11,44 @@ export interface SessionCommandResult {
 }
 
 /**
+ * Hook event data received on stdin from Claude Code
+ */
+export interface HookEventData {
+	session_id: string;
+	transcript_path?: string;
+	cwd?: string;
+	permission_mode?: string;
+	hook_event_name: string;
+	source?: string;
+	reason?: string;
+}
+
+/**
+ * Read JSON data from stdin
+ */
+export async function readStdin(): Promise<string> {
+	return new Promise((resolve, reject) => {
+		let data = '';
+
+		process.stdin.setEncoding('utf8');
+		process.stdin.on('data', (chunk) => {
+			data += chunk;
+		});
+		process.stdin.on('end', () => {
+			resolve(data);
+		});
+		process.stdin.on('error', (err) => {
+			reject(err);
+		});
+
+		// Handle case where stdin is empty or not connected
+		if (process.stdin.isTTY) {
+			resolve('');
+		}
+	});
+}
+
+/**
  * Log hook events to file for debugging
  */
 function logHookEvent(event: string, data: Record<string, unknown>): void {
@@ -197,6 +235,91 @@ export async function handleSessionEnd(
 		return {
 			success: false,
 			message: `Failed to end session: ${error instanceof Error ? error.message : 'Unknown error'}`,
+		};
+	}
+}
+
+/**
+ * Handle unified session-hook command that reads JSON from stdin
+ * Routes to appropriate handler based on hook_event_name
+ */
+export async function handleSessionHook(
+	sessionsService: ISessionsService,
+	agentType: AgentType
+): Promise<SessionCommandResult> {
+	try {
+		// Read JSON from stdin
+		const stdinData = await readStdin();
+
+		if (!stdinData.trim()) {
+			logHookEvent('session-hook-empty-stdin', { agentType });
+			return {
+				success: false,
+				message: 'No data received on stdin',
+			};
+		}
+
+		// Parse JSON
+		let hookData: HookEventData;
+		try {
+			hookData = JSON.parse(stdinData) as HookEventData;
+		} catch {
+			logHookEvent('session-hook-parse-error', { agentType, stdinData });
+			return {
+				success: false,
+				message: 'Failed to parse stdin JSON',
+			};
+		}
+
+		logHookEvent('session-hook-received', {
+			agentType,
+			hookEventName: hookData.hook_event_name,
+			sessionId: hookData.session_id,
+			cwd: hookData.cwd,
+		});
+
+		// Route to appropriate handler based on hook_event_name
+		switch (hookData.hook_event_name) {
+			case 'SessionStart':
+				return handleSessionStart(sessionsService, {
+					sessionId: hookData.session_id,
+					cwd: hookData.cwd || process.cwd(),
+					agentType,
+					metadata: {
+						transcriptPath: hookData.transcript_path,
+						permissionMode: hookData.permission_mode,
+						source: hookData.source,
+					},
+				});
+
+			case 'Stop':
+				return handleSessionIdle(sessionsService, hookData.session_id);
+
+			case 'Notification':
+				return handleSessionAttention(sessionsService, hookData.session_id);
+
+			case 'SessionEnd':
+				return handleSessionEnd(sessionsService, hookData.session_id);
+
+			default:
+				logHookEvent('session-hook-unknown-event', {
+					hookEventName: hookData.hook_event_name,
+					sessionId: hookData.session_id,
+				});
+				return {
+					success: false,
+					message: `Unknown hook event: ${hookData.hook_event_name}`,
+				};
+		}
+	} catch (error) {
+		logHookEvent('session-hook-error', {
+			agentType,
+			error: error instanceof Error ? error.message : 'Unknown error',
+		});
+
+		return {
+			success: false,
+			message: `Hook handler error: ${error instanceof Error ? error.message : 'Unknown error'}`,
 		};
 	}
 }

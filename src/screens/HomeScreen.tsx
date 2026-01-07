@@ -20,6 +20,7 @@ export function HomeScreen() {
 	const [showMenu, setShowMenu] = useState(false);
 	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
 	const [isUpdatingSessions, setIsUpdatingSessions] = useState(false);
+	const [sessionRefreshTick, setSessionRefreshTick] = useState(0);
 
 	// Get workspace-aware groves service
 	const grovesService = useService(GrovesServiceToken);
@@ -28,7 +29,7 @@ export function HomeScreen() {
 	// Get session tracking service
 	const sessionTrackingService = useService(SessionTrackingServiceToken);
 
-	// Background session update on mount
+	// Background session polling - updates every 2 seconds
 	useEffect(() => {
 		let isMounted = true;
 
@@ -42,14 +43,21 @@ export function HomeScreen() {
 			} finally {
 				if (isMounted) {
 					setIsUpdatingSessions(false);
+					// Trigger re-render to update session indicators
+					setSessionRefreshTick((tick) => tick + 1);
 				}
 			}
 		}
 
+		// Initial update
 		updateSessions();
+
+		// Poll every 2 seconds
+		const interval = setInterval(updateSessions, 2000);
 
 		return () => {
 			isMounted = false;
+			clearInterval(interval);
 		};
 	}, [sessionTrackingService]);
 
@@ -159,6 +167,7 @@ export function HomeScreen() {
 							groves={groves}
 							selectedIndex={selectedGroveIndex}
 							sessionTrackingService={sessionTrackingService}
+							refreshTick={sessionRefreshTick}
 						/>
 					</Box>
 

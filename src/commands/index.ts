@@ -3,6 +3,7 @@ export { initWorkspace } from './workspace.js';
 export {
 	handleSessionAttention,
 	handleSessionEnd,
+	handleSessionHook,
 	handleSessionIdle,
 	handleSessionStart,
 } from './sessions.js';

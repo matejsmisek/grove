@@ -39,7 +39,7 @@ export function SessionIndicator({
 				<Box flexDirection="row">
 					{Array.from({ length: activeCount }).map((_, i) => (
 						<Box key={i} minWidth={2} flexShrink={0}>
-							<Text color="green">{LOADER_FRAMES[frameIndex]}</Text>
+							<Text color="#C15F3C">{LOADER_FRAMES[frameIndex]}</Text>
 						</Box>
 					))}
 				</Box>

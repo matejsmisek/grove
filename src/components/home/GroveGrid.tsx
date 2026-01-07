@@ -11,9 +11,16 @@ type GroveGridProps = {
 	groves: GroveReference[];
 	selectedIndex: number;
 	sessionTrackingService: ISessionTrackingService;
+	/** Used to trigger re-render when sessions are updated */
+	refreshTick?: number;
 };
 
-export function GroveGrid({ groves, selectedIndex, sessionTrackingService }: GroveGridProps) {
+export function GroveGrid({
+	groves,
+	selectedIndex,
+	sessionTrackingService,
+	refreshTick: _refreshTick,
+}: GroveGridProps) {
 	// Total items = 1 (create button) + groves.length
 	const totalItems = 1 + groves.length;
 	const rowCount = Math.ceil(totalItems / 4);
@@ -47,11 +54,7 @@ export function GroveGrid({ groves, selectedIndex, sessionTrackingService }: Gro
 
 							items.push(
 								<Box key={grove.id} marginLeft={marginLeft}>
-									<GrovePanel
-										grove={grove}
-										isSelected={isSelected}
-										sessionCounts={sessionCounts}
-									/>
+									<GrovePanel grove={grove} isSelected={isSelected} sessionCounts={sessionCounts} />
 								</Box>
 							);
 						}
