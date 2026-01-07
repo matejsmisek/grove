@@ -130,8 +130,8 @@ export class ClaudeAdapter implements IAgentAdapter {
 
 					const status = await this.determineStatus(sessionData.sessionId, filePath);
 
-					// Session is considered running if status is not 'finished' or 'error'
-					const isRunning = status !== 'finished' && status !== 'error';
+					// Session is considered running if status is not 'closed' or 'error'
+					const isRunning = status !== 'closed' && status !== 'error';
 
 					sessions.push({
 						sessionId: sessionData.sessionId,

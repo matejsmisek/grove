@@ -14,7 +14,7 @@ type GrovePanelProps = {
 		active: number;
 		idle: number;
 		attention: number;
-		finished: number;
+		closed: number;
 	};
 };
 
@@ -65,7 +65,7 @@ export function GrovePanel({ grove, isSelected, sessionCounts }: GrovePanelProps
 						activeCount={sessionCounts.active}
 						idleCount={sessionCounts.idle}
 						attentionCount={sessionCounts.attention}
-						finishedCount={sessionCounts.finished}
+						closedCount={sessionCounts.closed}
 					/>
 				</Box>
 			)}

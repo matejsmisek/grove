@@ -144,12 +144,13 @@ This shows which hooks are active and which are missing.
 
 ### Session Status Indicators
 
-| Indicator | Status             | Description                                   |
-| --------- | ------------------ | --------------------------------------------- |
-| `✻ 2`     | Active (animated)  | Claude is actively processing or working      |
-| `· 1`     | Idle               | Claude finished responding, waiting for input |
-| `⚠ 1`    | Needs Attention    | Claude needs user action (permission, etc.)   |
-| (none)    | No active sessions | No Claude sessions running in this grove      |
+| Indicator | Status             | Description                                 |
+| --------- | ------------------ | ------------------------------------------- |
+| `✻ 2`     | Active (animated)  | Claude is actively processing or working    |
+| `· 1`     | Idle               | Session running, waiting for input          |
+| `⚠ 1`    | Needs Attention    | Claude needs user action (permission, etc.) |
+| `✓ 1`     | Closed             | Session closed, ready for a new prompt      |
+| (none)    | No active sessions | No Claude sessions running in this grove    |
 
 ### Data Storage
 

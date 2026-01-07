@@ -1,6 +1,6 @@
+import { Volume } from 'memfs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Volume } from 'memfs';
 
 import { createMockFs, setupMockHomeDir } from '../../__tests__/helpers.js';
 import { SessionsService } from '../SessionsService.js';
@@ -18,12 +18,12 @@ vi.mock('fs', () => {
 				get(_target, prop) {
 					return vol?.[prop as keyof Volume];
 				},
-			},
+			}
 		),
 		...Object.fromEntries(
 			Object.getOwnPropertyNames(Volume.prototype)
 				.filter((key) => key !== 'constructor')
-				.map((key) => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)]),
+				.map((key) => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
 		),
 	};
 });
@@ -326,13 +326,13 @@ describe('SessionsService', () => {
 				isRunning: true,
 			};
 
-			const finishedSession: AgentSession = {
+			const closedSession: AgentSession = {
 				sessionId: 'test-456',
 				agentType: 'claude',
 				groveId: 'grove-1',
 				workspacePath: '/home/user/project2',
 				worktreePath: null,
-				status: 'finished',
+				status: 'closed',
 				lastUpdate: '2024-01-01T00:00:00Z',
 				isRunning: false,
 			};
@@ -349,7 +349,7 @@ describe('SessionsService', () => {
 			};
 
 			service.addSession(activeSession);
-			service.addSession(finishedSession);
+			service.addSession(closedSession);
 			service.addSession(notRunningSession);
 
 			const activeSessions = service.getAllActiveSessions();
@@ -405,7 +405,7 @@ describe('SessionsService', () => {
 				groveId: 'grove-1',
 				workspacePath: '/home/user/project',
 				worktreePath: null,
-				status: 'finished',
+				status: 'closed',
 				lastUpdate: oldDate.toISOString(),
 				isRunning: false,
 			};

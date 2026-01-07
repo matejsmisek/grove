@@ -6,7 +6,7 @@ interface SessionIndicatorProps {
 	activeCount: number;
 	idleCount: number;
 	attentionCount: number;
-	finishedCount: number;
+	closedCount: number;
 }
 
 // Grove-style loader frames
@@ -16,7 +16,7 @@ export function SessionIndicator({
 	activeCount,
 	idleCount,
 	attentionCount,
-	finishedCount,
+	closedCount,
 }: SessionIndicatorProps) {
 	const [frameIndex, setFrameIndex] = useState(0);
 
@@ -31,7 +31,7 @@ export function SessionIndicator({
 		return () => clearInterval(interval);
 	}, [activeCount]);
 
-	if (activeCount === 0 && idleCount === 0 && attentionCount === 0 && finishedCount === 0) {
+	if (activeCount === 0 && idleCount === 0 && attentionCount === 0 && closedCount === 0) {
 		return null;
 	}
 
@@ -64,9 +64,9 @@ export function SessionIndicator({
 					))}
 				</Box>
 			)}
-			{finishedCount > 0 && (
+			{closedCount > 0 && (
 				<Box flexDirection="row">
-					{Array.from({ length: finishedCount }).map((_, i) => (
+					{Array.from({ length: closedCount }).map((_, i) => (
 						<Box key={i} minWidth={2} flexShrink={0}>
 							<Text color="green">✓</Text>
 						</Box>
