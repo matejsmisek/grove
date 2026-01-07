@@ -2,10 +2,10 @@ import React from 'react';
 
 import { Box, Text } from 'ink';
 
-import { SessionIndicator } from '../SessionIndicator.js';
 import type { GroveReference } from '../../storage/index.js';
 import { readGroveMetadata } from '../../storage/index.js';
 import { formatTimeAgo } from '../../utils/time.js';
+import { SessionIndicator } from '../SessionIndicator.js';
 
 type GrovePanelProps = {
 	grove: GroveReference;
@@ -15,9 +15,10 @@ type GrovePanelProps = {
 		idle: number;
 		attention: number;
 	};
+	width?: number;
 };
 
-export function GrovePanel({ grove, isSelected, sessionCounts }: GrovePanelProps) {
+export function GrovePanel({ grove, isSelected, sessionCounts, width = 24 }: GrovePanelProps) {
 	// Get grove metadata to count worktrees
 	let worktreeCount = 0;
 	try {
@@ -35,7 +36,7 @@ export function GrovePanel({ grove, isSelected, sessionCounts }: GrovePanelProps
 			borderColor={isSelected ? 'cyan' : 'gray'}
 			paddingX={1}
 			paddingY={1}
-			width={24}
+			width={width}
 			flexDirection="column"
 		>
 			{/* Grove name */}
