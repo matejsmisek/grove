@@ -90,6 +90,7 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 	const [viewMode, setViewMode] = useState<ViewMode>('selectSession');
 	const [availableTerminals, setAvailableTerminals] = useState<ClaudeTerminalType[]>([]);
 	const [selectedTerminal, setSelectedTerminal] = useState<ClaudeTerminalType | null>(null);
+	const [showedTerminalSelection, setShowedTerminalSelection] = useState(false);
 
 	useEffect(() => {
 		// Check if supported terminals are available
@@ -158,6 +159,7 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 		// If no terminal is determined and multiple are available, show terminal selection
 		if (!terminalToUse && terminals.length > 1) {
 			setViewMode('selectTerminal');
+			setShowedTerminalSelection(true);
 			setLoading(false);
 			return;
 		}
@@ -224,7 +226,7 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 	useInput(
 		(input, key) => {
 			if (key.escape) {
-				if (viewMode === 'selectSession' && availableTerminals.length > 1 && sessions.length > 1) {
+				if (viewMode === 'selectSession' && showedTerminalSelection) {
 					// If we came from terminal selection, go back to it
 					setViewMode('selectTerminal');
 					setSelectedIndex(0);
