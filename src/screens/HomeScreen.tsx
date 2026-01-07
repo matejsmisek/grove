@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { Box, Text, useApp, useInput } from 'ink';
 
@@ -37,7 +37,7 @@ export function HomeScreen() {
 			try {
 				await sessionTrackingService.updateAllSessions();
 				await sessionTrackingService.cleanupStale();
-			} catch (error) {
+			} catch {
 				// Silent fail - don't block UI
 			} finally {
 				if (isMounted) {
