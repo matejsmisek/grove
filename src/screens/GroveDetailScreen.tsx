@@ -290,6 +290,9 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 			: []),
 	];
 
+	// Determine if we're in single-worktree shortcut mode
+	const isSingleWorktreeMode = worktreeDetails.length === 1;
+
 	// Handle keyboard navigation
 	useInput(
 		(input, key) => {
@@ -299,20 +302,29 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 					setShowInitLog(false);
 					setInitLogContent('');
 				}
-			} else if (showActions) {
-				// Actions menu navigation
+			} else if (showActions || isSingleWorktreeMode) {
+				// Actions menu navigation (including single-worktree shortcut mode)
 				if (key.escape) {
-					setShowActions(false);
-					setSelectedActionIndex(0);
+					if (showActions && !isSingleWorktreeMode) {
+						// Multiple worktrees: close actions menu
+						setShowActions(false);
+						setSelectedActionIndex(0);
+					} else {
+						// Single worktree or main screen: go back to home
+						goBack();
+					}
 				} else if (key.upArrow) {
 					setSelectedActionIndex((prev) => (prev > 0 ? prev - 1 : worktreeActions.length - 1));
 				} else if (key.downArrow) {
 					setSelectedActionIndex((prev) => (prev < worktreeActions.length - 1 ? prev + 1 : 0));
 				} else if (key.return) {
 					worktreeActions[selectedActionIndex].action();
+				} else if (input === 'c' && isSingleWorktreeMode) {
+					// Allow closing grove from single-worktree mode
+					navigate('closeGrove', { groveId });
 				}
 			} else {
-				// Main screen navigation
+				// Main screen navigation (multiple worktrees)
 				if (key.escape) {
 					goBack();
 				} else if (key.upArrow && worktreeDetails.length > 0) {
@@ -408,8 +420,8 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			{showActions ? (
-				/* Show Actions Menu */
+			{showActions && !isSingleWorktreeMode ? (
+				/* Show Actions Menu (multiple worktrees only) */
 				<Box flexDirection="column">
 					{/* Header */}
 					<Box marginBottom={1}>
@@ -550,12 +562,41 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 						</Box>
 					)}
 
+					{/* Actions Menu (single worktree shortcut) */}
+					{isSingleWorktreeMode && worktreeDetails.length > 0 && (
+						<>
+							<Box marginBottom={1}>
+								<Text bold underline>
+									Actions
+								</Text>
+							</Box>
+
+							<Box flexDirection="column" marginBottom={1}>
+								{worktreeActions.map((action, index) => (
+									<Box key={action.label}>
+										<Text color={selectedActionIndex === index ? 'cyan' : undefined}>
+											{selectedActionIndex === index ? '❯ ' : '  '}
+											{action.label}
+										</Text>
+									</Box>
+								))}
+							</Box>
+						</>
+					)}
+
 					{/* Help text */}
 					<Box marginTop={1} flexDirection="column">
-						<Text dimColor>
-							↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>c</Text> Close Grove •{' '}
-							<Text bold>ESC</Text> Back
-						</Text>
+						{isSingleWorktreeMode ? (
+							<Text dimColor>
+								↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>c</Text> Close Grove •{' '}
+								<Text bold>ESC</Text> Back
+							</Text>
+						) : (
+							<Text dimColor>
+								↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>c</Text> Close Grove •{' '}
+								<Text bold>ESC</Text> Back
+							</Text>
+						)}
 					</Box>
 				</>
 			)}
