@@ -46,6 +46,35 @@ function formatRelativeTime(isoTimestamp: string): string {
 	}
 }
 
+/**
+ * Truncate text to a maximum length with ellipsis
+ */
+function truncateText(text: string, maxLength: number): string {
+	if (text.length <= maxLength) {
+		return text;
+	}
+	return text.substring(0, maxLength - 1) + '…';
+}
+
+/**
+ * Get a display name for the session
+ * Priority: firstPrompt > projectName > sessionId (last 8 chars)
+ */
+function getSessionDisplayName(session: AgentSession, maxLength: number = 60): string {
+	// Check for first prompt in metadata
+	if (session.metadata?.firstPrompt && typeof session.metadata.firstPrompt === 'string') {
+		return truncateText(session.metadata.firstPrompt, maxLength);
+	}
+
+	// Fall back to project name
+	if (session.metadata?.projectName && typeof session.metadata.projectName === 'string') {
+		return truncateText(session.metadata.projectName, maxLength);
+	}
+
+	// Fall back to shortened session ID
+	return `Session ${session.sessionId.substring(0, 8)}`;
+}
+
 export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreenProps) {
 	const { goBack, navigate } = useNavigation();
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
@@ -302,7 +331,7 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 			</Box>
 
 			{sessions.map((session, index) => {
-				const sessionName = session.metadata?.projectName || 'Claude Session';
+				const sessionName = getSessionDisplayName(session);
 				const lastActivity = session.metadata?.lastActivity || session.lastUpdate;
 				const relativeTime = formatRelativeTime(lastActivity);
 				const statusColor =

@@ -61,7 +61,7 @@ export class ClaudeSessionService implements IClaudeSessionService {
 	 */
 	getDefaultTemplate(terminalType: ClaudeTerminalType): string {
 		if (terminalType === 'konsole') {
-			return `title: Claude ;; workdir: \${WORKING_DIR} ;; command: \${AGENT}
+			return `title: Claude ;; workdir: \${WORKING_DIR} ;; command: \${AGENT_COMMAND}
 title: cmd ;; workdir: \${WORKING_DIR} ;; command: bash
 `;
 		} else {
@@ -69,7 +69,7 @@ title: cmd ;; workdir: \${WORKING_DIR} ;; command: bash
 			return `layout tall
 cd \${WORKING_DIR}
 layout tall:bias=65;full_size=1
-launch --title "claude" \${AGENT}
+launch --title "claude" \${AGENT_COMMAND}
 launch --title "cmd" bash
 `;
 		}
@@ -135,10 +135,12 @@ launch --title "cmd" bash
 	}
 
 	/**
-	 * Apply template by replacing ${WORKING_DIR} and ${AGENT} placeholders
+	 * Apply template by replacing ${WORKING_DIR} and ${AGENT_COMMAND} placeholders
 	 */
 	applyTemplate(template: string, workingDir: string, agentCommand: string = 'claude'): string {
-		return template.replace(/\$\{WORKING_DIR\}/g, workingDir).replace(/\$\{AGENT\}/g, agentCommand);
+		return template
+			.replace(/\$\{WORKING_DIR\}/g, workingDir)
+			.replace(/\$\{AGENT_COMMAND\}/g, agentCommand);
 	}
 
 	/**

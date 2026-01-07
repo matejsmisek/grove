@@ -5,7 +5,7 @@
 	"ide": "@webstorm",
 	"claudeSessionTemplates": {
 		"kitty": {
-			"content": "layout tall\ncd ${WORKING_DIR}\nlayout tall:bias=65;full_size=1\nlaunch --title \"claude\" ${AGENT}\nlaunch --title \"cmd\" bash\nlaunch --title \"bootup\" --hold bash -c 'direnv allow . && eval \"$(direnv export bash)\" && docker compose up -d && composer app:init'"
+			"content": "layout tall\ncd ${WORKING_DIR}\nlayout tall:bias=65;full_size=1\nlaunch --title \"claude\" ${AGENT_COMMAND}\nlaunch --title \"cmd\" bash\nlaunch --title \"bootup\" --hold bash -c 'direnv allow . && eval \"$(direnv export bash)\" && docker compose up -d && composer app:init'"
 		}
 	}
 }

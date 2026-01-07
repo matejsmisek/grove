@@ -580,7 +580,7 @@ export interface IClaudeSessionService {
 	): string;
 
 	/**
-	 * Apply template by replacing ${WORKING_DIR} and ${AGENT} placeholders
+	 * Apply template by replacing ${WORKING_DIR} and ${AGENT_COMMAND} placeholders
 	 * @param template - Template content
 	 * @param workingDir - Working directory path
 	 * @param agentCommand - Optional agent command (defaults to 'claude')
