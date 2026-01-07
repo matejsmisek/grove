@@ -1,11 +1,11 @@
 {
-	"branchNameTemplate": "grove/${GROVE_NAME}",
-	"fileCopyPatterns": [".gitignore", "*.config.js"],
-	"initActions": [
-		"echo 'Installing dependencies...'",
-		"npm install --silent",
-		"echo 'Dependencies installed successfully!'",
-		"npm run build"
-	],
-	"ide": "@vscode"
+	"branchNameTemplate": "ms-${GROVE_NAME}",
+	"fileCopyPatterns": [".claude/settings.local.json", ".grove.local.json"],
+	"initActions": ["npm install"],
+	"ide": "@webstorm",
+	"claudeSessionTemplates": {
+		"kitty": {
+			"content": "layout tall\ncd ${WORKING_DIR}\nlayout tall:bias=65;full_size=1\nlaunch --title \"claude\" bash\nlaunch --title \"cmd\" bash\nlaunch --title \"bootup\" --hold bash -c 'direnv allow . && eval \"$(direnv export bash)\" && docker compose up -d && composer app:init'"
+		}
+	}
 }
