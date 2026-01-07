@@ -96,7 +96,7 @@ export class SessionsService implements ISessionsService {
 
 	getAllActiveSessions(): AgentSession[] {
 		const data = this.readSessions();
-		return data.sessions.filter((s) => s.isRunning && s.status !== 'finished');
+		return data.sessions.filter((s) => s.isRunning && s.status !== 'closed');
 	}
 
 	buildIndex(): SessionsIndex {
@@ -144,9 +144,9 @@ export class SessionsService implements ISessionsService {
 			if (age < threshold) return true;
 
 			// Keep if still running (will be validated by adapter)
-			if (session.isRunning && session.status !== 'finished') return true;
+			if (session.isRunning && session.status !== 'closed') return true;
 
-			// Remove stale finished sessions
+			// Remove stale closed sessions
 			return false;
 		});
 

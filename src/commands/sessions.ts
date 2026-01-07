@@ -208,7 +208,7 @@ export async function handleSessionEnd(
 
 	try {
 		const updated = sessionsService.updateSession(sessionId, {
-			status: 'finished',
+			status: 'closed',
 			isRunning: false,
 		});
 

@@ -49,6 +49,7 @@ export class ClaudeAdapter implements IAgentAdapter {
 			// Parse JSONL - get first event with full session info
 			let sessionData: ClaudeSessionEvent | null = null;
 			let lastTimestamp = '';
+			let messageCount = 0; // Track actual conversation messages
 
 			for (const line of lines) {
 				try {
@@ -58,6 +59,10 @@ export class ClaudeAdapter implements IAgentAdapter {
 					}
 					if (event.timestamp) {
 						lastTimestamp = event.timestamp;
+					}
+					// Count user and assistant messages (actual conversation)
+					if (event.type === 'user' || event.type === 'assistant') {
+						messageCount++;
 					}
 				} catch {
 					continue;
@@ -73,6 +78,7 @@ export class ClaudeAdapter implements IAgentAdapter {
 					branch: sessionData.gitBranch,
 					lastActivity: lastTimestamp || sessionData.timestamp,
 					startedAt: sessionData.timestamp,
+					messageCount, // Include message count
 				},
 			};
 		} catch {
@@ -88,16 +94,30 @@ export class ClaudeAdapter implements IAgentAdapter {
 			// Parse last few events to determine status
 			const recentEvents = lines.slice(-10);
 			let lastEventType = '';
+			let lastEventTimestamp = '';
 
 			for (let i = recentEvents.length - 1; i >= 0; i--) {
 				try {
 					const event = JSON.parse(recentEvents[i]) as ClaudeSessionEvent;
 					if (event.type) {
 						lastEventType = event.type;
+						lastEventTimestamp = event.timestamp || '';
 						break;
 					}
 				} catch {
 					continue;
+				}
+			}
+
+			// Check if session is stale (last activity > 1 hour ago)
+			if (lastEventTimestamp) {
+				const lastActivity = new Date(lastEventTimestamp);
+				const now = new Date();
+				const hoursSinceActivity = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
+
+				// If last activity was over 1 hour ago, consider session closed
+				if (hoursSinceActivity > 1) {
+					return 'closed';
 				}
 			}
 
@@ -128,10 +148,14 @@ export class ClaudeAdapter implements IAgentAdapter {
 					const sessionData = this.parseSessionFile(filePath);
 					if (!sessionData || !sessionData.sessionId) continue;
 
+					// Skip sessions with no conversation messages (empty/just started)
+					const messageCount = sessionData.metadata?.messageCount || 0;
+					if (messageCount === 0) continue;
+
 					const status = await this.determineStatus(sessionData.sessionId, filePath);
 
-					// Session is considered running if status is not 'finished' or 'error'
-					const isRunning = status !== 'finished' && status !== 'error';
+					// Session is considered running if status is not 'closed' or 'error'
+					const isRunning = status !== 'closed' && status !== 'error';
 
 					sessions.push({
 						sessionId: sessionData.sessionId,

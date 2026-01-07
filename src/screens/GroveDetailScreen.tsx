@@ -169,13 +169,15 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	// Helper function to get session counts for a worktree
 	const getSessionCounts = (worktreePath: string) => {
 		const worktreeSessions = groveSessions.filter(
-			(session) => session.worktreePath === worktreePath && session.isRunning
+			(session) =>
+				session.worktreePath === worktreePath && (session.isRunning || session.status === 'closed')
 		);
 
 		return {
 			activeCount: worktreeSessions.filter((s) => s.status === 'active').length,
 			idleCount: worktreeSessions.filter((s) => s.status === 'idle').length,
 			attentionCount: worktreeSessions.filter((s) => s.status === 'attention').length,
+			closedCount: worktreeSessions.filter((s) => s.status === 'closed').length,
 		};
 	};
 
@@ -512,12 +514,14 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 											</Text>
 											{(sessionCounts.activeCount > 0 ||
 												sessionCounts.idleCount > 0 ||
-												sessionCounts.attentionCount > 0) && (
+												sessionCounts.attentionCount > 0 ||
+												sessionCounts.closedCount > 0) && (
 												<Box marginLeft={1}>
 													<SessionIndicator
 														activeCount={sessionCounts.activeCount}
 														idleCount={sessionCounts.idleCount}
 														attentionCount={sessionCounts.attentionCount}
+														closedCount={sessionCounts.closedCount}
 													/>
 												</Box>
 											)}

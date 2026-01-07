@@ -428,12 +428,12 @@ export type AgentType = 'claude' | 'gemini' | 'codex' | 'custom';
  * Session Status
  * Represents the current state of an AI agent session
  * - active: Agent is currently processing/working
- * - idle: Waiting for user input
+ * - idle: Waiting for user input (session still running)
  * - attention: Needs user action (permission, input, etc.)
- * - finished: Session completed/terminated
+ * - closed: Session has been closed/terminated (SessionEnd fired)
  * - error: Session encountered an error
  */
-export type SessionStatus = 'active' | 'idle' | 'attention' | 'finished' | 'error';
+export type SessionStatus = 'active' | 'idle' | 'attention' | 'closed' | 'error';
 
 /**
  * Individual AI agent session
