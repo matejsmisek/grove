@@ -2,10 +2,10 @@ import React from 'react';
 
 import { Box, Text } from 'ink';
 
-import { SessionIndicator } from '../SessionIndicator.js';
 import type { GroveReference } from '../../storage/index.js';
 import { readGroveMetadata } from '../../storage/index.js';
 import { formatTimeAgo } from '../../utils/time.js';
+import { SessionIndicator } from '../SessionIndicator.js';
 
 type GrovePanelProps = {
 	grove: GroveReference;
@@ -14,6 +14,7 @@ type GrovePanelProps = {
 		active: number;
 		idle: number;
 		attention: number;
+		finished: number;
 	};
 };
 
@@ -64,6 +65,7 @@ export function GrovePanel({ grove, isSelected, sessionCounts }: GrovePanelProps
 						activeCount={sessionCounts.active}
 						idleCount={sessionCounts.idle}
 						attentionCount={sessionCounts.attention}
+						finishedCount={sessionCounts.finished}
 					/>
 				</Box>
 			)}

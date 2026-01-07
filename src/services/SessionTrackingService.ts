@@ -22,6 +22,7 @@ export interface ISessionTrackingService {
 		active: number;
 		idle: number;
 		attention: number;
+		finished: number;
 		total: number;
 	};
 
@@ -124,6 +125,7 @@ export class SessionTrackingService implements ISessionTrackingService {
 			active: sessions.filter((s) => s.status === 'active').length,
 			idle: sessions.filter((s) => s.status === 'idle').length,
 			attention: sessions.filter((s) => s.status === 'attention').length,
+			finished: sessions.filter((s) => s.status === 'finished').length,
 			total: sessions.length,
 		};
 	}
