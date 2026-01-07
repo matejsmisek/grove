@@ -5,6 +5,7 @@ import { Box, Text, useInput } from 'ink';
 import fs from 'fs';
 import path from 'path';
 
+import { SessionIndicator } from '../components/SessionIndicator.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
@@ -18,11 +19,12 @@ import {
 	ClaudeSessionServiceToken,
 	GitServiceToken,
 	GrovesServiceToken,
+	SessionsServiceToken,
 	SettingsServiceToken,
 	WorkspaceServiceToken,
 } from '../services/tokens.js';
 import { GroveConfigService } from '../storage/index.js';
-import type { Settings, Worktree } from '../storage/types.js';
+import type { AgentSession, Settings, Worktree } from '../storage/types.js';
 
 interface WorktreeDetails {
 	worktree: Worktree;
@@ -89,6 +91,7 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	const gitService = useService(GitServiceToken);
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
 	const grovesService = useService(GrovesServiceToken);
+	const sessionsService = useService(SessionsServiceToken);
 	const settingsService = useService(SettingsServiceToken);
 	const workspaceService = useService(WorkspaceServiceToken);
 	const [loading, setLoading] = useState(true);
@@ -100,6 +103,7 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	const [showActions, setShowActions] = useState(false);
 	const [selectedActionIndex, setSelectedActionIndex] = useState(0);
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
+	const [groveSessions, setGroveSessions] = useState<AgentSession[]>([]);
 
 	// Get workspace context to display workspace name
 	const workspaceContext = workspaceService.getCurrentContext();
@@ -129,6 +133,10 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 					return;
 				}
 
+				// Load agent sessions for this grove
+				const sessions = sessionsService.getSessionsByGrove(groveId);
+				setGroveSessions(sessions);
+
 				// Fetch details for each worktree in parallel
 				const detailsPromises = metadata.worktrees.map(async (worktree) => {
 					const [branch, fileStats, hasUnpushed] = await Promise.all([
@@ -157,6 +165,19 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 
 		loadDetails();
 	}, [groveId]);
+
+	// Helper function to get session counts for a worktree
+	const getSessionCounts = (worktreePath: string) => {
+		const worktreeSessions = groveSessions.filter(
+			(session) => session.worktreePath === worktreePath && session.isRunning
+		);
+
+		return {
+			activeCount: worktreeSessions.filter((s) => s.status === 'active').length,
+			idleCount: worktreeSessions.filter((s) => s.status === 'idle').length,
+			attentionCount: worktreeSessions.filter((s) => s.status === 'attention').length,
+		};
+	};
 
 	// Worktree action handlers
 	const handleOpenInClaude = () => {
@@ -460,6 +481,7 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 							{worktreeDetails.map((detail, index) => {
 								const isSelected = index === selectedIndex;
 								const hasChanges = detail.fileStats.total > 0;
+								const sessionCounts = getSessionCounts(detail.worktree.worktreePath);
 
 								return (
 									<Box
@@ -470,12 +492,23 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 										paddingX={1}
 										marginBottom={1}
 									>
-										{/* Repository Name */}
+										{/* Repository Name with Session Indicator */}
 										<Box>
 											<Text bold color={isSelected ? 'cyan' : undefined}>
 												{detail.worktree.repositoryName}
 												{detail.worktree.projectPath && <Text dimColor> / {detail.worktree.projectPath}</Text>}
 											</Text>
+											{(sessionCounts.activeCount > 0 ||
+												sessionCounts.idleCount > 0 ||
+												sessionCounts.attentionCount > 0) && (
+												<Box marginLeft={1}>
+													<SessionIndicator
+														activeCount={sessionCounts.activeCount}
+														idleCount={sessionCounts.idleCount}
+														attentionCount={sessionCounts.attentionCount}
+													/>
+												</Box>
+											)}
 										</Box>
 
 										{/* Branch */}
