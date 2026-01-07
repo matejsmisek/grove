@@ -14,6 +14,7 @@ import { OpenClaudeScreen } from '../screens/OpenClaudeScreen.js';
 import { OpenIDEScreen } from '../screens/OpenIDEScreen.js';
 import { OpenTerminalScreen } from '../screens/OpenTerminalScreen.js';
 import { RepositoriesScreen } from '../screens/RepositoriesScreen.js';
+import { ResumeClaudeScreen } from '../screens/ResumeClaudeScreen.js';
 import { SettingsScreen } from '../screens/SettingsScreen.js';
 import { WorkingFolderScreen } from '../screens/WorkingFolderScreen.js';
 import { useNavigation } from './useNavigation.js';
@@ -49,6 +50,14 @@ export function Router() {
 		case 'openClaude':
 			// Type narrowing: we know params is { groveId: string } here
 			return <OpenClaudeScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
+		case 'resumeClaude':
+			// Type narrowing: we know params is { groveId: string; worktreePath?: string } here
+			return (
+				<ResumeClaudeScreen
+					groveId={'groveId' in current.params ? current.params.groveId : ''}
+					worktreePath={'worktreePath' in current.params ? current.params.worktreePath : undefined}
+				/>
+			);
 		case 'ideSettings':
 			return <IDESettingsScreen />;
 		case 'claudeTerminalSettings':

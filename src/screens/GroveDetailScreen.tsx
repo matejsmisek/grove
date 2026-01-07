@@ -182,6 +182,12 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 	};
 
 	// Worktree action handlers
+	const handleResumeClaude = () => {
+		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
+		setShowActions(false);
+		navigate('resumeClaude', { groveId, worktreePath: selectedWorktree.worktreePath });
+	};
+
 	const handleOpenInClaude = () => {
 		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selectedWorktree);
@@ -268,7 +274,24 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 
 	// Worktree action options (dynamically built based on worktree state)
 	const selectedWorktree = worktreeDetails[selectedIndex]?.worktree;
+	// Check if there are active Claude sessions for the selected worktree
+	const hasActiveSessions =
+		selectedWorktree &&
+		groveSessions.some(
+			(s) =>
+				s.worktreePath === selectedWorktree.worktreePath && s.isRunning && s.agentType === 'claude'
+		);
+
 	const worktreeActions = [
+		// Conditionally add "Resume claude" if there are active sessions
+		...(hasActiveSessions
+			? [
+					{
+						label: 'Resume claude',
+						action: handleResumeClaude,
+					},
+				]
+			: []),
 		{
 			label: 'Open in Claude',
 			action: handleOpenInClaude,

@@ -61,7 +61,7 @@ export class ClaudeSessionService implements IClaudeSessionService {
 	 */
 	getDefaultTemplate(terminalType: ClaudeTerminalType): string {
 		if (terminalType === 'konsole') {
-			return `title: Claude ;; workdir: \${WORKING_DIR} ;; command: claude
+			return `title: Claude ;; workdir: \${WORKING_DIR} ;; command: \${AGENT}
 title: cmd ;; workdir: \${WORKING_DIR} ;; command: bash
 `;
 		} else {
@@ -69,7 +69,7 @@ title: cmd ;; workdir: \${WORKING_DIR} ;; command: bash
 			return `layout tall
 cd \${WORKING_DIR}
 layout tall:bias=65;full_size=1
-launch --title "claude" claude
+launch --title "claude" \${AGENT}
 launch --title "cmd" bash
 `;
 		}
@@ -135,10 +135,10 @@ launch --title "cmd" bash
 	}
 
 	/**
-	 * Apply template by replacing ${WORKING_DIR} placeholder
+	 * Apply template by replacing ${WORKING_DIR} and ${AGENT} placeholders
 	 */
-	applyTemplate(template: string, workingDir: string): string {
-		return template.replace(/\$\{WORKING_DIR\}/g, workingDir);
+	applyTemplate(template: string, workingDir: string, agentCommand: string = 'claude'): string {
+		return template.replace(/\$\{WORKING_DIR\}/g, workingDir).replace(/\$\{AGENT\}/g, agentCommand);
 	}
 
 	/**
@@ -313,5 +313,58 @@ launch --title "cmd" bash
 			success: true,
 			message: 'Opened Claude session',
 		};
+	}
+
+	/**
+	 * Resume an existing Claude session
+	 */
+	resumeSession(
+		sessionId: string,
+		workingDir: string,
+		terminalType: ClaudeTerminalType
+	): ClaudeSessionResult {
+		// Verify the selected terminal is actually available
+		if (!this.commandExists(terminalType)) {
+			return {
+				success: false,
+				message: `Selected terminal '${terminalType}' is not available on this system.`,
+			};
+		}
+
+		// Check if claude command is available
+		if (!this.commandExists('claude')) {
+			return {
+				success: false,
+				message: 'Claude CLI not found. Please install Claude CLI first.',
+			};
+		}
+
+		try {
+			this.ensureTmpDir();
+
+			// Get the appropriate template (use global template since we don't have repo info here)
+			const template = this.getEffectiveTemplate(terminalType);
+
+			// Build the agent command with --resume flag
+			const agentCommand = `claude --resume ${sessionId}`;
+
+			// Apply template with working directory and resume command
+			const sessionContent = this.applyTemplate(template, workingDir, agentCommand);
+
+			// Generate unique filename for the session file
+			const tmpSessionId = crypto.randomBytes(8).toString('hex');
+			const tmpDir = this.getTmpDir();
+
+			if (terminalType === 'konsole') {
+				return this.launchKonsole(sessionContent, tmpDir, tmpSessionId);
+			} else {
+				return this.launchKitty(sessionContent, tmpDir, tmpSessionId);
+			}
+		} catch (error) {
+			return {
+				success: false,
+				message: `Failed to resume Claude session: ${error instanceof Error ? error.message : String(error)}`,
+			};
+		}
 	}
 }
