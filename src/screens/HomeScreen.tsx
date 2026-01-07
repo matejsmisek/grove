@@ -30,22 +30,32 @@ export function HomeScreen() {
 	// Get session tracking service
 	const sessionTrackingService = useService(SessionTrackingServiceToken);
 
-	// Background session polling - updates every 2 seconds
+	// Background session polling - updates every 10 seconds
 	useEffect(() => {
 		let isMounted = true;
 
 		async function updateSessions() {
 			setIsUpdatingSessions(true);
 			try {
-				await sessionTrackingService.updateAllSessions();
-				await sessionTrackingService.cleanupStale();
+				const updateResult = await sessionTrackingService.updateAllSessions();
+				const cleanedUp = await sessionTrackingService.cleanupStale();
+
+				// Only trigger re-render if something actually changed
+				const hasChanges =
+					updateResult.added > 0 ||
+					updateResult.updated > 0 ||
+					updateResult.removed > 0 ||
+					cleanedUp > 0;
+
+				if (isMounted && hasChanges) {
+					// Trigger re-render to update session indicators
+					setSessionRefreshTick((tick) => tick + 1);
+				}
 			} catch {
 				// Silent fail - don't block UI
 			} finally {
 				if (isMounted) {
 					setIsUpdatingSessions(false);
-					// Trigger re-render to update session indicators
-					setSessionRefreshTick((tick) => tick + 1);
 				}
 			}
 		}
@@ -53,8 +63,8 @@ export function HomeScreen() {
 		// Initial update
 		updateSessions();
 
-		// Poll every 2 seconds
-		const interval = setInterval(updateSessions, 2000);
+		// Poll every 10 seconds
+		const interval = setInterval(updateSessions, 10000);
 
 		return () => {
 			isMounted = false;
