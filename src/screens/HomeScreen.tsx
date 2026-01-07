@@ -30,7 +30,7 @@ export function HomeScreen() {
 	// Get session tracking service
 	const sessionTrackingService = useService(SessionTrackingServiceToken);
 
-	// Background session polling - updates every 2 seconds
+	// Background session polling - updates every 10 seconds
 	useEffect(() => {
 		let isMounted = true;
 
@@ -63,8 +63,8 @@ export function HomeScreen() {
 		// Initial update
 		updateSessions();
 
-		// Poll every 2 seconds
-		const interval = setInterval(updateSessions, 2000);
+		// Poll every 10 seconds
+		const interval = setInterval(updateSessions, 10000);
 
 		return () => {
 			isMounted = false;
