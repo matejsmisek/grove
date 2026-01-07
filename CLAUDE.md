@@ -94,13 +94,18 @@ Repositories can include a `.grove.json` file to customize grove creation:
 	"ide": "@phpstorm",
 	"initActions": ["npm install", "cp .env.example .env"],
 	"claudeSessionTemplates": {
-		"konsole": "title: Claude ;; workdir: ${WORKING_DIR} ;; command: claude",
-		"kitty": "layout tall\ncd ${WORKING_DIR}\nlaunch --title \"claude\" claude"
+		"konsole": "title: Claude ;; workdir: ${WORKING_DIR} ;; command: ${AGENT_COMMAND}",
+		"kitty": "layout tall\ncd ${WORKING_DIR}\nlaunch --title \"claude\" ${AGENT_COMMAND}"
 	}
 }
 ```
 
 **InitActions**: Execute sequentially in worktree directory after creation. Stop on first failure. Output logged to `grove-init-{worktreeName}.log`.
+
+**Template Variables**:
+
+- `${WORKING_DIR}`: Replaced with the working directory path
+- `${AGENT_COMMAND}`: Replaced with the agent launch command. When opening a new session, this is `claude`. When resuming a session, this is `claude --resume <session_id>`.
 
 ## Development Workflow
 

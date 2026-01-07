@@ -580,12 +580,13 @@ export interface IClaudeSessionService {
 	): string;
 
 	/**
-	 * Apply template by replacing ${WORKING_DIR} placeholder
+	 * Apply template by replacing ${WORKING_DIR} and ${AGENT_COMMAND} placeholders
 	 * @param template - Template content
 	 * @param workingDir - Working directory path
-	 * @returns Template with placeholder replaced
+	 * @param agentCommand - Optional agent command (defaults to 'claude')
+	 * @returns Template with placeholders replaced
 	 */
-	applyTemplate(template: string, workingDir: string): string;
+	applyTemplate(template: string, workingDir: string, agentCommand?: string): string;
 
 	/**
 	 * Open Claude in a terminal session with the working directory set
@@ -600,6 +601,18 @@ export interface IClaudeSessionService {
 		repositoryPath: string,
 		projectPath?: string,
 		terminalType?: ClaudeTerminalType
+	): ClaudeSessionResult;
+
+	/**
+	 * Resume an existing Claude session
+	 * @param sessionId - The session ID to resume
+	 * @param workingDir - Directory to set as working directory
+	 * @param terminalType - Terminal type to use
+	 */
+	resumeSession(
+		sessionId: string,
+		workingDir: string,
+		terminalType: ClaudeTerminalType
 	): ClaudeSessionResult;
 }
 

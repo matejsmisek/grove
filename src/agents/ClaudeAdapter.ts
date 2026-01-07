@@ -11,6 +11,7 @@ interface ClaudeSessionEvent {
 	timestamp?: string;
 	type?: string;
 	gitBranch?: string;
+	content?: string;
 }
 
 export class ClaudeAdapter implements IAgentAdapter {
@@ -50,6 +51,7 @@ export class ClaudeAdapter implements IAgentAdapter {
 			let sessionData: ClaudeSessionEvent | null = null;
 			let lastTimestamp = '';
 			let messageCount = 0; // Track actual conversation messages
+			let firstPrompt = '';
 
 			for (const line of lines) {
 				try {
@@ -63,6 +65,10 @@ export class ClaudeAdapter implements IAgentAdapter {
 					// Count user and assistant messages (actual conversation)
 					if (event.type === 'user' || event.type === 'assistant') {
 						messageCount++;
+					}
+					// Capture first user prompt
+					if (!firstPrompt && event.type === 'user' && event.content) {
+						firstPrompt = event.content;
 					}
 				} catch {
 					continue;
@@ -79,6 +85,7 @@ export class ClaudeAdapter implements IAgentAdapter {
 					lastActivity: lastTimestamp || sessionData.timestamp,
 					startedAt: sessionData.timestamp,
 					messageCount, // Include message count
+					firstPrompt: firstPrompt || undefined,
 				},
 			};
 		} catch {
