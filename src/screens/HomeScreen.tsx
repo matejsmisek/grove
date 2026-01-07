@@ -21,6 +21,7 @@ export function HomeScreen() {
 	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
 	const [isUpdatingSessions, setIsUpdatingSessions] = useState(false);
 	const [sessionRefreshTick, setSessionRefreshTick] = useState(0);
+	const [columnCount, setColumnCount] = useState(4); // Default to 4, will be updated by GroveGrid
 
 	// Get workspace-aware groves service
 	const grovesService = useService(GrovesServiceToken);
@@ -97,12 +98,12 @@ export function HomeScreen() {
 				setSelectedGroveIndex((prev) => (prev < totalItems - 1 ? prev + 1 : 0));
 			} else if (key.upArrow) {
 				setSelectedGroveIndex((prev) => {
-					const newIndex = prev - 4;
+					const newIndex = prev - columnCount;
 					return newIndex >= 0 ? newIndex : prev;
 				});
 			} else if (key.downArrow) {
 				setSelectedGroveIndex((prev) => {
-					const newIndex = prev + 4;
+					const newIndex = prev + columnCount;
 					return newIndex < totalItems ? newIndex : prev;
 				});
 			} else if (key.return) {
@@ -168,6 +169,7 @@ export function HomeScreen() {
 							selectedIndex={selectedGroveIndex}
 							sessionTrackingService={sessionTrackingService}
 							refreshTick={sessionRefreshTick}
+							onColumnsChange={setColumnCount}
 						/>
 					</Box>
 

@@ -4,16 +4,17 @@ import { Box, Text } from 'ink';
 
 type CreateGrovePanelProps = {
 	isSelected: boolean;
+	width?: number;
 };
 
-export function CreateGrovePanel({ isSelected }: CreateGrovePanelProps) {
+export function CreateGrovePanel({ isSelected, width = 24 }: CreateGrovePanelProps) {
 	return (
 		<Box
 			borderStyle="round"
 			borderColor={isSelected ? 'cyan' : 'gray'}
 			paddingX={1}
 			paddingY={1}
-			width={24}
+			width={width}
 			flexDirection="column"
 			justifyContent="center"
 			alignItems="center"
