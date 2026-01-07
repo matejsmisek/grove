@@ -52,7 +52,9 @@ export class SessionTrackingService implements ISessionTrackingService {
 		for (const adapter of availableAdapters) {
 			try {
 				const detectedSessions = await adapter.detectSessions();
+				const detectedSessionIds = new Set(detectedSessions.map((s) => s.sessionId));
 
+				// Update or add detected sessions
 				for (const session of detectedSessions) {
 					const existing = this.sessionsService.getSession(session.sessionId);
 
@@ -63,6 +65,18 @@ export class SessionTrackingService implements ISessionTrackingService {
 						this.sessionsService.updateSession(session.sessionId, session);
 						result.updated++;
 					}
+				}
+
+				// Cleanup orphaned sessions for this adapter
+				// (sessions tracked by Grove but no longer found in adapter's data)
+				const allSessions = this.sessionsService.readSessions().sessions;
+				const orphanedSessions = allSessions.filter(
+					(s) => s.agentType === adapter.agentType && !detectedSessionIds.has(s.sessionId)
+				);
+
+				for (const orphaned of orphanedSessions) {
+					this.sessionsService.removeSession(orphaned.sessionId);
+					result.removed++;
 				}
 			} catch (error) {
 				result.errors.push(
