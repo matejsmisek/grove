@@ -132,8 +132,8 @@ export async function handleSessionIdle(
 		if (!updated) {
 			logHookEvent('session-idle-not-found', { sessionId });
 			return {
-				success: false,
-				message: `Session ${sessionId} not found`,
+				success: true,
+				message: `Session ${sessionId} not found (hook continues)`,
 			};
 		}
 
@@ -150,8 +150,8 @@ export async function handleSessionIdle(
 		});
 
 		return {
-			success: false,
-			message: `Failed to update session: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			success: true,
+			message: `Failed to update session: ${error instanceof Error ? error.message : 'Unknown error'} (hook continues)`,
 		};
 	}
 }
@@ -173,8 +173,8 @@ export async function handleSessionAttention(
 		if (!updated) {
 			logHookEvent('session-attention-not-found', { sessionId });
 			return {
-				success: false,
-				message: `Session ${sessionId} not found`,
+				success: true,
+				message: `Session ${sessionId} not found (hook continues)`,
 			};
 		}
 
@@ -191,8 +191,8 @@ export async function handleSessionAttention(
 		});
 
 		return {
-			success: false,
-			message: `Failed to update session: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			success: true,
+			message: `Failed to update session: ${error instanceof Error ? error.message : 'Unknown error'} (hook continues)`,
 		};
 	}
 }
@@ -215,8 +215,8 @@ export async function handleSessionEnd(
 		if (!updated) {
 			logHookEvent('session-end-not-found', { sessionId });
 			return {
-				success: false,
-				message: `Session ${sessionId} not found`,
+				success: true,
+				message: `Session ${sessionId} not found (hook continues)`,
 			};
 		}
 
@@ -233,8 +233,8 @@ export async function handleSessionEnd(
 		});
 
 		return {
-			success: false,
-			message: `Failed to end session: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			success: true,
+			message: `Failed to end session: ${error instanceof Error ? error.message : 'Unknown error'} (hook continues)`,
 		};
 	}
 }
@@ -254,8 +254,8 @@ export async function handleSessionHook(
 		if (!stdinData.trim()) {
 			logHookEvent('session-hook-empty-stdin', { agentType });
 			return {
-				success: false,
-				message: 'No data received on stdin',
+				success: true,
+				message: 'No data received on stdin (hook continues)',
 			};
 		}
 
@@ -266,8 +266,8 @@ export async function handleSessionHook(
 		} catch {
 			logHookEvent('session-hook-parse-error', { agentType, stdinData });
 			return {
-				success: false,
-				message: 'Failed to parse stdin JSON',
+				success: true,
+				message: 'Failed to parse stdin JSON (hook continues)',
 			};
 		}
 
@@ -307,8 +307,8 @@ export async function handleSessionHook(
 					sessionId: hookData.session_id,
 				});
 				return {
-					success: false,
-					message: `Unknown hook event: ${hookData.hook_event_name}`,
+					success: true,
+					message: `Unknown hook event: ${hookData.hook_event_name} (hook continues)`,
 				};
 		}
 	} catch (error) {
@@ -318,8 +318,8 @@ export async function handleSessionHook(
 		});
 
 		return {
-			success: false,
-			message: `Hook handler error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			success: true,
+			message: `Hook handler error: ${error instanceof Error ? error.message : 'Unknown error'} (hook continues)`,
 		};
 	}
 }
