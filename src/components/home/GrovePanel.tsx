@@ -22,10 +22,23 @@ type GrovePanelProps = {
 export function GrovePanel({ grove, isSelected, sessionCounts, width = 24 }: GrovePanelProps) {
 	// Get grove metadata to count worktrees
 	let worktreeCount = 0;
+	let repoDisplayName = '';
 	try {
 		const metadata = readGroveMetadata(grove.path);
 		if (metadata) {
 			worktreeCount = metadata.worktrees.length;
+			// For single worktree groves, get the repo name
+			if (worktreeCount === 1) {
+				const worktree = metadata.worktrees[0];
+				if (worktree) {
+					repoDisplayName = worktree.repositoryName;
+					// For monorepos, append the project name
+					if (worktree.projectPath) {
+						const projectName = worktree.projectPath.split('/').pop() || '';
+						repoDisplayName = `${repoDisplayName}.${projectName}`;
+					}
+				}
+			}
 		}
 	} catch {
 		// If we can't read metadata, just show 0
@@ -52,10 +65,12 @@ export function GrovePanel({ grove, isSelected, sessionCounts, width = 24 }: Gro
 				<Text dimColor>Created {formatTimeAgo(grove.createdAt)}</Text>
 			</Box>
 
-			{/* Worktree count */}
+			{/* Worktree count or repo name */}
 			<Box marginTop={1}>
 				<Text color="green">
-					{worktreeCount} worktree{worktreeCount !== 1 ? 's' : ''}
+					{worktreeCount === 1
+						? repoDisplayName
+						: `${worktreeCount} worktree${worktreeCount !== 1 ? 's' : ''}`}
 				</Text>
 			</Box>
 
