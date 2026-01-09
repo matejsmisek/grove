@@ -15,16 +15,6 @@ export async function initWorkspace(cwd?: string): Promise<WorkspaceInitResult> 
 	const workspaceService = new WorkspaceService();
 
 	try {
-		// Check if already in a workspace
-		const existingWorkspace = workspaceService.discoverWorkspace(workingDir);
-		if (existingWorkspace) {
-			const config = workspaceService.readWorkspaceConfig(existingWorkspace);
-			return {
-				success: false,
-				message: `Already in workspace "${config.name}" at ${existingWorkspace}`,
-			};
-		}
-
 		// Check if .grove.workspace.json already exists in current directory
 		if (workspaceService.isWorkspaceRoot(workingDir)) {
 			return {

@@ -101,6 +101,61 @@ describe('WorkspaceService', () => {
 
 			expect(result).toBe('/');
 		});
+
+		it('should find closest workspace when workspaces are nested', () => {
+			const parentWorkspace = '/workspace';
+			const nestedWorkspace = '/workspace/nested';
+			const deepDir = '/workspace/nested/deep/folder';
+
+			// Create parent workspace
+			vol.mkdirSync(parentWorkspace, { recursive: true });
+			vol.writeFileSync(
+				path.join(parentWorkspace, '.grove.workspace.json'),
+				JSON.stringify({ name: 'parent', version: '1.0.0', grovesFolder: './groves' })
+			);
+
+			// Create nested workspace
+			vol.mkdirSync(nestedWorkspace, { recursive: true });
+			vol.writeFileSync(
+				path.join(nestedWorkspace, '.grove.workspace.json'),
+				JSON.stringify({ name: 'nested', version: '1.0.0', grovesFolder: './groves' })
+			);
+
+			vol.mkdirSync(deepDir, { recursive: true });
+
+			// From deep directory, should find nested workspace (closest one)
+			const result = service.discoverWorkspace(deepDir);
+
+			expect(result).toBe(nestedWorkspace);
+		});
+
+		it('should find parent workspace when not in nested workspace directory', () => {
+			const parentWorkspace = '/workspace';
+			const nestedWorkspace = '/workspace/nested';
+			const siblingDir = '/workspace/sibling';
+
+			// Create parent workspace
+			vol.mkdirSync(parentWorkspace, { recursive: true });
+			vol.writeFileSync(
+				path.join(parentWorkspace, '.grove.workspace.json'),
+				JSON.stringify({ name: 'parent', version: '1.0.0', grovesFolder: './groves' })
+			);
+
+			// Create nested workspace
+			vol.mkdirSync(nestedWorkspace, { recursive: true });
+			vol.writeFileSync(
+				path.join(nestedWorkspace, '.grove.workspace.json'),
+				JSON.stringify({ name: 'nested', version: '1.0.0', grovesFolder: './groves' })
+			);
+
+			// Create sibling directory (not under nested)
+			vol.mkdirSync(siblingDir, { recursive: true });
+
+			// From sibling directory, should find parent workspace
+			const result = service.discoverWorkspace(siblingDir);
+
+			expect(result).toBe(parentWorkspace);
+		});
 	});
 
 	describe('readWorkspaceConfig', () => {
@@ -225,6 +280,32 @@ describe('WorkspaceService', () => {
 			expect(globalWorkspaces.workspaces).toHaveLength(1);
 			expect(globalWorkspaces.workspaces[0].name).toBe(name);
 			expect(globalWorkspaces.workspaces[0].path).toBe(workspacePath);
+		});
+
+		it('should allow creating nested workspaces', () => {
+			const parentWorkspace = '/workspace';
+			const nestedWorkspace = '/workspace/nested';
+
+			vol.mkdirSync(parentWorkspace, { recursive: true });
+			vol.mkdirSync(nestedWorkspace, { recursive: true });
+
+			// Initialize parent workspace
+			service.initWorkspace(parentWorkspace, 'Parent Workspace', './groves');
+
+			// Initialize nested workspace inside parent
+			service.initWorkspace(nestedWorkspace, 'Nested Workspace', './nested-groves');
+
+			// Verify both workspaces exist
+			expect(vol.existsSync(path.join(parentWorkspace, '.grove.workspace.json'))).toBe(true);
+			expect(vol.existsSync(path.join(nestedWorkspace, '.grove.workspace.json'))).toBe(true);
+
+			// Verify both are tracked globally
+			const globalWorkspaces = service.readGlobalWorkspaces();
+			expect(globalWorkspaces.workspaces).toHaveLength(2);
+
+			// Verify nested workspace has its own .grove folder
+			expect(vol.existsSync(path.join(nestedWorkspace, '.grove'))).toBe(true);
+			expect(vol.existsSync(path.join(nestedWorkspace, 'nested-groves'))).toBe(true);
 		});
 	});
 
