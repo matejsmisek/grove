@@ -141,6 +141,8 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 		process.exit(result.configured ? 0 : 1);
 	})();
 } else {
+	// Clear terminal to give app full height
+	console.clear();
 	// Start the interactive UI
 	render(<App />);
 }
