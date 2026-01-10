@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
 	esbuild: {
 		jsx: 'automatic',
+		target: 'es2022',
 	},
 	test: {
 		globals: true,
