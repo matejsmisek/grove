@@ -11,8 +11,6 @@ export default defineConfig({
 				'node_modules/',
 				'dist/',
 				'src/index.tsx',
-				'src/components/**',
-				'src/screens/**',
 				'src/navigation/**',
 				'**/*.d.ts',
 				'**/__tests__/**',
