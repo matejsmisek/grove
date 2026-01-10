@@ -249,6 +249,66 @@ Completed at: ${new Date().toISOString()}
 	}
 
 	/**
+	 * Ensure repository is up-to-date before creating worktree
+	 * @param repoPath - Repository root path
+	 * @param onLog - Optional callback for logging
+	 * @returns Object with info about whether we need to reset the worktree after creation
+	 */
+	private async ensureRepoUpToDate(
+		repoPath: string,
+		onLog?: (message: string) => void
+	): Promise<{ needsReset: boolean; mainBranch: string }> {
+		// Detect main branch (master, main, or current branch)
+		const mainBranch = await this.gitService.detectMainBranch(repoPath);
+
+		if (onLog) {
+			onLog(`Detected main branch: ${mainBranch}`);
+		}
+
+		// Get current branch
+		const currentBranch = await this.gitService.getCurrentBranch(repoPath);
+
+		// Check for uncommitted changes
+		const hasChanges = await this.gitService.hasUncommittedChanges(repoPath);
+
+		// If on main branch with no uncommitted changes, fetch and pull
+		if (currentBranch === mainBranch && !hasChanges) {
+			if (onLog) {
+				onLog(`Repository is on ${mainBranch} with no uncommitted changes, updating...`);
+			}
+
+			// Fetch from remote
+			const fetchResult = await this.gitService.fetch(repoPath);
+			if (!fetchResult.success) {
+				console.warn(`Warning: Failed to fetch from remote: ${fetchResult.stderr}`);
+			}
+
+			// Pull latest changes
+			const pullResult = await this.gitService.pull(repoPath);
+			if (!pullResult.success) {
+				console.warn(`Warning: Failed to pull latest changes: ${pullResult.stderr}`);
+			}
+
+			if (onLog) {
+				onLog(`Repository updated to latest ${mainBranch}`);
+			}
+
+			return { needsReset: false, mainBranch };
+		}
+
+		// If on a different branch or has uncommitted changes, we'll reset after worktree creation
+		if (onLog) {
+			if (currentBranch !== mainBranch) {
+				onLog(`Repository is on ${currentBranch}, will reset worktree to latest ${mainBranch}`);
+			} else {
+				onLog(`Repository has uncommitted changes, will reset worktree to latest ${mainBranch}`);
+			}
+		}
+
+		return { needsReset: true, mainBranch };
+	}
+
+	/**
 	 * Create a new grove with worktrees for selected repositories
 	 * @param name - Name of the grove (will be normalized for folder/branch names)
 	 * @param selections - Array of repository selections, each optionally with a project path
@@ -314,6 +374,9 @@ Completed at: ${new Date().toISOString()}
 					onLog(`Creating worktree for ${displayName}...`);
 				}
 
+				// Ensure repository is up-to-date before creating worktree
+				const { needsReset, mainBranch } = await this.ensureRepoUpToDate(repo.path, onLog);
+
 				// Read merged repository/project grove configuration
 				const mergedConfig = this.groveConfigService.readMergedConfig(repo.path, selection.projectPath);
 
@@ -336,6 +399,37 @@ Completed at: ${new Date().toISOString()}
 
 				if (!result.success) {
 					throw new Error(result.stderr || 'Failed to create worktree');
+				}
+
+				// If we need to reset the worktree to the latest main branch, do it now
+				if (needsReset) {
+					if (onLog) {
+						onLog(`Resetting worktree to latest ${mainBranch}...`);
+					}
+
+					// Fetch in the new worktree
+					const fetchResult = await this.gitService.fetch(worktreePath);
+					if (!fetchResult.success) {
+						console.warn(`Warning: Failed to fetch in worktree: ${fetchResult.stderr}`);
+					}
+
+					// Get the SHA of the remote main branch
+					const revParseResult = await this.gitService.revParse(worktreePath, `origin/${mainBranch}`);
+
+					if (revParseResult.success) {
+						const targetCommit = revParseResult.stdout.trim();
+
+						// Reset to the latest remote commit
+						const resetResult = await this.gitService.reset(worktreePath, targetCommit, true);
+
+						if (!resetResult.success) {
+							console.warn(`Warning: Failed to reset worktree: ${resetResult.stderr}`);
+						} else if (onLog) {
+							onLog(`Worktree reset to latest ${mainBranch} (${targetCommit.substring(0, 7)})`);
+						}
+					} else {
+						console.warn(`Warning: Failed to resolve origin/${mainBranch}: ${revParseResult.stderr}`);
+					}
 				}
 
 				// Copy files matching patterns from repository root to worktree

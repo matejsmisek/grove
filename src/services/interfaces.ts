@@ -385,6 +385,44 @@ export interface IGitService {
 	 * @returns Object with counts for modified, added, deleted, and untracked files
 	 */
 	getFileChangeStats(repoPath: string): Promise<FileChangeStats>;
+
+	/**
+	 * Detect the main branch of a repository
+	 * Tries "master" first, then "main", then returns current branch
+	 * @param repoPath - Repository root path
+	 * @returns The detected main branch name
+	 */
+	detectMainBranch(repoPath: string): Promise<string>;
+
+	/**
+	 * Fetch from remote repository
+	 * @param repoPath - Repository root path
+	 * @param remote - Remote name (defaults to 'origin')
+	 */
+	fetch(repoPath: string, remote?: string): Promise<GitCommandResult>;
+
+	/**
+	 * Pull from remote repository
+	 * @param repoPath - Repository root path
+	 * @param remote - Remote name (defaults to 'origin')
+	 * @param branch - Branch name (optional, uses current branch if not specified)
+	 */
+	pull(repoPath: string, remote?: string, branch?: string): Promise<GitCommandResult>;
+
+	/**
+	 * Reset repository to a specific commit
+	 * @param repoPath - Repository root path
+	 * @param ref - Git reference (commit, branch, etc.)
+	 * @param hard - Use --hard flag to discard all changes
+	 */
+	reset(repoPath: string, ref: string, hard?: boolean): Promise<GitCommandResult>;
+
+	/**
+	 * Resolve a git reference to its SHA
+	 * @param repoPath - Repository root path
+	 * @param ref - Git reference to resolve
+	 */
+	revParse(repoPath: string, ref: string): Promise<GitCommandResult>;
 }
 
 /**

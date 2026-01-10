@@ -345,4 +345,88 @@ export class GitService implements IGitService {
 		// If the output has content, at least one remote branch has this commit
 		return remoteBranchesResult.stdout.trim().length === 0;
 	}
+
+	/**
+	 * Detect the main branch of a repository
+	 * Tries "master" first, then "main", then returns current branch
+	 * @param repoPath - Repository root path
+	 * @returns The detected main branch name
+	 */
+	async detectMainBranch(repoPath: string): Promise<string> {
+		// Try to find "master" branch
+		const masterResult = await this.executeGitCommand(repoPath, [
+			'rev-parse',
+			'--verify',
+			'refs/heads/master',
+		]);
+
+		if (masterResult.success) {
+			return 'master';
+		}
+
+		// Try to find "main" branch
+		const mainResult = await this.executeGitCommand(repoPath, [
+			'rev-parse',
+			'--verify',
+			'refs/heads/main',
+		]);
+
+		if (mainResult.success) {
+			return 'main';
+		}
+
+		// Fall back to current branch
+		return this.getCurrentBranch(repoPath);
+	}
+
+	/**
+	 * Fetch from remote repository
+	 * @param repoPath - Repository root path
+	 * @param remote - Remote name (defaults to 'origin')
+	 */
+	async fetch(repoPath: string, remote: string = 'origin'): Promise<GitCommandResult> {
+		return this.executeGitCommand(repoPath, ['fetch', remote]);
+	}
+
+	/**
+	 * Pull from remote repository
+	 * @param repoPath - Repository root path
+	 * @param remote - Remote name (defaults to 'origin')
+	 * @param branch - Branch name (optional, uses current branch if not specified)
+	 */
+	async pull(
+		repoPath: string,
+		remote: string = 'origin',
+		branch?: string
+	): Promise<GitCommandResult> {
+		const args = ['pull', remote];
+		if (branch) {
+			args.push(branch);
+		}
+		return this.executeGitCommand(repoPath, args);
+	}
+
+	/**
+	 * Reset repository to a specific commit
+	 * @param repoPath - Repository root path
+	 * @param ref - Git reference (commit, branch, etc.)
+	 * @param hard - Use --hard flag to discard all changes
+	 */
+	async reset(repoPath: string, ref: string, hard: boolean = false): Promise<GitCommandResult> {
+		const args = ['reset'];
+		if (hard) {
+			args.push('--hard');
+		}
+		args.push(ref);
+		return this.executeGitCommand(repoPath, args);
+	}
+
+	/**
+	 * Resolve a git reference to its SHA
+	 * @param repoPath - Repository root path
+	 * @param ref - Git reference to resolve
+	 */
+	async revParse(repoPath: string, ref: string): Promise<GitCommandResult> {
+		return this.executeGitCommand(repoPath, ['rev-parse', ref]);
+	}
 }
