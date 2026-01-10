@@ -202,7 +202,9 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		expect(output).toMatch(/clean|✓|ok/i); // Should show clean status
+		// Should show clean status (either text or checkmark)
+		const hasCleanStatus = output.includes('clean') || output.includes('✓') || output.includes('passed');
+		expect(hasCleanStatus).toBe(true);
 	});
 
 	it('should show warning when there are uncommitted changes', async () => {
@@ -344,6 +346,8 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		expect(output).toMatch(/⚠|warning|caution/i);
+		// Should show warning (either text or warning symbol)
+		const hasWarning = output.includes('⚠') || /warning|caution/i.test(output);
+		expect(hasWarning).toBe(true);
 	});
 });
