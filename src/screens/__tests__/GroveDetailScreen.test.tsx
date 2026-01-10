@@ -54,17 +54,23 @@ vi.mock('child_process', () => ({
 				on: vi.fn((event: string, callback: (data: Buffer) => void) => {
 					if (event === 'data') {
 						// Return mock git output based on command
-						if (args.includes('rev-parse')) {
-							// Current branch
+						if (args.includes('rev-parse') && !args.includes('--abbrev-ref')) {
+							// git rev-parse HEAD - return commit hash
+							setTimeout(() => callback(Buffer.from('abc123def456\n')), 0);
+						} else if (args.includes('rev-parse')) {
+							// Current branch (git rev-parse --abbrev-ref)
 							setTimeout(() => callback(Buffer.from('main\n')), 0);
 						} else if (args.includes('status')) {
-							// File stats (clean status)
-							setTimeout(
-								() => callback(Buffer.from('## main...origin/main\n ?? untracked.txt\n')),
-								0
-							);
+							// File stats - proper porcelain format (just file status, no branch line)
+							setTimeout(() => callback(Buffer.from('?? untracked.txt\n')), 0);
 						} else if (args.includes('rev-list')) {
 							// Unpushed commits (none)
+							setTimeout(() => callback(Buffer.from('0\n')), 0);
+						} else if (args.includes('branch') && args.includes('-r')) {
+							// Remote branches containing commit (clean state)
+							setTimeout(() => callback(Buffer.from('  origin/main\n')), 0);
+						} else {
+							// Default: empty output
 							setTimeout(() => callback(Buffer.from('')), 0);
 						}
 					}
@@ -86,7 +92,7 @@ vi.mock('child_process', () => ({
 describe('GroveDetailScreen - Visual Workflow', () => {
 	beforeEach(() => {
 		resetContainer();
-		
+
 		vol = new Volume();
 
 		// Set up test environment
@@ -192,11 +198,8 @@ describe('GroveDetailScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		// Should show some file stats (based on mock git status)
-		const lowerOutput = output.toLowerCase();
-		const hasFileStats = lowerOutput.includes('modified') || lowerOutput.includes('added') ||
-		                     lowerOutput.includes('deleted') || lowerOutput.includes('untracked');
-		expect(hasFileStats).toBe(true);
+		// Based on mock git status output: "?? untracked.txt"
+		expect(output).toContain('1 untracked');
 	});
 
 	it('should show error when grove not found', async () => {
@@ -229,7 +232,7 @@ describe('GroveDetailScreen - Visual Workflow', () => {
 		expect(output).toContain('2'); // Should show 2 worktrees
 	});
 
-	it('should show actions menu options', async () => {
+	it('should show navigation help text', async () => {
 		const { lastFrame } = render(
 			<ServiceProvider container={getContainer()}>
 				<NavigationProvider>
@@ -241,10 +244,9 @@ describe('GroveDetailScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		// Should show available actions in the help text
-		const lowerOutput = output.toLowerCase();
-		const hasActionHints = lowerOutput.includes('enter') || lowerOutput.includes('space') || lowerOutput.includes('actions');
-		expect(hasActionHints).toBe(true);
+		// Check for the actual help text from the component
+		expect(output).toContain('Navigate');
+		expect(output).toContain('Enter');
 	});
 
 	it('should handle monorepo worktrees with project paths', async () => {

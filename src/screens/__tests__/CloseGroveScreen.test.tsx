@@ -62,24 +62,38 @@ vi.mock('child_process', () => ({
 				on: vi.fn((event: string, callback: (data: Buffer) => void) => {
 					if (event === 'data') {
 						// Mock uncommitted changes check (git status --porcelain)
-						if (args.includes('--porcelain')) {
+						if (args.includes('--porcelain') || args.includes('status')) {
 							if (gitMockResponses.hasUncommittedChanges) {
-								// Return output indicating uncommitted changes
 								setTimeout(() => callback(Buffer.from(' M modified-file.ts\n')), 0);
 							} else {
-								// Return empty output (clean working tree)
 								setTimeout(() => callback(Buffer.from('')), 0);
 							}
 						}
 						// Mock unpushed commits check (git rev-list)
 						else if (args.includes('rev-list')) {
 							if (gitMockResponses.hasUnpushedCommits) {
-								// Return commit hash (indicating unpushed commits)
-								setTimeout(() => callback(Buffer.from('abc123def456\n')), 0);
+								setTimeout(() => callback(Buffer.from('1\n')), 0);
 							} else {
-								// Return empty output (no unpushed commits)
-								setTimeout(() => callback(Buffer.from('')), 0);
+								setTimeout(() => callback(Buffer.from('0\n')), 0);
 							}
+						}
+						// Mock git branch -r --contains (check if commit is on remote)
+						else if (args.includes('branch') && args.includes('-r')) {
+							if (gitMockResponses.hasUnpushedCommits) {
+								// No remote branches contain this commit
+								setTimeout(() => callback(Buffer.from('')), 0);
+							} else {
+								// Remote branch contains this commit
+								setTimeout(() => callback(Buffer.from('  origin/main\n')), 0);
+							}
+						}
+						// Mock git rev-parse HEAD (return a commit hash)
+						else if (args.includes('rev-parse') && args.includes('HEAD')) {
+							setTimeout(() => callback(Buffer.from('abc123def456\n')), 0);
+						}
+						// Default: return empty (no upstream)
+						else {
+							setTimeout(() => callback(Buffer.from('')), 0);
 						}
 					}
 				}),
@@ -155,7 +169,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		);
 
 		const output = lastFrame()!;
-		expect(output).toContain('Loading');
+		expect(output).toContain('Loading grove information...');
 	});
 
 	it('should display grove name', async () => {
@@ -171,7 +185,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		expect(output).toContain('Test Grove');
+		expect(output).toContain('Close Grove: Test Grove');
 	});
 
 	it('should show simple Y/N confirmation when no issues detected', async () => {
@@ -186,10 +200,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		// Should show Y/N options
-		const lowerOutput = output.toLowerCase();
-		expect(lowerOutput).toContain('y');
-		expect(lowerOutput).toContain('n');
+		expect(output).toContain('Press Y to confirm or N to cancel');
 		expect(output).toContain('test-repo-1');
 	});
 
@@ -205,9 +216,9 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		// Should show clean status (either text or checkmark)
-		const hasCleanStatus = output.includes('clean') || output.includes('✓') || output.includes('passed');
-		expect(hasCleanStatus).toBe(true);
+		expect(output).toContain('✓ All safety checks passed.');
+		expect(output).toContain('Uncommitted changes: ✓ No');
+		expect(output).toContain('Unpushed commits: ✓ No');
 	});
 
 	it('should show warning when there are uncommitted changes', async () => {
@@ -225,9 +236,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		const lowerOutput = output.toLowerCase();
-		const hasUncommittedWarning = lowerOutput.includes('uncommitted') || lowerOutput.includes('changes');
-		expect(hasUncommittedWarning).toBe(true);
+		expect(output).toContain('Uncommitted changes: ⚠ Yes');
 	});
 
 	it('should show warning when there are unpushed commits', async () => {
@@ -245,9 +254,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		const lowerOutput = output.toLowerCase();
-		const hasUnpushedWarning = lowerOutput.includes('unpushed') || lowerOutput.includes('commits');
-		expect(hasUnpushedWarning).toBe(true);
+		expect(output).toContain('Unpushed commits: ⚠ Yes');
 	});
 
 	it('should require typing "delete" when issues detected', async () => {
@@ -265,7 +272,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		expect(output).toContain('delete'); // Should ask to type "delete"
+		expect(output).toContain('Type "delete" to confirm deletion:');
 	});
 
 	it('should show both warnings when both issues detected', async () => {
@@ -284,9 +291,8 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		const lowerOutput = output.toLowerCase();
-		expect(lowerOutput).toContain('uncommitted');
-		expect(lowerOutput).toContain('unpushed');
+		expect(output).toContain('Uncommitted changes: ⚠ Yes');
+		expect(output).toContain('Unpushed commits: ⚠ Yes');
 	});
 
 	it('should show error when grove not found', async () => {
@@ -301,7 +307,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		expect(output).toContain('Grove not found');
+		expect(output).toContain('Error: Grove not found');
 	});
 
 	it('should list all worktrees being checked', async () => {
@@ -354,9 +360,6 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		// Should show warning (either text or warning symbol)
-		const lowerOutput = output.toLowerCase();
-		const hasWarning = output.includes('⚠') || lowerOutput.includes('warning') || lowerOutput.includes('caution');
-		expect(hasWarning).toBe(true);
+		expect(output).toContain('⚠ Warning: This grove has uncommitted changes or unpushed commits.');
 	});
 });
