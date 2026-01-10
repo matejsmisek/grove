@@ -186,7 +186,10 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		expect(output).toMatch(/y.*n/i); // Should show Y/N options
+		// Should show Y/N options
+		const lowerOutput = output.toLowerCase();
+		expect(lowerOutput).toContain('y');
+		expect(lowerOutput).toContain('n');
 		expect(output).toContain('test-repo-1');
 	});
 
@@ -222,7 +225,9 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		expect(output).toMatch(/uncommitted|changes/i);
+		const lowerOutput = output.toLowerCase();
+		const hasUncommittedWarning = lowerOutput.includes('uncommitted') || lowerOutput.includes('changes');
+		expect(hasUncommittedWarning).toBe(true);
 	});
 
 	it('should show warning when there are unpushed commits', async () => {
@@ -240,7 +245,9 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		expect(output).toMatch(/unpushed|commits/i);
+		const lowerOutput = output.toLowerCase();
+		const hasUnpushedWarning = lowerOutput.includes('unpushed') || lowerOutput.includes('commits');
+		expect(hasUnpushedWarning).toBe(true);
 	});
 
 	it('should require typing "delete" when issues detected', async () => {
@@ -277,8 +284,9 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
 		const output = lastFrame()!;
-		expect(output).toMatch(/uncommitted/i);
-		expect(output).toMatch(/unpushed/i);
+		const lowerOutput = output.toLowerCase();
+		expect(lowerOutput).toContain('uncommitted');
+		expect(lowerOutput).toContain('unpushed');
 	});
 
 	it('should show error when grove not found', async () => {
@@ -347,7 +355,8 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 
 		const output = lastFrame()!;
 		// Should show warning (either text or warning symbol)
-		const hasWarning = output.includes('⚠') || /warning|caution/i.test(output);
+		const lowerOutput = output.toLowerCase();
+		const hasWarning = output.includes('⚠') || lowerOutput.includes('warning') || lowerOutput.includes('caution');
 		expect(hasWarning).toBe(true);
 	});
 });

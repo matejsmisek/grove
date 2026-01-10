@@ -193,7 +193,10 @@ describe('GroveDetailScreen - Visual Workflow', () => {
 
 		const output = lastFrame()!;
 		// Should show some file stats (based on mock git status)
-		expect(output).toMatch(/modified|added|deleted|untracked/i);
+		const lowerOutput = output.toLowerCase();
+		const hasFileStats = lowerOutput.includes('modified') || lowerOutput.includes('added') ||
+		                     lowerOutput.includes('deleted') || lowerOutput.includes('untracked');
+		expect(hasFileStats).toBe(true);
 	});
 
 	it('should show error when grove not found', async () => {
@@ -239,7 +242,9 @@ describe('GroveDetailScreen - Visual Workflow', () => {
 
 		const output = lastFrame()!;
 		// Should show available actions in the help text
-		expect(output).toMatch(/enter|space|actions/i);
+		const lowerOutput = output.toLowerCase();
+		const hasActionHints = lowerOutput.includes('enter') || lowerOutput.includes('space') || lowerOutput.includes('actions');
+		expect(hasActionHints).toBe(true);
 	});
 
 	it('should handle monorepo worktrees with project paths', async () => {
