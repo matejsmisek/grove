@@ -67,3 +67,19 @@ export function getGroveDisplayName(normalizedName: string): string {
 	}
 	return normalizedName;
 }
+
+/**
+ * Extract the 5-character unique suffix from a normalized grove name
+ * This suffix can be used to make related paths globally unique
+ *
+ * @param normalizedName - The normalized name with suffix (e.g., "my-grove-abc12")
+ * @returns The 5-character suffix (e.g., "abc12")
+ */
+export function getGroveSuffix(normalizedName: string): string {
+	// Extract the last 5 characters (the suffix after the final hyphen)
+	if (normalizedName.length > 6 && normalizedName[normalizedName.length - 6] === '-') {
+		return normalizedName.substring(normalizedName.length - 5);
+	}
+	// Fallback: return empty string if format doesn't match
+	return '';
+}

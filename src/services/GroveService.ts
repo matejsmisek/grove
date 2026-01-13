@@ -10,7 +10,7 @@ import type {
 	RepositorySelection,
 	Worktree,
 } from '../storage/types.js';
-import { normalizeGroveName } from '../utils/index.js';
+import { getGroveSuffix, normalizeGroveName } from '../utils/index.js';
 import type {
 	CloseGroveResult,
 	IContextService,
@@ -52,18 +52,26 @@ export class GroveService implements IGroveService {
 	/**
 	 * Generate a unique worktree name for a selection
 	 * Handles monorepo projects by appending project name
+	 * Includes grove suffix to make worktree folders globally unique
 	 */
-	private generateWorktreeName(selection: RepositorySelection, existingNames: Set<string>): string {
+	private generateWorktreeName(
+		selection: RepositorySelection,
+		existingNames: Set<string>,
+		groveSuffix: string
+	): string {
 		const baseName = selection.projectPath
 			? `${selection.repository.name}-${selection.projectPath}`
 			: selection.repository.name;
 
-		let name = baseName;
+		// Include grove suffix to make the worktree folder globally unique
+		const baseNameWithSuffix = groveSuffix ? `${baseName}-${groveSuffix}` : baseName;
+
+		let name = baseNameWithSuffix;
 		let counter = 1;
 
 		// Handle duplicate names by appending a counter
 		while (existingNames.has(name)) {
-			name = `${baseName}-${counter}`;
+			name = `${baseNameWithSuffix}-${counter}`;
 			counter++;
 		}
 
@@ -362,10 +370,12 @@ Completed at: ${new Date().toISOString()}
 		const worktrees: Worktree[] = [];
 		const errors: string[] = [];
 		const worktreeNames = new Set<string>();
+		// Extract the grove suffix for use in worktree naming
+		const groveSuffix = getGroveSuffix(normalizedName);
 
 		for (const selection of selections) {
 			const repo = selection.repository;
-			const worktreeName = this.generateWorktreeName(selection, worktreeNames);
+			const worktreeName = this.generateWorktreeName(selection, worktreeNames, groveSuffix);
 
 			try {
 				// Log worktree creation start
