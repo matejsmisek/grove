@@ -294,10 +294,19 @@ export class GitService implements IGitService {
 
 	/**
 	 * Check if a git repository has unpushed commits on the current branch
+	 * Returns false if the upstream branch is gone (merged and deleted on remote),
+	 * since the branch was already pushed/merged.
 	 * @param repoPath - Repository root path
 	 */
 	async hasUnpushedCommits(repoPath: string): Promise<boolean> {
-		// First, check if the current branch has an upstream
+		// First, check if the upstream branch is gone (merged and deleted on remote)
+		// If the upstream is gone, the branch was already pushed/merged, so no unpushed commits
+		const upstreamStatus = await this.getBranchUpstreamStatus(repoPath);
+		if (upstreamStatus === 'gone') {
+			return false;
+		}
+
+		// Check if the current branch has an upstream
 		const upstreamResult = await this.executeGitCommand(repoPath, [
 			'rev-parse',
 			'--abbrev-ref',
