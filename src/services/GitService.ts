@@ -1,9 +1,14 @@
 import { spawn } from 'child_process';
 
-import type { GitCommandResult, IGitService, WorktreeInfo } from './interfaces.js';
+import type {
+	BranchUpstreamStatus,
+	GitCommandResult,
+	IGitService,
+	WorktreeInfo,
+} from './interfaces.js';
 
 // Re-export types for backward compatibility
-export type { GitCommandResult, WorktreeInfo } from './interfaces.js';
+export type { BranchUpstreamStatus, GitCommandResult, WorktreeInfo } from './interfaces.js';
 
 /**
  * Stateless Git Service implementation
@@ -428,5 +433,53 @@ export class GitService implements IGitService {
 	 */
 	async revParse(repoPath: string, ref: string): Promise<GitCommandResult> {
 		return this.executeGitCommand(repoPath, ['rev-parse', ref]);
+	}
+
+	/**
+	 * Get the upstream status of the current branch
+	 * Uses `git branch -vv` to detect if the upstream is marked as :gone
+	 * @param repoPath - Repository root path
+	 * @returns 'active' if upstream exists, 'gone' if upstream was deleted, 'none' if no upstream
+	 */
+	async getBranchUpstreamStatus(repoPath: string): Promise<BranchUpstreamStatus> {
+		// Get current branch name
+		const currentBranch = await this.getCurrentBranch(repoPath);
+		if (currentBranch === 'unknown' || currentBranch === 'detached') {
+			return 'none';
+		}
+
+		// Use git branch -vv to get detailed tracking info
+		const result = await this.executeGitCommand(repoPath, ['branch', '-vv']);
+		if (!result.success) {
+			return 'none';
+		}
+
+		// Parse output to find the current branch line
+		// Format: * branch-name  commit [origin/branch: gone] commit message
+		// or:     * branch-name  commit [origin/branch] commit message
+		// or:     * branch-name  commit [origin/branch: ahead 1] commit message
+		const lines = result.stdout.split('\n');
+		for (const line of lines) {
+			// Current branch starts with '* '
+			if (line.startsWith('* ')) {
+				// Check if the line contains tracking info with :gone
+				// The pattern is [remote/branch: gone] or [remote/branch]
+				const goneMatch = line.match(/\[.+: gone\]/);
+				if (goneMatch) {
+					return 'gone';
+				}
+
+				// Check if there's any tracking info at all
+				const trackingMatch = line.match(/\[.+?\]/);
+				if (trackingMatch) {
+					return 'active';
+				}
+
+				// No tracking info found
+				return 'none';
+			}
+		}
+
+		return 'none';
 	}
 }
