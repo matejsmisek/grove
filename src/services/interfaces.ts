@@ -423,6 +423,14 @@ export interface IGitService {
 	 * @param ref - Git reference to resolve
 	 */
 	revParse(repoPath: string, ref: string): Promise<GitCommandResult>;
+
+	/**
+	 * Get the upstream status of the current branch
+	 * Detects if the branch's upstream tracking ref is gone (deleted after merge)
+	 * @param repoPath - Repository root path
+	 * @returns 'active' if upstream exists, 'gone' if upstream was deleted, 'none' if no upstream
+	 */
+	getBranchUpstreamStatus(repoPath: string): Promise<BranchUpstreamStatus>;
 }
 
 /**
@@ -435,6 +443,14 @@ export interface FileChangeStats {
 	untracked: number;
 	total: number;
 }
+
+/**
+ * Branch upstream status
+ * - 'active': Branch has an active upstream that exists
+ * - 'gone': Branch had an upstream that no longer exists (merged and deleted)
+ * - 'none': Branch has no upstream configured
+ */
+export type BranchUpstreamStatus = 'active' | 'gone' | 'none';
 
 // ============================================================================
 // Other Service Interfaces

@@ -14,7 +14,7 @@ import {
 	openTerminalInPath,
 	resolveIDEForPath,
 } from '../services/index.js';
-import type { FileChangeStats } from '../services/interfaces.js';
+import type { BranchUpstreamStatus, FileChangeStats } from '../services/interfaces.js';
 import {
 	ClaudeSessionServiceToken,
 	GitServiceToken,
@@ -31,6 +31,7 @@ interface WorktreeDetails {
 	branch: string;
 	fileStats: FileChangeStats;
 	hasUnpushedCommits: boolean;
+	upstreamStatus: BranchUpstreamStatus;
 }
 
 interface GroveDetailScreenProps {
@@ -139,10 +140,11 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 
 				// Fetch details for each worktree in parallel
 				const detailsPromises = metadata.worktrees.map(async (worktree) => {
-					const [branch, fileStats, hasUnpushed] = await Promise.all([
+					const [branch, fileStats, hasUnpushed, upstreamStatus] = await Promise.all([
 						gitService.getCurrentBranch(worktree.worktreePath),
 						gitService.getFileChangeStats(worktree.worktreePath),
 						gitService.hasUnpushedCommits(worktree.worktreePath),
+						gitService.getBranchUpstreamStatus(worktree.worktreePath),
 					]);
 
 					return {
@@ -150,6 +152,7 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 						branch,
 						fileStats,
 						hasUnpushedCommits: hasUnpushed,
+						upstreamStatus,
 					};
 				});
 
@@ -554,6 +557,7 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 										<Box marginTop={0}>
 											<Text dimColor>Branch: </Text>
 											<Text color="yellow">{detail.branch}</Text>
+											{detail.upstreamStatus === 'gone' && <Text color="green"> (Merged)</Text>}
 										</Box>
 
 										{/* File Changes */}

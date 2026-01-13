@@ -6,6 +6,7 @@ import TextInput from 'ink-text-input';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
+import type { BranchUpstreamStatus } from '../services/interfaces.js';
 import { GitServiceToken, GroveServiceToken, GrovesServiceToken } from '../services/tokens.js';
 
 interface WorktreeCheck {
@@ -13,6 +14,7 @@ interface WorktreeCheck {
 	worktreePath: string;
 	hasUncommittedChanges: boolean;
 	hasUnpushedCommits: boolean;
+	upstreamStatus: BranchUpstreamStatus;
 }
 
 interface CloseGroveScreenProps {
@@ -58,10 +60,19 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 				let foundIssues = false;
 
 				for (const worktree of metadata.worktrees) {
-					const uncommitted = await gitService.hasUncommittedChanges(worktree.worktreePath);
-					const unpushed = await gitService.hasUnpushedCommits(worktree.worktreePath);
+					const [uncommitted, unpushed, upstreamStatus] = await Promise.all([
+						gitService.hasUncommittedChanges(worktree.worktreePath),
+						gitService.hasUnpushedCommits(worktree.worktreePath),
+						gitService.getBranchUpstreamStatus(worktree.worktreePath),
+					]);
 
-					if (uncommitted || unpushed) {
+					// Issue if:
+					// - dirty tree (uncommitted changes)
+					// - unpushed commits
+					// - pushed but not merged (upstream is 'active')
+					// - no upstream configured (might be local-only)
+					// No issue only if upstream is 'gone' (merged)
+					if (uncommitted || unpushed || upstreamStatus !== 'gone') {
 						foundIssues = true;
 					}
 
@@ -70,6 +81,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 						worktreePath: worktree.worktreePath,
 						hasUncommittedChanges: uncommitted,
 						hasUnpushedCommits: unpushed,
+						upstreamStatus,
 					});
 				}
 
@@ -224,6 +236,18 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 								)}
 							</Text>
 						</Box>
+						<Box marginLeft={2}>
+							<Text>
+								Branch status:{' '}
+								{check.upstreamStatus === 'gone' ? (
+									<Text color="green">✓ Merged</Text>
+								) : check.upstreamStatus === 'active' ? (
+									<Text color="yellow">⚠ Not merged</Text>
+								) : (
+									<Text color="yellow">⚠ No upstream</Text>
+								)}
+							</Text>
+						</Box>
 					</Box>
 				))}
 			</Box>
@@ -232,10 +256,11 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 				<Box flexDirection="column" marginTop={1}>
 					<Box marginBottom={1}>
 						<Text color="yellow" bold>
-							⚠ Warning: This grove has uncommitted changes or unpushed commits.
+							⚠ Warning: This grove has unfinished work.
 						</Text>
 					</Box>
-					<Box marginBottom={1}>
+					<Box marginBottom={1} flexDirection="column">
+						<Text>Some worktrees have uncommitted changes, unpushed commits, or unmerged branches.</Text>
 						<Text>Closing this grove will permanently delete all worktrees and their contents.</Text>
 					</Box>
 					<Box flexDirection="column" marginBottom={1}>
@@ -251,7 +276,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 			) : (
 				<Box flexDirection="column" marginTop={1}>
 					<Box marginBottom={1}>
-						<Text color="green">✓ All safety checks passed.</Text>
+						<Text color="green">✓ All branches are merged and clean.</Text>
 					</Box>
 					<Box marginBottom={1}>
 						<Text>Are you sure you want to close this grove? This will delete all worktrees.</Text>
