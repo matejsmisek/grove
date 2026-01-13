@@ -10,7 +10,7 @@ import type {
 	RepositorySelection,
 	Worktree,
 } from '../storage/types.js';
-import { normalizeGroveName } from '../utils/index.js';
+import { generateGroveIdentifier, normalizeGroveName } from '../utils/index.js';
 import type {
 	CloseGroveResult,
 	IContextService,
@@ -52,18 +52,26 @@ export class GroveService implements IGroveService {
 	/**
 	 * Generate a unique worktree name for a selection
 	 * Handles monorepo projects by appending project name
+	 * Includes grove suffix to make worktree folders globally unique
 	 */
-	private generateWorktreeName(selection: RepositorySelection, existingNames: Set<string>): string {
+	private generateWorktreeName(
+		selection: RepositorySelection,
+		existingNames: Set<string>,
+		groveSuffix: string
+	): string {
 		const baseName = selection.projectPath
 			? `${selection.repository.name}-${selection.projectPath}`
 			: selection.repository.name;
 
-		let name = baseName;
+		// Include grove suffix to make the worktree folder globally unique
+		const baseNameWithSuffix = groveSuffix ? `${baseName}-${groveSuffix}` : baseName;
+
+		let name = baseNameWithSuffix;
 		let counter = 1;
 
 		// Handle duplicate names by appending a counter
 		while (existingNames.has(name)) {
-			name = `${baseName}-${counter}`;
+			name = `${baseNameWithSuffix}-${counter}`;
 			counter++;
 		}
 
@@ -322,8 +330,10 @@ Completed at: ${new Date().toISOString()}
 	): Promise<GroveMetadata> {
 		const settings = this.settingsService.readSettings();
 		const groveId = this.generateGroveId();
+		// Generate the unique grove identifier first
+		const groveIdentifier = generateGroveIdentifier(name);
 		// Normalize the grove name for use in folder paths and branch names
-		const normalizedName = normalizeGroveName(name);
+		const normalizedName = normalizeGroveName(name, groveIdentifier);
 		const grovePath = path.join(settings.workingFolder, normalizedName);
 
 		// Check if grove folder already exists
@@ -365,7 +375,7 @@ Completed at: ${new Date().toISOString()}
 
 		for (const selection of selections) {
 			const repo = selection.repository;
-			const worktreeName = this.generateWorktreeName(selection, worktreeNames);
+			const worktreeName = this.generateWorktreeName(selection, worktreeNames, groveIdentifier);
 
 			try {
 				// Log worktree creation start
@@ -391,8 +401,8 @@ Completed at: ${new Date().toISOString()}
 				const branchSuffix = selection.projectPath ? `-${selection.projectPath}` : '';
 				const branchName = branchBase + branchSuffix;
 
-				// Create worktree path
-				const worktreePath = path.join(grovePath, `${worktreeName}.worktree`);
+				// Create worktree path (identifier already included in worktreeName)
+				const worktreePath = path.join(grovePath, worktreeName);
 
 				// Add worktree (creates new branch from HEAD)
 				const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, 'HEAD');
