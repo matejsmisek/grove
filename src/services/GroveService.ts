@@ -10,7 +10,7 @@ import type {
 	RepositorySelection,
 	Worktree,
 } from '../storage/types.js';
-import { getGroveSuffix, normalizeGroveName } from '../utils/index.js';
+import { generateGroveIdentifier, normalizeGroveName } from '../utils/index.js';
 import type {
 	CloseGroveResult,
 	IContextService,
@@ -330,8 +330,10 @@ Completed at: ${new Date().toISOString()}
 	): Promise<GroveMetadata> {
 		const settings = this.settingsService.readSettings();
 		const groveId = this.generateGroveId();
+		// Generate the unique grove identifier first
+		const groveIdentifier = generateGroveIdentifier(name);
 		// Normalize the grove name for use in folder paths and branch names
-		const normalizedName = normalizeGroveName(name);
+		const normalizedName = normalizeGroveName(name, groveIdentifier);
 		const grovePath = path.join(settings.workingFolder, normalizedName);
 
 		// Check if grove folder already exists
@@ -370,12 +372,10 @@ Completed at: ${new Date().toISOString()}
 		const worktrees: Worktree[] = [];
 		const errors: string[] = [];
 		const worktreeNames = new Set<string>();
-		// Extract the grove suffix for use in worktree naming
-		const groveSuffix = getGroveSuffix(normalizedName);
 
 		for (const selection of selections) {
 			const repo = selection.repository;
-			const worktreeName = this.generateWorktreeName(selection, worktreeNames, groveSuffix);
+			const worktreeName = this.generateWorktreeName(selection, worktreeNames, groveIdentifier);
 
 			try {
 				// Log worktree creation start
@@ -401,8 +401,8 @@ Completed at: ${new Date().toISOString()}
 				const branchSuffix = selection.projectPath ? `-${selection.projectPath}` : '';
 				const branchName = branchBase + branchSuffix;
 
-				// Create worktree path
-				const worktreePath = path.join(grovePath, `${worktreeName}.worktree`);
+				// Create worktree path (identifier already included in worktreeName)
+				const worktreePath = path.join(grovePath, worktreeName);
 
 				// Add worktree (creates new branch from HEAD)
 				const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, 'HEAD');

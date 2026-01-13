@@ -1,6 +1,18 @@
 import crypto from 'crypto';
 
 /**
+ * Generate a unique 5-character identifier for a grove based on its name
+ * Uses SHA256 hash of the name to ensure deterministic output
+ *
+ * @param name - The original grove name
+ * @returns A 5-character alphanumeric identifier
+ */
+export function generateGroveIdentifier(name: string): string {
+	const hash = crypto.createHash('sha256').update(name).digest('base64url');
+	return hash.substring(0, 5);
+}
+
+/**
  * Normalize and shorten a grove name for use in folder paths and branch names
  *
  * This function:
@@ -8,13 +20,18 @@ import crypto from 'crypto';
  * 2. Replaces spaces and special characters with hyphens
  * 3. Removes invalid characters for file paths and git branches
  * 4. Truncates to a maximum length
- * 5. Adds a 5-character alphanumeric suffix based on the original name for uniqueness
+ * 5. Appends the provided identifier for uniqueness
  *
  * @param name - The original grove name
+ * @param identifier - The unique identifier to append (from generateGroveIdentifier)
  * @param maxLength - Maximum length before adding suffix (default: 40)
- * @returns Normalized name with 5-character suffix (e.g., "my-grove-abc12")
+ * @returns Normalized name with identifier suffix (e.g., "my-grove-abc12")
  */
-export function normalizeGroveName(name: string, maxLength: number = 40): string {
+export function normalizeGroveName(
+	name: string,
+	identifier: string,
+	maxLength: number = 40
+): string {
 	// Step 1: Convert to lowercase
 	let normalized = name.toLowerCase();
 
@@ -39,18 +56,13 @@ export function normalizeGroveName(name: string, maxLength: number = 40): string
 		normalized = normalized.replace(/-+$/, '');
 	}
 
-	// Step 6: Generate a 5-character suffix based on hash of original name
-	// This ensures uniqueness even after normalization and shortening
-	const hash = crypto.createHash('sha256').update(name).digest('base64url');
-	const suffix = hash.substring(0, 5);
-
-	// Step 7: Combine normalized name with suffix
+	// Step 6: Combine normalized name with identifier
 	// If normalized name is empty (all special chars), use a default
 	if (normalized.length === 0) {
 		normalized = 'grove';
 	}
 
-	return `${normalized}-${suffix}`;
+	return `${normalized}-${identifier}`;
 }
 
 /**
@@ -66,20 +78,4 @@ export function getGroveDisplayName(normalizedName: string): string {
 		return normalizedName.substring(0, normalizedName.length - 6);
 	}
 	return normalizedName;
-}
-
-/**
- * Extract the 5-character unique suffix from a normalized grove name
- * This suffix can be used to make related paths globally unique
- *
- * @param normalizedName - The normalized name with suffix (e.g., "my-grove-abc12")
- * @returns The 5-character suffix (e.g., "abc12")
- */
-export function getGroveSuffix(normalizedName: string): string {
-	// Extract the last 5 characters (the suffix after the final hyphen)
-	if (normalizedName.length > 6 && normalizedName[normalizedName.length - 6] === '-') {
-		return normalizedName.substring(normalizedName.length - 5);
-	}
-	// Fallback: return empty string if format doesn't match
-	return '';
 }
