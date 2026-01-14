@@ -9,7 +9,8 @@ import crypto from 'crypto';
  */
 export function generateGroveIdentifier(name: string): string {
 	const hash = crypto.createHash('sha256').update(name).digest('base64url');
-	return hash.substring(0, 5);
+	// Convert to lowercase for uniform identifiers across grove, folders, worktrees, and branches
+	return hash.substring(0, 5).toLowerCase();
 }
 
 /**
