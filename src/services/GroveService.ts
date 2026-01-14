@@ -59,9 +59,10 @@ export class GroveService implements IGroveService {
 		existingNames: Set<string>,
 		groveSuffix: string
 	): string {
+		// Lowercase the base name for uniform identifiers across grove, folders, worktrees, and branches
 		const baseName = selection.projectPath
-			? `${selection.repository.name}-${selection.projectPath}`
-			: selection.repository.name;
+			? `${selection.repository.name}-${selection.projectPath}`.toLowerCase()
+			: selection.repository.name.toLowerCase();
 
 		// Include grove suffix to make the worktree folder globally unique
 		const baseNameWithSuffix = groveSuffix ? `${baseName}-${groveSuffix}` : baseName;
@@ -398,7 +399,8 @@ Completed at: ${new Date().toISOString()}
 					normalizedName,
 					selection.projectPath
 				);
-				const branchSuffix = selection.projectPath ? `-${selection.projectPath}` : '';
+				// Lowercase the project path suffix for uniform identifiers
+				const branchSuffix = selection.projectPath ? `-${selection.projectPath.toLowerCase()}` : '';
 				const branchName = branchBase + branchSuffix;
 
 				// Create worktree path (identifier already included in worktreeName)
