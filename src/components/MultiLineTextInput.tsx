@@ -175,6 +175,19 @@ export function MultiLineTextInput({
 
 	useInput(
 		(input, key) => {
+			// Backspace - check first as terminals send different codes
+			// \x7f (DEL, 127), \b (BS, 8), or key.backspace flag
+			if (key.backspace || input === '\x7f' || input === '\b' || input === '\x08') {
+				deleteChar(false);
+				return;
+			}
+
+			// Delete key
+			if (key.delete) {
+				deleteChar(true);
+				return;
+			}
+
 			// Navigation
 			if (key.upArrow) {
 				moveCursor(-1, 0);
@@ -215,12 +228,6 @@ export function MultiLineTextInput({
 				insertText('\n');
 			} else if (key.escape) {
 				onCancel?.();
-			} else if (key.backspace || input === '\x7f' || input === '\b') {
-				// Backspace - delete character before cursor
-				deleteChar(false);
-			} else if (key.delete) {
-				// Delete - delete character at cursor
-				deleteChar(true);
 			} else if (input && !key.ctrl && !key.meta) {
 				// Insert printable character
 				insertText(input);
