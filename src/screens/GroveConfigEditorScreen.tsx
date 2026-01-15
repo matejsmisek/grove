@@ -10,11 +10,23 @@ import { getMonorepoProjects } from '../git/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { ALL_IDE_TYPES, getIDEDisplayName } from '../services/index.js';
 import { GroveConfigServiceToken, RepositoryServiceToken } from '../services/tokens.js';
-import type { GroveRepoConfig, Repository } from '../storage/types.js';
+import type {
+	ClaudeSessionTemplates,
+	ClaudeTerminalType,
+	GroveRepoConfig,
+	Repository,
+} from '../storage/types.js';
 
 // Valid template variables
 const BRANCH_TEMPLATE_VARIABLES = ['GROVE_NAME'] as const;
 const CLAUDE_TEMPLATE_VARIABLES = ['WORKING_DIR', 'AGENT_COMMAND'] as const;
+
+// Available terminal types for Claude templates
+const CLAUDE_TERMINAL_TYPES: ClaudeTerminalType[] = ['konsole', 'kitty'];
+const TERMINAL_DISPLAY_NAMES: Record<ClaudeTerminalType, string> = {
+	konsole: 'KDE Konsole',
+	kitty: 'Kitty',
+};
 
 type ViewMode =
 	| 'fileList'
@@ -23,7 +35,9 @@ type ViewMode =
 	| 'editConfig'
 	| 'editField'
 	| 'editListItem'
-	| 'selectIDE';
+	| 'selectIDE'
+	| 'selectClaudeTerminal'
+	| 'editClaudeTemplate';
 
 type ConfigFileType = 'grove' | 'groveLocal';
 
@@ -88,7 +102,7 @@ const CONFIG_FIELDS: ConfigField[] = [
 ];
 
 export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScreenProps) {
-	const { goBack, canGoBack, navigate } = useNavigation();
+	const { goBack, canGoBack } = useNavigation();
 	const repositoryService = useService(RepositoryServiceToken);
 	const groveConfigService = useService(GroveConfigServiceToken);
 
@@ -122,6 +136,9 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 	const [editingField, setEditingField] = useState<ConfigFieldKey | null>(null);
 	const [tempValue, setTempValue] = useState('');
 	const [editingListIndex, setEditingListIndex] = useState(-1);
+
+	// Claude template editing
+	const [editingTerminalType, setEditingTerminalType] = useState<ClaudeTerminalType | null>(null);
 
 	// Scan for config files
 	const scanConfigFiles = () => {
@@ -412,9 +429,42 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					saveConfig(newConfig);
 					setViewMode('editConfig');
 				}
+			} else if (viewMode === 'selectClaudeTerminal') {
+				if (key.escape) {
+					setEditingField(null);
+					setViewMode('editConfig');
+				} else if (key.upArrow) {
+					setSelectedIndex((prev) => (prev > 0 ? prev - 1 : CLAUDE_TERMINAL_TYPES.length));
+				} else if (key.downArrow) {
+					setSelectedIndex((prev) => (prev < CLAUDE_TERMINAL_TYPES.length ? prev + 1 : 0));
+				} else if (key.return) {
+					if (selectedIndex === CLAUDE_TERMINAL_TYPES.length) {
+						// Clear all templates
+						const newConfig = { ...config };
+						delete newConfig.claudeSessionTemplates;
+						setConfig(newConfig);
+						saveConfig(newConfig);
+						setEditingField(null);
+						setViewMode('editConfig');
+					} else {
+						// Edit selected terminal's template
+						const terminalType = CLAUDE_TERMINAL_TYPES[selectedIndex];
+						const templates = config.claudeSessionTemplates || {};
+						const template = templates[terminalType];
+						setEditingTerminalType(terminalType);
+						setTempValue(template?.content || '');
+						setViewMode('editClaudeTemplate');
+					}
+				}
 			}
 		},
-		{ isActive: editingField === null && viewMode !== 'editField' && viewMode !== 'editListItem' }
+		{
+			isActive:
+				editingField === null &&
+				viewMode !== 'editField' &&
+				viewMode !== 'editListItem' &&
+				viewMode !== 'editClaudeTemplate',
+		}
 	);
 
 	// Handle ESC in editField mode (for TextInput which doesn't have onCancel)
@@ -458,9 +508,9 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 				setViewMode('selectIDE');
 				break;
 			case 'claudeTemplates':
-				// Navigate to Claude Terminal Settings
-				setEditingField(null);
-				navigate('claudeTerminalSettings', {});
+				// Show terminal type selector for Claude templates
+				setSelectedIndex(0);
+				setViewMode('selectClaudeTerminal');
 				break;
 		}
 	};
@@ -722,6 +772,155 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 						<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Select -{' '}
 						<Text color="cyan">ESC</Text> Cancel
 					</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	// Claude terminal type selection
+	if (viewMode === 'selectClaudeTerminal') {
+		const templates = config.claudeSessionTemplates || {};
+
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="yellow">
+						Claude Session Templates
+					</Text>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Text dimColor>Select a terminal type to edit its template:</Text>
+				</Box>
+
+				<Box flexDirection="column">
+					{CLAUDE_TERMINAL_TYPES.map((terminalType, index) => {
+						const hasTemplate = templates[terminalType] !== undefined;
+
+						return (
+							<Text
+								key={terminalType}
+								color={index === selectedIndex ? 'cyan' : undefined}
+								bold={index === selectedIndex}
+							>
+								{index === selectedIndex ? '> ' : '  '}
+								{TERMINAL_DISPLAY_NAMES[terminalType]}
+								{hasTemplate && <Text color="green"> (configured)</Text>}
+							</Text>
+						);
+					})}
+					<Text
+						color={selectedIndex === CLAUDE_TERMINAL_TYPES.length ? 'cyan' : undefined}
+						bold={selectedIndex === CLAUDE_TERMINAL_TYPES.length}
+					>
+						{selectedIndex === CLAUDE_TERMINAL_TYPES.length ? '> ' : '  '}
+						(clear all templates)
+					</Text>
+				</Box>
+
+				<Box marginTop={1}>
+					<Text dimColor>
+						<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Edit -{' '}
+						<Text color="cyan">ESC</Text> Cancel
+					</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	// Claude template editing
+	if (viewMode === 'editClaudeTemplate' && editingTerminalType) {
+		const validateClaudeTemplate = (template: string): { valid: boolean; invalidVars: string[] } => {
+			const varPattern = /\$\{([^}]+)\}/g;
+			const invalidVars: string[] = [];
+			let match;
+
+			while ((match = varPattern.exec(template)) !== null) {
+				const varName = match[1];
+				if (
+					!CLAUDE_TEMPLATE_VARIABLES.includes(varName as (typeof CLAUDE_TEMPLATE_VARIABLES)[number])
+				) {
+					invalidVars.push(varName);
+				}
+			}
+
+			return { valid: invalidVars.length === 0, invalidVars };
+		};
+
+		const validation = validateClaudeTemplate(tempValue);
+
+		const handleSaveClaudeTemplate = () => {
+			const templates: ClaudeSessionTemplates = { ...(config.claudeSessionTemplates || {}) };
+			if (tempValue.trim()) {
+				templates[editingTerminalType] = { content: tempValue };
+			} else {
+				delete templates[editingTerminalType];
+			}
+			const newConfig: GroveRepoConfig = {
+				...config,
+				claudeSessionTemplates: Object.keys(templates).length > 0 ? templates : undefined,
+			};
+			setConfig(newConfig);
+			saveConfig(newConfig);
+			setEditingTerminalType(null);
+			setEditingField(null);
+			setViewMode('selectClaudeTerminal');
+			setSelectedIndex(CLAUDE_TERMINAL_TYPES.indexOf(editingTerminalType));
+		};
+
+		const handleCancelClaudeTemplate = () => {
+			setEditingTerminalType(null);
+			setViewMode('selectClaudeTerminal');
+		};
+
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="yellow">
+						Edit {TERMINAL_DISPLAY_NAMES[editingTerminalType]} Template
+					</Text>
+				</Box>
+
+				{/* Variable hints */}
+				<Box marginBottom={1} flexDirection="column">
+					<Text dimColor>Available variables:</Text>
+					<Box marginLeft={2} flexDirection="column">
+						<Text>
+							<Text color="cyan">${'{WORKING_DIR}'}</Text>
+							<Text dimColor> - Working directory path</Text>
+						</Text>
+						<Text>
+							<Text color="cyan">${'{AGENT_COMMAND}'}</Text>
+							<Text dimColor> - Claude command</Text>
+						</Text>
+					</Box>
+				</Box>
+
+				{/* Validation warnings */}
+				{!validation.valid && (
+					<Box marginBottom={1}>
+						<Text color="yellow">
+							Unknown variables: {validation.invalidVars.map((v) => `\${${v}}`).join(', ')}
+						</Text>
+					</Box>
+				)}
+
+				{savedMessage && (
+					<Box marginBottom={1}>
+						<Text color="green">{savedMessage}</Text>
+					</Box>
+				)}
+
+				<Box flexDirection="column" marginBottom={1} borderStyle="single" padding={1}>
+					<MultiLineTextInput
+						value={tempValue}
+						onChange={setTempValue}
+						onSubmit={handleSaveClaudeTemplate}
+						onCancel={handleCancelClaudeTemplate}
+						isActive={true}
+						maxVisibleLines={15}
+						showLineNumbers={true}
+					/>
 				</Box>
 			</Box>
 		);
