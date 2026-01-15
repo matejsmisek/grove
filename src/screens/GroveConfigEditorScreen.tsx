@@ -414,6 +414,16 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 		{ isActive: editingField === null && viewMode !== 'editField' && viewMode !== 'editListItem' }
 	);
 
+	// Handle ESC in editField mode (for TextInput which doesn't have onCancel)
+	useInput(
+		(_input, key) => {
+			if (key.escape) {
+				handleStringCancel();
+			}
+		},
+		{ isActive: viewMode === 'editField' && editingField !== null }
+	);
+
 	// Start editing a field
 	const startEditField = (field: ConfigField) => {
 		setEditingField(field.key);
