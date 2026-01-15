@@ -4,7 +4,6 @@ import { Box, Text, useInput } from 'ink';
 
 import TextInput from 'ink-text-input';
 
-import { MultiLineTextInput } from '../components/MultiLineTextInput.js';
 import { useService } from '../di/index.js';
 import { getMonorepoProjects } from '../git/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
@@ -16,6 +15,7 @@ import type {
 	GroveRepoConfig,
 	Repository,
 } from '../storage/types.js';
+import { openExternalEditor } from '../utils/externalEditor.js';
 
 // Valid template variables
 const BRANCH_TEMPLATE_VARIABLES = ['GROVE_NAME'] as const;
@@ -36,8 +36,7 @@ type ViewMode =
 	| 'editField'
 	| 'editListItem'
 	| 'selectIDE'
-	| 'selectClaudeTerminal'
-	| 'editClaudeTemplate';
+	| 'selectClaudeTerminal';
 
 type ConfigFileType = 'grove' | 'groveLocal';
 
@@ -136,9 +135,6 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 	const [editingField, setEditingField] = useState<ConfigFieldKey | null>(null);
 	const [tempValue, setTempValue] = useState('');
 	const [editingListIndex, setEditingListIndex] = useState(-1);
-
-	// Claude template editing
-	const [editingTerminalType, setEditingTerminalType] = useState<ClaudeTerminalType | null>(null);
 
 	// Scan for config files
 	const scanConfigFiles = () => {
@@ -447,23 +443,54 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 						setEditingField(null);
 						setViewMode('editConfig');
 					} else {
-						// Edit selected terminal's template
+						// Edit selected terminal's template using external editor
 						const terminalType = CLAUDE_TERMINAL_TYPES[selectedIndex];
 						const templates = config.claudeSessionTemplates || {};
-						const template = templates[terminalType];
-						setEditingTerminalType(terminalType);
-						setTempValue(template?.content || '');
-						setViewMode('editClaudeTemplate');
+						const currentTemplate = templates[terminalType]?.content || '';
+
+						const header = `# ${TERMINAL_DISPLAY_NAMES[terminalType]} Template for .grove.json
+# Available variables:
+#   \${WORKING_DIR} - Working directory path
+#   \${AGENT_COMMAND} - Claude command (claude or claude --resume <id>)
+#
+# Save and close to apply changes. Leave empty to remove template.
+# Lines starting with # are comments and will be removed.
+
+`;
+						const editedContent = openExternalEditor(header + currentTemplate, {
+							extension: '.txt',
+							prefix: `grove-config-${terminalType}-`,
+						});
+
+						if (editedContent !== null) {
+							const cleanedContent = editedContent
+								.split('\n')
+								.filter((line) => !line.startsWith('#'))
+								.join('\n')
+								.trim();
+
+							const newTemplates: ClaudeSessionTemplates = { ...templates };
+							if (cleanedContent) {
+								newTemplates[terminalType] = { content: cleanedContent };
+							} else {
+								delete newTemplates[terminalType];
+							}
+
+							const newConfig: GroveRepoConfig = {
+								...config,
+								claudeSessionTemplates: Object.keys(newTemplates).length > 0 ? newTemplates : undefined,
+							};
+							setConfig(newConfig);
+							saveConfig(newConfig);
+							setSavedMessage('Template saved');
+							setTimeout(() => setSavedMessage(null), 2000);
+						}
 					}
 				}
 			}
 		},
 		{
-			isActive:
-				editingField === null &&
-				viewMode !== 'editField' &&
-				viewMode !== 'editListItem' &&
-				viewMode !== 'editClaudeTemplate',
+			isActive: editingField === null && viewMode !== 'editField' && viewMode !== 'editListItem',
 		}
 	);
 
@@ -828,104 +855,6 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 		);
 	}
 
-	// Claude template editing
-	if (viewMode === 'editClaudeTemplate' && editingTerminalType) {
-		const validateClaudeTemplate = (template: string): { valid: boolean; invalidVars: string[] } => {
-			const varPattern = /\$\{([^}]+)\}/g;
-			const invalidVars: string[] = [];
-			let match;
-
-			while ((match = varPattern.exec(template)) !== null) {
-				const varName = match[1];
-				if (
-					!CLAUDE_TEMPLATE_VARIABLES.includes(varName as (typeof CLAUDE_TEMPLATE_VARIABLES)[number])
-				) {
-					invalidVars.push(varName);
-				}
-			}
-
-			return { valid: invalidVars.length === 0, invalidVars };
-		};
-
-		const validation = validateClaudeTemplate(tempValue);
-
-		const handleSaveClaudeTemplate = () => {
-			const templates: ClaudeSessionTemplates = { ...(config.claudeSessionTemplates || {}) };
-			if (tempValue.trim()) {
-				templates[editingTerminalType] = { content: tempValue };
-			} else {
-				delete templates[editingTerminalType];
-			}
-			const newConfig: GroveRepoConfig = {
-				...config,
-				claudeSessionTemplates: Object.keys(templates).length > 0 ? templates : undefined,
-			};
-			setConfig(newConfig);
-			saveConfig(newConfig);
-			setEditingTerminalType(null);
-			setEditingField(null);
-			setViewMode('selectClaudeTerminal');
-			setSelectedIndex(CLAUDE_TERMINAL_TYPES.indexOf(editingTerminalType));
-		};
-
-		const handleCancelClaudeTemplate = () => {
-			setEditingTerminalType(null);
-			setViewMode('selectClaudeTerminal');
-		};
-
-		return (
-			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={1}>
-					<Text bold color="yellow">
-						Edit {TERMINAL_DISPLAY_NAMES[editingTerminalType]} Template
-					</Text>
-				</Box>
-
-				{/* Variable hints */}
-				<Box marginBottom={1} flexDirection="column">
-					<Text dimColor>Available variables:</Text>
-					<Box marginLeft={2} flexDirection="column">
-						<Text>
-							<Text color="cyan">${'{WORKING_DIR}'}</Text>
-							<Text dimColor> - Working directory path</Text>
-						</Text>
-						<Text>
-							<Text color="cyan">${'{AGENT_COMMAND}'}</Text>
-							<Text dimColor> - Claude command</Text>
-						</Text>
-					</Box>
-				</Box>
-
-				{/* Validation warnings */}
-				{!validation.valid && (
-					<Box marginBottom={1}>
-						<Text color="yellow">
-							Unknown variables: {validation.invalidVars.map((v) => `\${${v}}`).join(', ')}
-						</Text>
-					</Box>
-				)}
-
-				{savedMessage && (
-					<Box marginBottom={1}>
-						<Text color="green">{savedMessage}</Text>
-					</Box>
-				)}
-
-				<Box flexDirection="column" marginBottom={1} borderStyle="single" padding={1}>
-					<MultiLineTextInput
-						value={tempValue}
-						onChange={setTempValue}
-						onSubmit={handleSaveClaudeTemplate}
-						onCancel={handleCancelClaudeTemplate}
-						isActive={true}
-						maxVisibleLines={15}
-						showLineNumbers={true}
-					/>
-				</Box>
-			</Box>
-		);
-	}
-
 	// List item editing
 	if (viewMode === 'editListItem' && editingField) {
 		const field = CONFIG_FIELDS.find((f) => f.key === editingField);
@@ -1110,31 +1039,19 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 				)}
 
 				<Box borderStyle="single" padding={1}>
-					{field?.key === 'branchNameTemplate' ? (
-						<TextInput
-							value={tempValue}
-							onChange={setTempValue}
-							onSubmit={handleStringSubmit}
-							placeholder="grove/${GROVE_NAME}"
-						/>
-					) : (
-						<MultiLineTextInput
-							value={tempValue}
-							onChange={setTempValue}
-							onSubmit={handleStringSubmit}
-							onCancel={handleStringCancel}
-							maxVisibleLines={10}
-						/>
-					)}
+					<TextInput
+						value={tempValue}
+						onChange={setTempValue}
+						onSubmit={handleStringSubmit}
+						placeholder={field?.key === 'branchNameTemplate' ? 'grove/${GROVE_NAME}' : ''}
+					/>
 				</Box>
 
-				{field?.key === 'branchNameTemplate' && (
-					<Box marginTop={1}>
-						<Text dimColor>
-							Press <Text color="cyan">Enter</Text> to save, <Text color="cyan">ESC</Text> to cancel
-						</Text>
-					</Box>
-				)}
+				<Box marginTop={1}>
+					<Text dimColor>
+						Press <Text color="cyan">Enter</Text> to save, <Text color="cyan">ESC</Text> to cancel
+					</Text>
+				</Box>
 			</Box>
 		);
 	}
