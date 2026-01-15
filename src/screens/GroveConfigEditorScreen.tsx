@@ -424,6 +424,17 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 		{ isActive: viewMode === 'editField' && editingField !== null }
 	);
 
+	// Handle ESC when actively editing a list item (editingListIndex !== -1)
+	useInput(
+		(_input, key) => {
+			if (key.escape) {
+				setEditingListIndex(-1);
+				setTempValue('');
+			}
+		},
+		{ isActive: viewMode === 'editListItem' && editingListIndex !== -1 }
+	);
+
 	// Start editing a field
 	const startEditField = (field: ConfigField) => {
 		setEditingField(field.key);
