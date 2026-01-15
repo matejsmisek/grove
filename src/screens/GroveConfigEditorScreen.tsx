@@ -195,14 +195,16 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 		setViewMode('editConfig');
 	};
 
-	// Save config
-	const saveConfig = () => {
+	// Save config - can optionally pass a config to save (for when state hasn't updated yet)
+	const saveConfig = (configToSave?: GroveRepoConfig) => {
 		if (!repository || !editingFile) return;
 
+		const configData = configToSave ?? config;
+
 		if (editingFile.type === 'grove') {
-			groveConfigService.writeGroveConfig(repository.path, config, editingFile.projectPath);
+			groveConfigService.writeGroveConfig(repository.path, configData, editingFile.projectPath);
 		} else {
-			groveConfigService.writeGroveLocalConfig(repository.path, config, editingFile.projectPath);
+			groveConfigService.writeGroveLocalConfig(repository.path, configData, editingFile.projectPath);
 		}
 
 		setSavedMessage('Configuration saved');
@@ -388,7 +390,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					const newConfig = { ...config };
 					delete newConfig[field.key];
 					setConfig(newConfig);
-					saveConfig();
+					saveConfig(newConfig);
 				}
 			} else if (viewMode === 'selectIDE') {
 				if (key.escape) {
@@ -398,15 +400,16 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 				} else if (key.downArrow) {
 					setSelectedIndex((prev) => (prev < ALL_IDE_TYPES.length ? prev + 1 : 0));
 				} else if (key.return) {
+					let newConfig: GroveRepoConfig;
 					if (selectedIndex === ALL_IDE_TYPES.length) {
-						const newConfig = { ...config };
+						newConfig = { ...config };
 						delete newConfig.ide;
-						setConfig(newConfig);
 					} else {
 						const ideType = ALL_IDE_TYPES[selectedIndex];
-						setConfig({ ...config, ide: `@${ideType}` });
+						newConfig = { ...config, ide: `@${ideType}` };
 					}
-					saveConfig();
+					setConfig(newConfig);
+					saveConfig(newConfig);
 					setViewMode('editConfig');
 				}
 			}
@@ -475,14 +478,15 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 				}
 			}
 
+			let newConfig: GroveRepoConfig;
 			if (tempValue) {
-				setConfig({ ...config, [editingField]: tempValue });
+				newConfig = { ...config, [editingField]: tempValue };
 			} else {
-				const newConfig = { ...config };
+				newConfig = { ...config };
 				delete newConfig[editingField];
-				setConfig(newConfig);
 			}
-			saveConfig();
+			setConfig(newConfig);
+			saveConfig(newConfig);
 		}
 		setEditingField(null);
 		setViewMode('editConfig');
@@ -761,8 +765,9 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 											if (tempValue) {
 												const newItems = [...items];
 												newItems[index] = tempValue;
-												setConfig({ ...config, [editingField]: newItems });
-												saveConfig();
+												const newConfig = { ...config, [editingField]: newItems };
+												setConfig(newConfig);
+												saveConfig(newConfig);
 											}
 											setEditingListIndex(-1);
 											setTempValue('');
@@ -795,8 +800,9 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 								onSubmit={() => {
 									if (tempValue) {
 										const newItems = [...items, tempValue];
-										setConfig({ ...config, [editingField]: newItems });
-										saveConfig();
+										const newConfig = { ...config, [editingField]: newItems };
+										setConfig(newConfig);
+										saveConfig(newConfig);
 									}
 									setEditingListIndex(-1);
 									setTempValue('');
@@ -835,11 +841,12 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					onDelete={() => {
 						if (editingListIndex === -1 && selectedIndex < items.length) {
 							const newItems = items.filter((_, i) => i !== selectedIndex);
-							setConfig({
+							const newConfig = {
 								...config,
 								[editingField]: newItems.length > 0 ? newItems : undefined,
-							});
-							saveConfig();
+							};
+							setConfig(newConfig);
+							saveConfig(newConfig);
 							if (selectedIndex >= newItems.length && selectedIndex > 0) {
 								setSelectedIndex(selectedIndex - 1);
 							}
