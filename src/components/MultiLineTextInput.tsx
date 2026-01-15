@@ -207,18 +207,20 @@ export function MultiLineTextInput({
 			} else if (key.pageDown) {
 				// Page down - move down by maxVisibleLines
 				moveCursor(maxVisibleLines, 0);
+			} else if (input === 's' && key.ctrl) {
+				// Ctrl+S: Submit/Save
+				onSubmit?.();
 			} else if (key.return) {
-				if (key.ctrl || key.meta) {
-					// Ctrl+Enter or Cmd+Enter: Submit
-					onSubmit?.();
-				} else {
-					// Enter: Insert newline
-					insertText('\n');
-				}
+				// Enter: Insert newline
+				insertText('\n');
 			} else if (key.escape) {
 				onCancel?.();
-			} else if (key.backspace || key.delete) {
-				deleteChar(key.delete);
+			} else if (key.backspace || input === '\x7f' || input === '\b') {
+				// Backspace - delete character before cursor
+				deleteChar(false);
+			} else if (key.delete) {
+				// Delete - delete character at cursor
+				deleteChar(true);
 			} else if (input && !key.ctrl && !key.meta) {
 				// Insert printable character
 				insertText(input);
@@ -290,7 +292,7 @@ export function MultiLineTextInput({
 			{/* Help text */}
 			<Box marginTop={1}>
 				<Text dimColor>
-					<Text color="cyan">Arrows</Text> Move | <Text color="cyan">Ctrl+Enter</Text> Save |{' '}
+					<Text color="cyan">Arrows</Text> Move | <Text color="cyan">Ctrl+S</Text> Save |{' '}
 					<Text color="cyan">Esc</Text> Cancel
 				</Text>
 			</Box>
