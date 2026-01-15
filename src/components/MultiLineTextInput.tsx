@@ -59,14 +59,15 @@ export function MultiLineTextInput({
 
 	// Ensure cursor stays within bounds when value changes
 	useEffect(() => {
+		const currentLines = value.split('\n');
 		setCursor((prev) => {
-			const maxLine = Math.max(0, lines.length - 1);
+			const maxLine = Math.max(0, currentLines.length - 1);
 			const line = Math.min(prev.line, maxLine);
-			const maxColumn = lines[line]?.length ?? 0;
+			const maxColumn = currentLines[line]?.length ?? 0;
 			const column = Math.min(prev.column, maxColumn);
 			return { line, column };
 		});
-	}, [lines]);
+	}, [value]);
 
 	// Adjust scroll to keep cursor visible
 	useEffect(() => {
