@@ -62,21 +62,28 @@ export function MultiLineTextInput({
 		const currentLines = value.split('\n');
 		setCursor((prev) => {
 			const maxLine = Math.max(0, currentLines.length - 1);
-			const line = Math.min(prev.line, maxLine);
-			const maxColumn = currentLines[line]?.length ?? 0;
-			const column = Math.min(prev.column, maxColumn);
-			return { line, column };
+			const newLine = Math.min(prev.line, maxLine);
+			const maxColumn = currentLines[newLine]?.length ?? 0;
+			const newColumn = Math.min(prev.column, maxColumn);
+			// Only update if values changed to avoid unnecessary re-renders
+			if (prev.line === newLine && prev.column === newColumn) {
+				return prev;
+			}
+			return { line: newLine, column: newColumn };
 		});
 	}, [value]);
 
 	// Adjust scroll to keep cursor visible
 	useEffect(() => {
-		if (cursor.line < scrollOffset) {
-			setScrollOffset(cursor.line);
-		} else if (cursor.line >= scrollOffset + maxVisibleLines) {
-			setScrollOffset(cursor.line - maxVisibleLines + 1);
-		}
-	}, [cursor.line, scrollOffset, maxVisibleLines]);
+		setScrollOffset((prev) => {
+			if (cursor.line < prev) {
+				return cursor.line;
+			} else if (cursor.line >= prev + maxVisibleLines) {
+				return cursor.line - maxVisibleLines + 1;
+			}
+			return prev;
+		});
+	}, [cursor.line, maxVisibleLines]);
 
 	const moveCursor = useCallback(
 		(deltaLine: number, deltaColumn: number) => {
@@ -175,15 +182,17 @@ export function MultiLineTextInput({
 
 	useInput(
 		(input, key) => {
-			// Backspace - check first as terminals send different codes
-			// \x7f (DEL, 127), \b (BS, 8), or key.backspace flag
-			if (key.backspace || input === '\x7f' || input === '\b' || input === '\x08') {
+			// Backspace - check character codes first as terminals send different codes
+			// \x7f (DEL, 127), \b (BS, 8) - many terminals send \x7f for backspace
+			// Some terminals also set key.delete=true for backspace, so check chars first
+			const isBackspaceChar = input === '\x7f' || input === '\b' || input === '\x08';
+			if (isBackspaceChar || key.backspace) {
 				deleteChar(false);
 				return;
 			}
 
-			// Delete key
-			if (key.delete) {
+			// Delete key - only if NOT a backspace character (some terminals confuse these)
+			if (key.delete && !isBackspaceChar) {
 				deleteChar(true);
 				return;
 			}
