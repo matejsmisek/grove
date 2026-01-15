@@ -17,6 +17,7 @@ export type Routes = {
 	claudeTerminalSettings: Record<string, never>;
 	llmSettings: Record<string, never>;
 	pluginSettings: Record<string, never>;
+	groveConfigEditor: { repositoryPath?: string };
 };
 
 // Navigation state for current screen and params

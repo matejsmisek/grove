@@ -5,8 +5,23 @@ import type { IGroveConfigService, MergedGroveConfig } from '../services/interfa
 import type { GroveIDEConfig, GroveRepoConfig, IDEConfig, IDEType } from './types.js';
 
 /**
+ * Valid template variables for different contexts
+ */
+export const BRANCH_TEMPLATE_VARIABLES = ['GROVE_NAME'] as const;
+export const CLAUDE_SESSION_TEMPLATE_VARIABLES = ['WORKING_DIR', 'AGENT_COMMAND'] as const;
+
+/**
+ * Validation result for template variables
+ */
+export interface TemplateValidationResult {
+	valid: boolean;
+	invalidVars: string[];
+	missingRequired: string[];
+}
+
+/**
  * Grove repository configuration service implementation
- * Reads .grove.json and .grove.local.json from repositories
+ * Reads and writes .grove.json and .grove.local.json from repositories
  */
 export class GroveConfigService implements IGroveConfigService {
 	/**
@@ -275,5 +290,207 @@ export class GroveConfigService implements IGroveConfigService {
 		}
 
 		return { ideConfig: mergedConfig.ide };
+	}
+
+	// =========================================================================
+	// Write Methods
+	// =========================================================================
+
+	/**
+	 * Write .grove.json configuration to a repository
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param config - Configuration to write
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	writeGroveConfig(repositoryPath: string, config: GroveRepoConfig, projectPath?: string): void {
+		const configDir = projectPath ? path.join(repositoryPath, projectPath) : repositoryPath;
+		const configPath = path.join(configDir, '.grove.json');
+
+		// Ensure directory exists
+		if (!fs.existsSync(configDir)) {
+			fs.mkdirSync(configDir, { recursive: true });
+		}
+
+		// Write config with pretty formatting
+		fs.writeFileSync(configPath, JSON.stringify(config, null, '\t'), 'utf-8');
+	}
+
+	/**
+	 * Write .grove.local.json configuration to a repository
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param config - Configuration to write
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	writeGroveLocalConfig(
+		repositoryPath: string,
+		config: GroveRepoConfig,
+		projectPath?: string
+	): void {
+		const configDir = projectPath ? path.join(repositoryPath, projectPath) : repositoryPath;
+		const configPath = path.join(configDir, '.grove.local.json');
+
+		// Ensure directory exists
+		if (!fs.existsSync(configDir)) {
+			fs.mkdirSync(configDir, { recursive: true });
+		}
+
+		// Write config with pretty formatting
+		fs.writeFileSync(configPath, JSON.stringify(config, null, '\t'), 'utf-8');
+	}
+
+	/**
+	 * Read just the .grove.json file (without merging with .grove.local.json)
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 * @returns Configuration from .grove.json only
+	 */
+	readGroveConfigOnly(repositoryPath: string, projectPath?: string): GroveRepoConfig {
+		const configDir = projectPath ? path.join(repositoryPath, projectPath) : repositoryPath;
+		const configPath = path.join(configDir, '.grove.json');
+
+		if (!fs.existsSync(configPath)) {
+			return {};
+		}
+
+		try {
+			const data = fs.readFileSync(configPath, 'utf-8');
+			return JSON.parse(data) as GroveRepoConfig;
+		} catch (error) {
+			console.error(`Error reading .grove.json from ${configDir}:`, error);
+			return {};
+		}
+	}
+
+	/**
+	 * Read just the .grove.local.json file (without merging)
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 * @returns Configuration from .grove.local.json only
+	 */
+	readGroveLocalConfigOnly(repositoryPath: string, projectPath?: string): GroveRepoConfig {
+		const configDir = projectPath ? path.join(repositoryPath, projectPath) : repositoryPath;
+		const configPath = path.join(configDir, '.grove.local.json');
+
+		if (!fs.existsSync(configPath)) {
+			return {};
+		}
+
+		try {
+			const data = fs.readFileSync(configPath, 'utf-8');
+			return JSON.parse(data) as GroveRepoConfig;
+		} catch (error) {
+			console.error(`Error reading .grove.local.json from ${configDir}:`, error);
+			return {};
+		}
+	}
+
+	/**
+	 * Check if a .grove.json file exists
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	groveConfigExists(repositoryPath: string, projectPath?: string): boolean {
+		const configDir = projectPath ? path.join(repositoryPath, projectPath) : repositoryPath;
+		const configPath = path.join(configDir, '.grove.json');
+		return fs.existsSync(configPath);
+	}
+
+	/**
+	 * Check if a .grove.local.json file exists
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	groveLocalConfigExists(repositoryPath: string, projectPath?: string): boolean {
+		const configDir = projectPath ? path.join(repositoryPath, projectPath) : repositoryPath;
+		const configPath = path.join(configDir, '.grove.local.json');
+		return fs.existsSync(configPath);
+	}
+
+	/**
+	 * Get list of project folders in a monorepo that have .grove.json files
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @returns Array of project folder names that contain .grove.json
+	 */
+	getProjectsWithGroveConfig(repositoryPath: string): string[] {
+		const projects: string[] = [];
+
+		try {
+			const entries = fs.readdirSync(repositoryPath, { withFileTypes: true });
+
+			for (const entry of entries) {
+				if (!entry.isDirectory()) continue;
+				if (entry.name.startsWith('.')) continue;
+				if (['node_modules', 'dist', 'build', 'vendor', '.git'].includes(entry.name)) continue;
+
+				const projectConfigPath = path.join(repositoryPath, entry.name, '.grove.json');
+				if (fs.existsSync(projectConfigPath)) {
+					projects.push(entry.name);
+				}
+			}
+		} catch (error) {
+			console.error(`Error scanning projects in ${repositoryPath}:`, error);
+		}
+
+		return projects.sort();
+	}
+
+	/**
+	 * Validate template variables in a string
+	 * @param template - Template string to validate
+	 * @param validVars - Array of valid variable names
+	 * @param requiredVars - Array of required variable names (optional)
+	 * @returns Validation result with invalid and missing required variables
+	 */
+	validateTemplateVariables(
+		template: string,
+		validVars: readonly string[],
+		requiredVars: readonly string[] = []
+	): TemplateValidationResult {
+		const varPattern = /\$\{([^}]+)\}/g;
+		const invalidVars: string[] = [];
+		const foundVars = new Set<string>();
+		let match;
+
+		while ((match = varPattern.exec(template)) !== null) {
+			const varName = match[1];
+			foundVars.add(varName);
+			if (!validVars.includes(varName)) {
+				invalidVars.push(varName);
+			}
+		}
+
+		const missingRequired = requiredVars.filter((v) => !foundVars.has(v));
+
+		return {
+			valid: invalidVars.length === 0 && missingRequired.length === 0,
+			invalidVars,
+			missingRequired,
+		};
+	}
+
+	/**
+	 * Validate branch name template
+	 * @param template - Branch name template to validate
+	 * @returns Validation result
+	 */
+	validateBranchTemplate(template: string): TemplateValidationResult {
+		return this.validateTemplateVariables(
+			template,
+			BRANCH_TEMPLATE_VARIABLES,
+			BRANCH_TEMPLATE_VARIABLES // GROVE_NAME is required
+		);
+	}
+
+	/**
+	 * Validate Claude session template
+	 * @param template - Claude session template to validate
+	 * @returns Validation result
+	 */
+	validateClaudeSessionTemplate(template: string): TemplateValidationResult {
+		return this.validateTemplateVariables(
+			template,
+			CLAUDE_SESSION_TEMPLATE_VARIABLES
+			// No required vars for session templates
+		);
 	}
 }
