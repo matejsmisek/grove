@@ -4,14 +4,15 @@ import { Box, Text, useInput } from 'ink';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { RepositoryServiceToken } from '../services/tokens.js';
+import { GroveConfigServiceToken, RepositoryServiceToken } from '../services/tokens.js';
 import type { Repository } from '../storage/index.js';
 
 type ScreenMode = 'list' | 'confirm-delete';
 
 export function RepositoriesScreen() {
-	const { goBack, canGoBack } = useNavigation();
+	const { goBack, canGoBack, navigate } = useNavigation();
 	const repositoryService = useService(RepositoryServiceToken);
+	const groveConfigService = useService(GroveConfigServiceToken);
 	const [repositories, setRepositories] = useState<Repository[]>(() =>
 		repositoryService.getAllRepositories()
 	);
@@ -48,6 +49,12 @@ export function RepositoriesScreen() {
 					setTimeout(() => {
 						setMonorepoToggleSuccess(false);
 					}, 2000);
+				}
+			} else if (input === 'c' || input === 'C') {
+				// Edit grove config
+				if (repositories.length > 0) {
+					const repo = repositories[selectedIndex];
+					navigate('groveConfigEditor', { repositoryPath: repo.path });
 				}
 			}
 		} else if (mode === 'confirm-delete') {
@@ -173,6 +180,8 @@ export function RepositoriesScreen() {
 				<Box marginLeft={2} flexDirection="column" marginTop={1}>
 					{repositories.map((repo, index) => {
 						const isSelected = index === selectedIndex;
+						const hasGroveConfig = groveConfigService.groveConfigExists(repo.path);
+						const hasLocalConfig = groveConfigService.groveLocalConfigExists(repo.path);
 						return (
 							<Box key={repo.path} flexDirection="column" marginBottom={1}>
 								<Box>
@@ -180,6 +189,8 @@ export function RepositoriesScreen() {
 										{isSelected ? '❯ ' : '  '}
 										{repo.name}
 										{repo.isMonorepo && <Text color="magenta"> [monorepo]</Text>}
+										{hasGroveConfig && <Text color="green"> [.grove.json]</Text>}
+										{hasLocalConfig && <Text color="yellow"> [.grove.local.json]</Text>}
 									</Text>
 								</Box>
 								<Box marginLeft={2}>
@@ -200,6 +211,9 @@ export function RepositoriesScreen() {
 				</Text>
 				<Text dimColor>
 					Press <Text color="cyan">M</Text> to toggle monorepo mode
+				</Text>
+				<Text dimColor>
+					Press <Text color="cyan">C</Text> to edit .grove.json config
 				</Text>
 				<Text dimColor>
 					Press <Text color="cyan">D</Text> or <Text color="cyan">Delete</Text> to unregister selected

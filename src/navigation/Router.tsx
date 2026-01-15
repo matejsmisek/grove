@@ -6,6 +6,7 @@ import { ChatScreen } from '../screens/ChatScreen.js';
 import { ClaudeTerminalSettingsScreen } from '../screens/ClaudeTerminalSettingsScreen.js';
 import { CloseGroveScreen } from '../screens/CloseGroveScreen.js';
 import { CreateGroveScreen } from '../screens/CreateGroveScreen.js';
+import { GroveConfigEditorScreen } from '../screens/GroveConfigEditorScreen.js';
 import { GroveDetailScreen } from '../screens/GroveDetailScreen.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
 import { IDESettingsScreen } from '../screens/IDESettingsScreen.js';
@@ -73,6 +74,12 @@ export function Router() {
 			return <WorkingFolderScreen />;
 		case 'repositories':
 			return <RepositoriesScreen />;
+		case 'groveConfigEditor':
+			return (
+				<GroveConfigEditorScreen
+					repositoryPath={'repositoryPath' in current.params ? current.params.repositoryPath : undefined}
+				/>
+			);
 		default:
 			return (
 				<Box padding={1}>

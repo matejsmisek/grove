@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
-import TextInput from 'ink-text-input';
-
+import { MultiLineTextInput } from '../components/MultiLineTextInput.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { ClaudeSessionServiceToken, SettingsServiceToken } from '../services/tokens.js';
@@ -12,6 +11,9 @@ import type {
 	ClaudeSessionTemplates,
 	ClaudeTerminalType,
 } from '../storage/types.js';
+
+// Valid template variables for Claude session templates
+const TEMPLATE_VARIABLES = ['WORKING_DIR', 'AGENT_COMMAND'] as const;
 
 type ViewMode = 'select' | 'configure';
 
@@ -129,7 +131,35 @@ export function ClaudeTerminalSettingsScreen() {
 		saveTemplate();
 	};
 
+	// Handle cancel editing
+	const handleCancelEdit = () => {
+		// Restore original template
+		const template = claudeSessionService.getEffectiveTemplate(configuringTerminal!);
+		setTempTemplate(template);
+		setEditingTemplate(false);
+	};
+
+	// Validate template variables - find any invalid ${...} patterns
+	const validateTemplateVariables = (
+		template: string
+	): { valid: boolean; invalidVars: string[] } => {
+		const varPattern = /\$\{([^}]+)\}/g;
+		const invalidVars: string[] = [];
+		let match;
+
+		while ((match = varPattern.exec(template)) !== null) {
+			const varName = match[1];
+			if (!TEMPLATE_VARIABLES.includes(varName as (typeof TEMPLATE_VARIABLES)[number])) {
+				invalidVars.push(varName);
+			}
+		}
+
+		return { valid: invalidVars.length === 0, invalidVars };
+	};
+
 	if (viewMode === 'configure' && configuringTerminal) {
+		const validation = validateTemplateVariables(tempTemplate);
+
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
@@ -144,15 +174,52 @@ export function ClaudeTerminalSettingsScreen() {
 					</Box>
 				)}
 
-				<Box marginBottom={1}>
-					<Text dimColor>Template content (use ${`{WORKING_DIR}`} as placeholder):</Text>
+				{/* Variable hints */}
+				<Box marginBottom={1} flexDirection="column">
+					<Text dimColor>Available variables:</Text>
+					<Box marginLeft={2} flexDirection="column">
+						<Text>
+							<Text color="cyan">${`{WORKING_DIR}`}</Text>
+							<Text dimColor> - Working directory path</Text>
+						</Text>
+						<Text>
+							<Text color="cyan">${`{AGENT_COMMAND}`}</Text>
+							<Text dimColor> - Claude command (</Text>
+							<Text color="gray">claude</Text>
+							<Text dimColor> or </Text>
+							<Text color="gray">claude --resume id</Text>
+							<Text dimColor>)</Text>
+						</Text>
+					</Box>
 				</Box>
+
+				{/* Validation warnings */}
+				{!validation.valid && (
+					<Box marginBottom={1}>
+						<Text color="yellow">
+							Unknown variables: {validation.invalidVars.map((v) => `\${${v}}`).join(', ')}
+						</Text>
+					</Box>
+				)}
 
 				<Box flexDirection="column" marginBottom={1} borderStyle="single" padding={1}>
 					{editingTemplate ? (
-						<TextInput value={tempTemplate} onChange={setTempTemplate} onSubmit={handleSubmitTemplate} />
+						<MultiLineTextInput
+							value={tempTemplate}
+							onChange={setTempTemplate}
+							onSubmit={handleSubmitTemplate}
+							onCancel={handleCancelEdit}
+							isActive={editingTemplate}
+							maxVisibleLines={15}
+							showLineNumbers={true}
+						/>
 					) : (
-						<Text>{tempTemplate || '(empty)'}</Text>
+						<Box flexDirection="column">
+							{tempTemplate.split('\n').map((line, index) => (
+								<Text key={index}>{line || ' '}</Text>
+							))}
+							{!tempTemplate && <Text dimColor>(empty)</Text>}
+						</Box>
 					)}
 				</Box>
 
