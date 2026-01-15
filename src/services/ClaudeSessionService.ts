@@ -22,6 +22,17 @@ export class ClaudeSessionService implements IClaudeSessionService {
 	) {}
 
 	/**
+	 * Normalize template content to a string
+	 * Handles both string and string[] formats
+	 */
+	private normalizeTemplateContent(content: string | string[]): string {
+		if (Array.isArray(content)) {
+			return content.join('\n');
+		}
+		return content;
+	}
+
+	/**
 	 * Check if a command exists in the system PATH
 	 */
 	private commandExists(command: string): boolean {
@@ -85,7 +96,7 @@ launch --title "cmd" bash
 		if (templates) {
 			const template = templates[terminalType];
 			if (template) {
-				return template.content;
+				return this.normalizeTemplateContent(template.content);
 			}
 		}
 		return this.getDefaultTemplate(terminalType);
@@ -112,7 +123,9 @@ launch --title "cmd" bash
 						projectConfig.claudeSessionTemplates &&
 						projectConfig.claudeSessionTemplates[terminalType]
 					) {
-						return projectConfig.claudeSessionTemplates[terminalType].content;
+						return this.normalizeTemplateContent(
+							projectConfig.claudeSessionTemplates[terminalType].content
+						);
 					}
 				} catch {
 					// Ignore JSON parse errors
@@ -126,7 +139,7 @@ launch --title "cmd" bash
 		if (repoTemplates) {
 			const repoTemplate = repoTemplates[terminalType];
 			if (repoTemplate) {
-				return repoTemplate.content;
+				return this.normalizeTemplateContent(repoTemplate.content);
 			}
 		}
 

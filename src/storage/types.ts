@@ -46,8 +46,11 @@ export type ClaudeTerminalType = 'konsole' | 'kitty';
  * Contains the file content with ${WORKING_DIR} placeholder
  */
 export interface ClaudeSessionTemplate {
-	/** Template content with ${WORKING_DIR} placeholder */
-	content: string;
+	/**
+	 * Template content with ${WORKING_DIR} placeholder
+	 * Can be either a single string or an array of strings (joined by newlines)
+	 */
+	content: string | string[];
 }
 
 /**
