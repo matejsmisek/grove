@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
@@ -17,9 +17,9 @@ const BRANCH_TEMPLATE_VARIABLES = ['GROVE_NAME'] as const;
 const CLAUDE_TEMPLATE_VARIABLES = ['WORKING_DIR', 'AGENT_COMMAND'] as const;
 
 type ViewMode =
-	| 'selectRepo'
-	| 'selectConfigLocation'
-	| 'selectConfigFile'
+	| 'fileList'
+	| 'createSelectType'
+	| 'createSelectFolder'
 	| 'editConfig'
 	| 'editField'
 	| 'editListItem'
@@ -27,12 +27,16 @@ type ViewMode =
 
 type ConfigFileType = 'grove' | 'groveLocal';
 
-interface ConfigLocation {
-	projectPath?: string; // undefined means root config
+// Represents a detected or potential config file
+interface ConfigFileEntry {
+	type: ConfigFileType;
+	projectPath?: string; // undefined = root
+	exists: boolean;
+	displayPath: string;
 }
 
 interface GroveConfigEditorScreenProps {
-	repositoryPath?: string; // Optional pre-selected repository
+	repositoryPath?: string;
 }
 
 // Config field definitions
@@ -88,82 +92,174 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 	const repositoryService = useService(RepositoryServiceToken);
 	const groveConfigService = useService(GroveConfigServiceToken);
 
+	// Find repository
+	const [repository] = useState<Repository | null>(() => {
+		if (!repositoryPath) return null;
+		const repos = repositoryService.getAllRepositories();
+		return repos.find((r) => r.path === repositoryPath) ?? null;
+	});
+
 	// State
-	const [viewMode, setViewMode] = useState<ViewMode>(
-		repositoryPath ? 'selectConfigLocation' : 'selectRepo'
-	);
+	const [viewMode, setViewMode] = useState<ViewMode>('fileList');
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
-	// Repository selection
-	const [repositories] = useState<Repository[]>(() => repositoryService.getAllRepositories());
-	const [selectedRepo, setSelectedRepo] = useState<Repository | null>(() =>
-		repositoryPath ? (repositories.find((r) => r.path === repositoryPath) ?? null) : null
+	// Config files detected
+	const [configFiles, setConfigFiles] = useState<ConfigFileEntry[]>([]);
+
+	// For creating new config
+	const [newConfigType, setNewConfigType] = useState<ConfigFileType>('grove');
+	const [availableFolders, setAvailableFolders] = useState<Array<{ path?: string; label: string }>>(
+		[]
 	);
 
-	// Config location (root or project folder for monorepos)
-	const [configLocation, setConfigLocation] = useState<ConfigLocation>({});
-	const [configLocations, setConfigLocations] = useState<ConfigLocation[]>([]);
-
-	// Config file type (.grove.json or .grove.local.json)
-	const [configFileType, setConfigFileType] = useState<ConfigFileType>('grove');
-
-	// Config data
+	// Current editing state
+	const [editingFile, setEditingFile] = useState<ConfigFileEntry | null>(null);
 	const [config, setConfig] = useState<GroveRepoConfig>({});
 
 	// Field editing
 	const [editingFieldIndex, setEditingFieldIndex] = useState(0);
 	const [editingField, setEditingField] = useState<ConfigFieldKey | null>(null);
 	const [tempValue, setTempValue] = useState('');
-	const [editingListIndex, setEditingListIndex] = useState(-1); // -1 = adding new item
+	const [editingListIndex, setEditingListIndex] = useState(-1);
 
-	// Load config locations for selected repo
-	const loadConfigLocations = (repo: Repository) => {
-		const locations: ConfigLocation[] = [{ projectPath: undefined }]; // Root config
+	// Scan for config files
+	const scanConfigFiles = () => {
+		if (!repository) return;
 
-		if (repo.isMonorepo) {
-			// Get projects with existing .grove.json
-			const projectsWithConfig = groveConfigService.getProjectsWithGroveConfig(repo.path);
-			for (const projectPath of projectsWithConfig) {
-				locations.push({ projectPath });
-			}
+		const files: ConfigFileEntry[] = [];
 
-			// Also get all monorepo projects (for creating new configs)
-			const allProjects = getMonorepoProjects(repo.path);
-			for (const projectPath of allProjects) {
-				if (!locations.find((l) => l.projectPath === projectPath)) {
-					locations.push({ projectPath });
+		// Check root .grove.json
+		if (groveConfigService.groveConfigExists(repository.path)) {
+			files.push({
+				type: 'grove',
+				projectPath: undefined,
+				exists: true,
+				displayPath: '.grove.json',
+			});
+		}
+
+		// Check root .grove.local.json
+		if (groveConfigService.groveLocalConfigExists(repository.path)) {
+			files.push({
+				type: 'groveLocal',
+				projectPath: undefined,
+				exists: true,
+				displayPath: '.grove.local.json',
+			});
+		}
+
+		// For monorepos, check project folders
+		if (repository.isMonorepo) {
+			const projects = getMonorepoProjects(repository.path);
+			for (const projectPath of projects) {
+				if (groveConfigService.groveConfigExists(repository.path, projectPath)) {
+					files.push({
+						type: 'grove',
+						projectPath,
+						exists: true,
+						displayPath: `${projectPath}/.grove.json`,
+					});
+				}
+				if (groveConfigService.groveLocalConfigExists(repository.path, projectPath)) {
+					files.push({
+						type: 'groveLocal',
+						projectPath,
+						exists: true,
+						displayPath: `${projectPath}/.grove.local.json`,
+					});
 				}
 			}
 		}
 
-		setConfigLocations(locations);
+		setConfigFiles(files);
 	};
 
-	// Load config for selected location
-	const loadConfig = (location: ConfigLocation, fileType: ConfigFileType) => {
-		if (!selectedRepo) return;
+	// Initial scan
+	useEffect(() => {
+		scanConfigFiles();
+	}, [repository]);
+
+	// Load config for editing
+	const loadConfig = (file: ConfigFileEntry) => {
+		if (!repository) return;
 
 		const loadedConfig =
-			fileType === 'grove'
-				? groveConfigService.readGroveConfigOnly(selectedRepo.path, location.projectPath)
-				: groveConfigService.readGroveLocalConfigOnly(selectedRepo.path, location.projectPath);
+			file.type === 'grove'
+				? groveConfigService.readGroveConfigOnly(repository.path, file.projectPath)
+				: groveConfigService.readGroveLocalConfigOnly(repository.path, file.projectPath);
 
 		setConfig(loadedConfig);
+		setEditingFile(file);
+		setEditingFieldIndex(0);
+		setViewMode('editConfig');
 	};
 
 	// Save config
 	const saveConfig = () => {
-		if (!selectedRepo) return;
+		if (!repository || !editingFile) return;
 
-		if (configFileType === 'grove') {
-			groveConfigService.writeGroveConfig(selectedRepo.path, config, configLocation.projectPath);
+		if (editingFile.type === 'grove') {
+			groveConfigService.writeGroveConfig(repository.path, config, editingFile.projectPath);
 		} else {
-			groveConfigService.writeGroveLocalConfig(selectedRepo.path, config, configLocation.projectPath);
+			groveConfigService.writeGroveLocalConfig(repository.path, config, editingFile.projectPath);
 		}
 
 		setSavedMessage('Configuration saved');
 		setTimeout(() => setSavedMessage(null), 2000);
+	};
+
+	// Create new config file
+	const createNewConfig = (type: ConfigFileType, projectPath?: string) => {
+		if (!repository) return;
+
+		const emptyConfig: GroveRepoConfig = {};
+
+		if (type === 'grove') {
+			groveConfigService.writeGroveConfig(repository.path, emptyConfig, projectPath);
+		} else {
+			groveConfigService.writeGroveLocalConfig(repository.path, emptyConfig, projectPath);
+		}
+
+		// Refresh the file list
+		scanConfigFiles();
+
+		// Open the new file for editing
+		const displayPath = projectPath
+			? `${projectPath}/${type === 'grove' ? '.grove.json' : '.grove.local.json'}`
+			: type === 'grove'
+				? '.grove.json'
+				: '.grove.local.json';
+
+		const newFile: ConfigFileEntry = {
+			type,
+			projectPath,
+			exists: true,
+			displayPath,
+		};
+
+		loadConfig(newFile);
+		setSavedMessage('Config file created');
+		setTimeout(() => setSavedMessage(null), 2000);
+	};
+
+	// Start create new config flow
+	const startCreateConfig = () => {
+		if (!repository) return;
+
+		// Build list of available folders
+		const folders: Array<{ path?: string; label: string }> = [{ path: undefined, label: '(root)' }];
+
+		if (repository.isMonorepo) {
+			const projects = getMonorepoProjects(repository.path);
+			for (const projectPath of projects) {
+				folders.push({ path: projectPath, label: projectPath });
+			}
+		}
+
+		setAvailableFolders(folders);
+		setSelectedIndex(0);
+		setViewMode('createSelectType');
 	};
 
 	// Get display value for a field
@@ -234,51 +330,52 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 	// Input handler
 	useInput(
 		(input, key) => {
-			if (viewMode === 'selectRepo') {
+			if (viewMode === 'fileList') {
 				if (key.escape && canGoBack) {
 					goBack();
-				} else if (key.upArrow) {
-					setSelectedIndex((prev) => (prev > 0 ? prev - 1 : repositories.length - 1));
-				} else if (key.downArrow) {
-					setSelectedIndex((prev) => (prev < repositories.length - 1 ? prev + 1 : 0));
-				} else if (key.return && repositories.length > 0) {
-					const repo = repositories[selectedIndex];
-					setSelectedRepo(repo);
-					loadConfigLocations(repo);
-					setSelectedIndex(0);
-					setViewMode('selectConfigLocation');
+				} else if (key.upArrow && configFiles.length > 0) {
+					setSelectedIndex((prev) => (prev > 0 ? prev - 1 : configFiles.length - 1));
+				} else if (key.downArrow && configFiles.length > 0) {
+					setSelectedIndex((prev) => (prev < configFiles.length - 1 ? prev + 1 : 0));
+				} else if (key.return && configFiles.length > 0) {
+					loadConfig(configFiles[selectedIndex]);
+				} else if (input === 'c' || input === 'C') {
+					startCreateConfig();
 				}
-			} else if (viewMode === 'selectConfigLocation') {
+			} else if (viewMode === 'createSelectType') {
 				if (key.escape) {
-					setViewMode('selectRepo');
-					setSelectedIndex(0);
-				} else if (key.upArrow) {
-					setSelectedIndex((prev) => (prev > 0 ? prev - 1 : configLocations.length - 1));
-				} else if (key.downArrow) {
-					setSelectedIndex((prev) => (prev < configLocations.length - 1 ? prev + 1 : 0));
-				} else if (key.return) {
-					setConfigLocation(configLocations[selectedIndex]);
-					setSelectedIndex(0);
-					setViewMode('selectConfigFile');
-				}
-			} else if (viewMode === 'selectConfigFile') {
-				if (key.escape) {
-					setViewMode('selectConfigLocation');
+					setViewMode('fileList');
 					setSelectedIndex(0);
 				} else if (key.upArrow || key.downArrow) {
 					setSelectedIndex((prev) => (prev === 0 ? 1 : 0));
 				} else if (key.return) {
-					const fileType = selectedIndex === 0 ? 'grove' : 'groveLocal';
-					setConfigFileType(fileType);
-					loadConfig(configLocation, fileType);
+					setNewConfigType(selectedIndex === 0 ? 'grove' : 'groveLocal');
+					if (availableFolders.length === 1) {
+						// Only root available, create directly
+						createNewConfig(selectedIndex === 0 ? 'grove' : 'groveLocal', undefined);
+					} else {
+						// Multiple folders, let user choose
+						setSelectedIndex(0);
+						setViewMode('createSelectFolder');
+					}
+				}
+			} else if (viewMode === 'createSelectFolder') {
+				if (key.escape) {
+					setViewMode('createSelectType');
 					setSelectedIndex(0);
-					setEditingFieldIndex(0);
-					setViewMode('editConfig');
+				} else if (key.upArrow) {
+					setSelectedIndex((prev) => (prev > 0 ? prev - 1 : availableFolders.length - 1));
+				} else if (key.downArrow) {
+					setSelectedIndex((prev) => (prev < availableFolders.length - 1 ? prev + 1 : 0));
+				} else if (key.return) {
+					createNewConfig(newConfigType, availableFolders[selectedIndex].path);
 				}
 			} else if (viewMode === 'editConfig') {
 				if (key.escape) {
-					setViewMode('selectConfigFile');
+					setViewMode('fileList');
+					setEditingFile(null);
 					setSelectedIndex(0);
+					scanConfigFiles(); // Refresh in case new file was created
 				} else if (key.upArrow) {
 					setEditingFieldIndex((prev) => (prev > 0 ? prev - 1 : CONFIG_FIELDS.length - 1));
 				} else if (key.downArrow) {
@@ -287,13 +384,10 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					const field = CONFIG_FIELDS[editingFieldIndex];
 					startEditField(field);
 				} else if (input === 'd' || key.delete) {
-					// Delete/clear field
 					const field = CONFIG_FIELDS[editingFieldIndex];
 					const newConfig = { ...config };
 					delete newConfig[field.key];
 					setConfig(newConfig);
-					saveConfig();
-				} else if (input === 's') {
 					saveConfig();
 				}
 			} else if (viewMode === 'selectIDE') {
@@ -305,7 +399,6 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					setSelectedIndex((prev) => (prev < ALL_IDE_TYPES.length ? prev + 1 : 0));
 				} else if (key.return) {
 					if (selectedIndex === ALL_IDE_TYPES.length) {
-						// Clear IDE
 						const newConfig = { ...config };
 						delete newConfig.ide;
 						setConfig(newConfig);
@@ -340,7 +433,6 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 				setViewMode('selectIDE');
 				break;
 			case 'claudeTemplates':
-				// For now, show a message that this should be edited via Claude Terminal Settings
 				setSavedMessage('Edit Claude templates in Claude Terminal Settings');
 				setTimeout(() => setSavedMessage(null), 3000);
 				setEditingField(null);
@@ -380,54 +472,76 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 		setViewMode('editConfig');
 	};
 
-	// Render repository selection
-	if (viewMode === 'selectRepo') {
-		if (repositories.length === 0) {
-			return (
-				<Box flexDirection="column" padding={1}>
-					<Box marginBottom={1}>
-						<Text bold color="yellow">
-							Grove Config Editor
+	// No repository found
+	if (!repository) {
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="red">
+						Repository not found
+					</Text>
+				</Box>
+				{canGoBack && (
+					<Box marginTop={1}>
+						<Text dimColor>
+							Press <Text color="cyan">ESC</Text> to go back
 						</Text>
 					</Box>
-					<Text dimColor>No repositories registered. Register a repository first.</Text>
-					{canGoBack && (
-						<Box marginTop={1}>
-							<Text dimColor>
-								Press <Text color="cyan">ESC</Text> to go back
-							</Text>
-						</Box>
-					)}
-				</Box>
-			);
-		}
+				)}
+			</Box>
+		);
+	}
 
+	// File list view
+	if (viewMode === 'fileList') {
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
 					<Text bold color="yellow">
-						Grove Config Editor - Select Repository
+						Grove Config - {repository.name}
 					</Text>
+					{repository.isMonorepo && <Text color="magenta"> [monorepo]</Text>}
 				</Box>
 
-				<Box flexDirection="column" marginTop={1}>
-					{repositories.map((repo, index) => (
-						<Box key={repo.path} flexDirection="column" marginBottom={1}>
-							<Text color={index === selectedIndex ? 'cyan' : undefined} bold={index === selectedIndex}>
-								{index === selectedIndex ? '> ' : '  '}
-								{repo.name}
-								{repo.isMonorepo && <Text color="magenta"> [monorepo]</Text>}
+				{savedMessage && (
+					<Box marginBottom={1}>
+						<Text color="green">{savedMessage}</Text>
+					</Box>
+				)}
+
+				{configFiles.length === 0 ? (
+					<Box flexDirection="column" marginTop={1}>
+						<Text dimColor>No config files found.</Text>
+						<Box marginTop={1}>
+							<Text dimColor>
+								Press <Text color="cyan">C</Text> to create a new config file.
 							</Text>
-							<Box marginLeft={4}>
-								<Text dimColor>{repo.path}</Text>
-							</Box>
 						</Box>
-					))}
-				</Box>
+					</Box>
+				) : (
+					<Box flexDirection="column" marginTop={1}>
+						<Text dimColor>Select a config file to edit:</Text>
+						<Box flexDirection="column" marginTop={1}>
+							{configFiles.map((file, index) => (
+								<Box key={file.displayPath}>
+									<Text color={index === selectedIndex ? 'cyan' : undefined} bold={index === selectedIndex}>
+										{index === selectedIndex ? '> ' : '  '}
+										<Text color={file.type === 'grove' ? 'green' : 'yellow'}>{file.displayPath}</Text>
+									</Text>
+								</Box>
+							))}
+						</Box>
+					</Box>
+				)}
 
-				<Box marginTop={1} flexDirection="column">
+				<Box marginTop={2} flexDirection="column">
+					{configFiles.length > 0 && (
+						<Text dimColor>
+							<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Edit
+						</Text>
+					)}
 					<Text dimColor>
-						<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Select
+						<Text color="cyan">C</Text> Create new config file
 					</Text>
 					{canGoBack && (
 						<Text dimColor>
@@ -439,82 +553,27 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 		);
 	}
 
-	// Render config location selection (for monorepos)
-	if (viewMode === 'selectConfigLocation') {
+	// Create config - select type
+	if (viewMode === 'createSelectType') {
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
 					<Text bold color="yellow">
-						Grove Config Editor - {selectedRepo?.name}
+						Create Config File
 					</Text>
 				</Box>
 
 				<Box marginBottom={1}>
-					<Text dimColor>Select configuration location:</Text>
+					<Text dimColor>Select config file type:</Text>
 				</Box>
 
 				<Box flexDirection="column">
-					{configLocations.map((location, index) => {
-						const hasGroveConfig = selectedRepo
-							? groveConfigService.groveConfigExists(selectedRepo.path, location.projectPath)
-							: false;
-						const hasLocalConfig = selectedRepo
-							? groveConfigService.groveLocalConfigExists(selectedRepo.path, location.projectPath)
-							: false;
-
-						return (
-							<Box key={location.projectPath ?? 'root'}>
-								<Text color={index === selectedIndex ? 'cyan' : undefined} bold={index === selectedIndex}>
-									{index === selectedIndex ? '> ' : '  '}
-									{location.projectPath ?? '(root)'}
-									{hasGroveConfig && <Text color="green"> .grove.json</Text>}
-									{hasLocalConfig && <Text color="yellow"> .grove.local.json</Text>}
-								</Text>
-							</Box>
-						);
-					})}
-				</Box>
-
-				<Box marginTop={1} flexDirection="column">
-					<Text dimColor>
-						<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Select
-					</Text>
-					<Text dimColor>
-						Press <Text color="cyan">ESC</Text> to go back
-					</Text>
-				</Box>
-			</Box>
-		);
-	}
-
-	// Render config file type selection
-	if (viewMode === 'selectConfigFile') {
-		const locationName = configLocation.projectPath ?? '(root)';
-		const hasGroveConfig = selectedRepo
-			? groveConfigService.groveConfigExists(selectedRepo.path, configLocation.projectPath)
-			: false;
-		const hasLocalConfig = selectedRepo
-			? groveConfigService.groveLocalConfigExists(selectedRepo.path, configLocation.projectPath)
-			: false;
-
-		return (
-			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={1}>
-					<Text bold color="yellow">
-						Grove Config Editor - {selectedRepo?.name}/{locationName}
-					</Text>
-				</Box>
-
-				<Box marginBottom={1}>
-					<Text dimColor>Select config file to edit:</Text>
-				</Box>
-
-				<Box flexDirection="column">
-					<Text color={selectedIndex === 0 ? 'cyan' : undefined} bold={selectedIndex === 0}>
-						{selectedIndex === 0 ? '> ' : '  '}
-						.grove.json
-						{hasGroveConfig ? <Text color="green"> (exists)</Text> : <Text dimColor> (new)</Text>}
-					</Text>
+					<Box>
+						<Text color={selectedIndex === 0 ? 'cyan' : undefined} bold={selectedIndex === 0}>
+							{selectedIndex === 0 ? '> ' : '  '}
+							<Text color="green">.grove.json</Text>
+						</Text>
+					</Box>
 					<Box marginLeft={4}>
 						<Text dimColor>Shared config (commit to repo)</Text>
 					</Box>
@@ -522,8 +581,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					<Box marginTop={1}>
 						<Text color={selectedIndex === 1 ? 'cyan' : undefined} bold={selectedIndex === 1}>
 							{selectedIndex === 1 ? '> ' : '  '}
-							.grove.local.json
-							{hasLocalConfig ? <Text color="green"> (exists)</Text> : <Text dimColor> (new)</Text>}
+							<Text color="yellow">.grove.local.json</Text>
 						</Text>
 					</Box>
 					<Box marginLeft={4}>
@@ -531,9 +589,61 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					</Box>
 				</Box>
 
-				<Box marginTop={1} flexDirection="column">
+				<Box marginTop={2} flexDirection="column">
 					<Text dimColor>
 						<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Select
+					</Text>
+					<Text dimColor>
+						Press <Text color="cyan">ESC</Text> to cancel
+					</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	// Create config - select folder (for monorepos)
+	if (viewMode === 'createSelectFolder') {
+		const fileName = newConfigType === 'grove' ? '.grove.json' : '.grove.local.json';
+
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="yellow">
+						Create {fileName}
+					</Text>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Text dimColor>Select location:</Text>
+				</Box>
+
+				<Box flexDirection="column">
+					{availableFolders.map((folder, index) => {
+						// Check if file already exists in this location
+						const alreadyExists =
+							newConfigType === 'grove'
+								? groveConfigService.groveConfigExists(repository.path, folder.path)
+								: groveConfigService.groveLocalConfigExists(repository.path, folder.path);
+
+						return (
+							<Box key={folder.path ?? 'root'}>
+								<Text
+									color={index === selectedIndex ? 'cyan' : undefined}
+									bold={index === selectedIndex}
+									dimColor={alreadyExists}
+								>
+									{index === selectedIndex ? '> ' : '  '}
+									{folder.label}
+									{alreadyExists && <Text color="gray"> (exists)</Text>}
+								</Text>
+							</Box>
+						);
+					})}
+				</Box>
+
+				<Box marginTop={2} flexDirection="column">
+					<Text dimColor>
+						<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Create
 					</Text>
 					<Text dimColor>
 						Press <Text color="cyan">ESC</Text> to go back
@@ -543,7 +653,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 		);
 	}
 
-	// Render IDE selection
+	// IDE selection
 	if (viewMode === 'selectIDE') {
 		const currentIDE = config.ide;
 
@@ -591,7 +701,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 		);
 	}
 
-	// Render list item editing (for stringArray fields)
+	// List item editing
 	if (viewMode === 'editListItem' && editingField) {
 		const field = CONFIG_FIELDS.find((f) => f.key === editingField);
 		const items = (config[editingField] as string[] | undefined) || [];
@@ -646,7 +756,6 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 						</Box>
 					))}
 
-					{/* Add new item */}
 					{editingListIndex === -1 && (
 						<Box marginTop={1}>
 							<Text color={selectedIndex === items.length ? 'cyan' : undefined}>
@@ -728,7 +837,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 		);
 	}
 
-	// Render string field editing
+	// String field editing
 	if (viewMode === 'editField' && editingField) {
 		const field = CONFIG_FIELDS.find((f) => f.key === editingField);
 		const validation =
@@ -802,15 +911,16 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 		);
 	}
 
-	// Render config editing
-	const locationName = configLocation.projectPath ?? '(root)';
-	const fileName = configFileType === 'grove' ? '.grove.json' : '.grove.local.json';
+	// Config editing view
+	if (!editingFile) {
+		return null;
+	}
 
 	return (
 		<Box flexDirection="column" padding={1}>
 			<Box marginBottom={1}>
 				<Text bold color="yellow">
-					Grove Config Editor - {selectedRepo?.name}/{locationName}/{fileName}
+					Edit {editingFile.displayPath}
 				</Text>
 			</Box>
 
@@ -845,7 +955,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					<Text color="cyan">d</Text> Delete field
 				</Text>
 				<Text dimColor>
-					<Text color="cyan">s</Text> Save - <Text color="cyan">ESC</Text> Back
+					Press <Text color="cyan">ESC</Text> to go back
 				</Text>
 			</Box>
 		</Box>
