@@ -34,7 +34,6 @@ export function ClaudeTerminalSettingsScreen() {
 
 	// For configure mode
 	const [configuringTerminal, setConfiguringTerminal] = useState<ClaudeTerminalType | null>(null);
-	const [editingTemplate, setEditingTemplate] = useState(false);
 	const [tempTemplate, setTempTemplate] = useState('');
 
 	// Get available terminals
@@ -54,7 +53,6 @@ export function ClaudeTerminalSettingsScreen() {
 		setConfiguringTerminal(terminalType);
 		setTempTemplate(template);
 		setViewMode('configure');
-		setEditingTemplate(false);
 	};
 
 	// Save custom template
@@ -80,23 +78,6 @@ export function ClaudeTerminalSettingsScreen() {
 		setTimeout(() => setSavedMessage(null), 1500);
 	};
 
-	// Reset to default template
-	const resetToDefault = () => {
-		if (!configuringTerminal) return;
-
-		const currentTemplates = settings.claudeSessionTemplates || {};
-		const newTemplates = { ...currentTemplates };
-		delete newTemplates[configuringTerminal];
-
-		settingsService.updateSettings({ claudeSessionTemplates: newTemplates });
-
-		const defaultTemplate = claudeSessionService.getDefaultTemplate(configuringTerminal);
-		setTempTemplate(defaultTemplate);
-
-		setSavedMessage(`Reset ${TERMINAL_DISPLAY_NAMES[configuringTerminal]} to default`);
-		setTimeout(() => setSavedMessage(null), 2000);
-	};
-
 	useInput(
 		(input, key) => {
 			if (viewMode === 'select') {
@@ -111,32 +92,22 @@ export function ClaudeTerminalSettingsScreen() {
 				} else if (input === 'c') {
 					startConfigure(allTerminals[selectedIndex]);
 				}
-			} else if (viewMode === 'configure' && !editingTemplate) {
-				if (key.escape) {
-					setViewMode('select');
-					setConfiguringTerminal(null);
-				} else if (key.return) {
-					setEditingTemplate(true);
-				} else if (input === 'r') {
-					resetToDefault();
-				}
 			}
 		},
-		{ isActive: !editingTemplate }
+		{ isActive: viewMode === 'select' }
 	);
 
 	// Handle template submission
 	const handleSubmitTemplate = () => {
-		setEditingTemplate(false);
 		saveTemplate();
+		setViewMode('select');
+		setConfiguringTerminal(null);
 	};
 
 	// Handle cancel editing
 	const handleCancelEdit = () => {
-		// Restore original template
-		const template = claudeSessionService.getEffectiveTemplate(configuringTerminal!);
-		setTempTemplate(template);
-		setEditingTemplate(false);
+		setViewMode('select');
+		setConfiguringTerminal(null);
 	};
 
 	// Validate template variables - find any invalid ${...} patterns
@@ -203,36 +174,16 @@ export function ClaudeTerminalSettingsScreen() {
 				)}
 
 				<Box flexDirection="column" marginBottom={1} borderStyle="single" padding={1}>
-					{editingTemplate ? (
-						<MultiLineTextInput
-							value={tempTemplate}
-							onChange={setTempTemplate}
-							onSubmit={handleSubmitTemplate}
-							onCancel={handleCancelEdit}
-							isActive={editingTemplate}
-							maxVisibleLines={15}
-							showLineNumbers={true}
-						/>
-					) : (
-						<Box flexDirection="column">
-							{tempTemplate.split('\n').map((line, index) => (
-								<Text key={index}>{line || ' '}</Text>
-							))}
-							{!tempTemplate && <Text dimColor>(empty)</Text>}
-						</Box>
-					)}
+					<MultiLineTextInput
+						value={tempTemplate}
+						onChange={setTempTemplate}
+						onSubmit={handleSubmitTemplate}
+						onCancel={handleCancelEdit}
+						isActive={true}
+						maxVisibleLines={15}
+						showLineNumbers={true}
+					/>
 				</Box>
-
-				{!editingTemplate && (
-					<Box marginTop={1} flexDirection="column">
-						<Text dimColor>
-							<Text color="cyan">Enter</Text> Edit template - <Text color="cyan">r</Text> Reset to default
-						</Text>
-						<Text dimColor>
-							Press <Text color="cyan">ESC</Text> to go back
-						</Text>
-					</Box>
-				)}
 			</Box>
 		);
 	}
