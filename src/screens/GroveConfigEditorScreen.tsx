@@ -88,7 +88,7 @@ const CONFIG_FIELDS: ConfigField[] = [
 ];
 
 export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScreenProps) {
-	const { goBack, canGoBack } = useNavigation();
+	const { goBack, canGoBack, navigate } = useNavigation();
 	const repositoryService = useService(RepositoryServiceToken);
 	const groveConfigService = useService(GroveConfigServiceToken);
 
@@ -451,12 +451,13 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 				break;
 			case 'ide':
 				setSelectedIndex(0);
+				setEditingField(null); // Don't set editingField for IDE selection
 				setViewMode('selectIDE');
 				break;
 			case 'claudeTemplates':
-				setSavedMessage('Edit Claude templates in Claude Terminal Settings');
-				setTimeout(() => setSavedMessage(null), 3000);
+				// Navigate to Claude Terminal Settings
 				setEditingField(null);
+				navigate('claudeTerminalSettings', {});
 				break;
 		}
 	};
