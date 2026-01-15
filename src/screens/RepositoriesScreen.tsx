@@ -50,7 +50,7 @@ export function RepositoriesScreen() {
 					setRepositories(repositoryService.getAllRepositories());
 					setSuccessMessage(newIsMonorepo ? 'Monorepo mode enabled' : 'Monorepo mode disabled');
 					setTimeout(() => setSuccessMessage(null), 2000);
-					setMode('list');
+					// Stay on repo menu, don't go back to list
 				},
 			},
 			{
