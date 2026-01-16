@@ -4,26 +4,74 @@ import { Box, Text, useInput } from 'ink';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { RepositoryServiceToken } from '../services/tokens.js';
+import { GroveConfigServiceToken, RepositoryServiceToken } from '../services/tokens.js';
 import type { Repository } from '../storage/index.js';
 
-type ScreenMode = 'list' | 'confirm-delete';
+type ScreenMode = 'list' | 'repo-menu' | 'confirm-delete';
+
+interface RepoMenuOption {
+	key: string;
+	label: string;
+	action: () => void;
+}
 
 export function RepositoriesScreen() {
-	const { goBack, canGoBack } = useNavigation();
+	const { goBack, canGoBack, navigate } = useNavigation();
 	const repositoryService = useService(RepositoryServiceToken);
+	const groveConfigService = useService(GroveConfigServiceToken);
 	const [repositories, setRepositories] = useState<Repository[]>(() =>
 		repositoryService.getAllRepositories()
 	);
 	const [selectedIndex, setSelectedIndex] = useState(0);
+	const [menuOptionIndex, setMenuOptionIndex] = useState(0);
 	const [mode, setMode] = useState<ScreenMode>('list');
-	const [deleteSuccess, setDeleteSuccess] = useState(false);
-	const [monorepoToggleSuccess, setMonorepoToggleSuccess] = useState(false);
+	const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+	const selectedRepo = repositories[selectedIndex] || null;
+
+	// Build menu options for selected repository
+	const getMenuOptions = (): RepoMenuOption[] => {
+		if (!selectedRepo) return [];
+
+		return [
+			{
+				key: 'config',
+				label: 'Edit .grove config',
+				action: () => {
+					navigate('groveConfigEditor', { repositoryPath: selectedRepo.path });
+				},
+			},
+			{
+				key: 'monorepo',
+				label: selectedRepo.isMonorepo ? 'Disable monorepo mode' : 'Enable monorepo mode',
+				action: () => {
+					const newIsMonorepo = !selectedRepo.isMonorepo;
+					repositoryService.updateRepository(selectedRepo.path, { isMonorepo: newIsMonorepo });
+					setRepositories(repositoryService.getAllRepositories());
+					setSuccessMessage(newIsMonorepo ? 'Monorepo mode enabled' : 'Monorepo mode disabled');
+					setTimeout(() => setSuccessMessage(null), 2000);
+					// Stay on repo menu, don't go back to list
+				},
+			},
+			{
+				key: 'delete',
+				label: 'Unregister repository',
+				action: () => {
+					setMode('confirm-delete');
+				},
+			},
+		];
+	};
+
+	const menuOptions = getMenuOptions();
 
 	useInput((input, key) => {
 		if (key.escape) {
 			if (mode === 'confirm-delete') {
+				setMode('repo-menu');
+			} else if (mode === 'repo-menu') {
 				setMode('list');
+				setMenuOptionIndex(0);
 			} else if (canGoBack) {
 				goBack();
 			}
@@ -32,56 +80,45 @@ export function RepositoriesScreen() {
 				setSelectedIndex((prev) => (prev > 0 ? prev - 1 : repositories.length - 1));
 			} else if (key.downArrow) {
 				setSelectedIndex((prev) => (prev < repositories.length - 1 ? prev + 1 : 0));
-			} else if (key.delete || key.backspace || input === 'd') {
-				if (repositories.length > 0) {
-					setMode('confirm-delete');
-				}
-			} else if (input === 'm' || input === 'M') {
-				// Toggle monorepo flag
-				if (repositories.length > 0) {
-					const repo = repositories[selectedIndex];
-					const newIsMonorepo = !repo.isMonorepo;
-					repositoryService.updateRepository(repo.path, { isMonorepo: newIsMonorepo });
-					// Refresh the list
-					setRepositories(repositoryService.getAllRepositories());
-					setMonorepoToggleSuccess(true);
-					setTimeout(() => {
-						setMonorepoToggleSuccess(false);
-					}, 2000);
-				}
+			} else if (key.return && repositories.length > 0) {
+				setMode('repo-menu');
+				setMenuOptionIndex(0);
+			}
+		} else if (mode === 'repo-menu') {
+			if (key.upArrow) {
+				setMenuOptionIndex((prev) => (prev > 0 ? prev - 1 : menuOptions.length - 1));
+			} else if (key.downArrow) {
+				setMenuOptionIndex((prev) => (prev < menuOptions.length - 1 ? prev + 1 : 0));
+			} else if (key.return && menuOptions[menuOptionIndex]) {
+				menuOptions[menuOptionIndex].action();
 			}
 		} else if (mode === 'confirm-delete') {
-			if (input === 'y') {
-				// Confirm deletion
+			if (input === 'y' || input === 'Y') {
 				const repoToDelete = repositories[selectedIndex];
 				const success = repositoryService.removeRepository(repoToDelete.path);
 				if (success) {
 					const newRepos = repositoryService.getAllRepositories();
 					setRepositories(newRepos);
-					setDeleteSuccess(true);
+					setSuccessMessage('Repository unregistered successfully');
 					setMode('list');
-					// Reset selected index if needed
 					if (selectedIndex >= newRepos.length) {
 						setSelectedIndex(Math.max(0, newRepos.length - 1));
 					}
-					// Clear success message after a delay
-					setTimeout(() => {
-						setDeleteSuccess(false);
-					}, 2000);
+					setTimeout(() => setSuccessMessage(null), 2000);
 				}
-			} else if (input === 'n') {
-				// Cancel deletion
-				setMode('list');
+			} else if (input === 'n' || input === 'N') {
+				setMode('repo-menu');
 			}
 		}
 	});
 
+	// Empty state
 	if (repositories.length === 0) {
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
 					<Text bold color="yellow">
-						📦 Registered Repositories
+						Registered Repositories
 					</Text>
 				</Box>
 
@@ -108,13 +145,13 @@ export function RepositoriesScreen() {
 		);
 	}
 
-	if (mode === 'confirm-delete') {
-		const repo = repositories[selectedIndex];
+	// Confirm delete view
+	if (mode === 'confirm-delete' && selectedRepo) {
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
 					<Text bold color="red">
-						⚠️ Confirm Deletion
+						Confirm Deletion
 					</Text>
 				</Box>
 
@@ -124,10 +161,10 @@ export function RepositoriesScreen() {
 
 				<Box marginTop={1} marginLeft={2} flexDirection="column">
 					<Text>
-						Name: <Text color="cyan">{repo.name}</Text>
+						Name: <Text color="cyan">{selectedRepo.name}</Text>
 					</Text>
 					<Text>
-						Path: <Text color="cyan">{repo.path}</Text>
+						Path: <Text color="cyan">{selectedRepo.path}</Text>
 					</Text>
 				</Box>
 
@@ -146,23 +183,75 @@ export function RepositoriesScreen() {
 		);
 	}
 
+	// Repository menu view
+	if (mode === 'repo-menu' && selectedRepo) {
+		const hasGroveConfig = groveConfigService.groveConfigExists(selectedRepo.path);
+		const hasLocalConfig = groveConfigService.groveLocalConfigExists(selectedRepo.path);
+
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="yellow">
+						{selectedRepo.name}
+					</Text>
+					{selectedRepo.isMonorepo && <Text color="magenta"> [monorepo]</Text>}
+				</Box>
+
+				<Box marginBottom={1}>
+					<Text dimColor>{selectedRepo.path}</Text>
+				</Box>
+
+				{(hasGroveConfig || hasLocalConfig) && (
+					<Box marginBottom={1}>
+						{hasGroveConfig && <Text color="green">.grove.json </Text>}
+						{hasLocalConfig && <Text color="yellow">.grove.local.json</Text>}
+					</Box>
+				)}
+
+				{successMessage && (
+					<Box marginBottom={1}>
+						<Text color="green">{successMessage}</Text>
+					</Box>
+				)}
+
+				<Box flexDirection="column" marginTop={1}>
+					{menuOptions.map((option, index) => (
+						<Box key={option.key}>
+							<Text
+								color={index === menuOptionIndex ? 'cyan' : undefined}
+								bold={index === menuOptionIndex}
+							>
+								{index === menuOptionIndex ? '> ' : '  '}
+								{option.label}
+							</Text>
+						</Box>
+					))}
+				</Box>
+
+				<Box marginTop={2} flexDirection="column">
+					<Text dimColor>
+						<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Select
+					</Text>
+					<Text dimColor>
+						Press <Text color="cyan">ESC</Text> to go back
+					</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	// Repository list view
 	return (
 		<Box flexDirection="column" padding={1}>
 			<Box marginBottom={1}>
 				<Text bold color="yellow">
-					📦 Registered Repositories
+					Registered Repositories
 				</Text>
 			</Box>
 
-			{deleteSuccess && (
+			{successMessage && (
 				<Box marginBottom={1}>
-					<Text color="green">✓ Repository unregistered successfully</Text>
-				</Box>
-			)}
-
-			{monorepoToggleSuccess && (
-				<Box marginBottom={1}>
-					<Text color="green">✓ Monorepo setting updated</Text>
+					<Text color="green">{successMessage}</Text>
 				</Box>
 			)}
 
@@ -173,20 +262,21 @@ export function RepositoriesScreen() {
 				<Box marginLeft={2} flexDirection="column" marginTop={1}>
 					{repositories.map((repo, index) => {
 						const isSelected = index === selectedIndex;
+						const hasGroveConfig = groveConfigService.groveConfigExists(repo.path);
+						const hasLocalConfig = groveConfigService.groveLocalConfigExists(repo.path);
 						return (
 							<Box key={repo.path} flexDirection="column" marginBottom={1}>
 								<Box>
 									<Text color={isSelected ? 'cyan' : undefined} bold={isSelected}>
-										{isSelected ? '❯ ' : '  '}
+										{isSelected ? '> ' : '  '}
 										{repo.name}
 										{repo.isMonorepo && <Text color="magenta"> [monorepo]</Text>}
+										{hasGroveConfig && <Text color="green"> [.grove.json]</Text>}
+										{hasLocalConfig && <Text color="yellow"> [.grove.local.json]</Text>}
 									</Text>
 								</Box>
-								<Box marginLeft={2}>
+								<Box marginLeft={4}>
 									<Text dimColor>{repo.path}</Text>
-								</Box>
-								<Box marginLeft={2}>
-									<Text dimColor>Registered: {new Date(repo.registeredAt).toLocaleString()}</Text>
 								</Box>
 							</Box>
 						);
@@ -196,14 +286,7 @@ export function RepositoriesScreen() {
 
 			<Box marginTop={2} flexDirection="column">
 				<Text dimColor>
-					Use <Text color="cyan">↑/↓</Text> arrows to select
-				</Text>
-				<Text dimColor>
-					Press <Text color="cyan">M</Text> to toggle monorepo mode
-				</Text>
-				<Text dimColor>
-					Press <Text color="cyan">D</Text> or <Text color="cyan">Delete</Text> to unregister selected
-					repository
+					<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Select repository
 				</Text>
 				{canGoBack && (
 					<Text dimColor>

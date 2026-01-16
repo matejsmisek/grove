@@ -199,8 +199,17 @@ export interface MergedGroveConfig {
 }
 
 /**
+ * Validation result for template variables
+ */
+export interface TemplateValidationResult {
+	valid: boolean;
+	invalidVars: string[];
+	missingRequired: string[];
+}
+
+/**
  * Grove repository configuration service interface
- * Reads .grove.json and .grove.local.json from repositories
+ * Reads and writes .grove.json and .grove.local.json from repositories
  */
 export interface IGroveConfigService {
 	/**
@@ -267,6 +276,88 @@ export interface IGroveConfigService {
 		repositoryPath: string,
 		projectPath?: string
 	): { ideType: IDEType } | { ideConfig: IDEConfig } | undefined;
+
+	// =========================================================================
+	// Write Methods
+	// =========================================================================
+
+	/**
+	 * Write .grove.json configuration to a repository
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param config - Configuration to write
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	writeGroveConfig(repositoryPath: string, config: GroveRepoConfig, projectPath?: string): void;
+
+	/**
+	 * Write .grove.local.json configuration to a repository
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param config - Configuration to write
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	writeGroveLocalConfig(repositoryPath: string, config: GroveRepoConfig, projectPath?: string): void;
+
+	/**
+	 * Read just the .grove.json file (without merging with .grove.local.json)
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	readGroveConfigOnly(repositoryPath: string, projectPath?: string): GroveRepoConfig;
+
+	/**
+	 * Read just the .grove.local.json file (without merging)
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	readGroveLocalConfigOnly(repositoryPath: string, projectPath?: string): GroveRepoConfig;
+
+	/**
+	 * Check if a .grove.json file exists
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	groveConfigExists(repositoryPath: string, projectPath?: string): boolean;
+
+	/**
+	 * Check if a .grove.local.json file exists
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	groveLocalConfigExists(repositoryPath: string, projectPath?: string): boolean;
+
+	/**
+	 * Get list of project folders in a monorepo that have .grove.json files
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @returns Array of project folder names that contain .grove.json
+	 */
+	getProjectsWithGroveConfig(repositoryPath: string): string[];
+
+	/**
+	 * Validate template variables in a string
+	 * @param template - Template string to validate
+	 * @param validVars - Array of valid variable names
+	 * @param requiredVars - Array of required variable names (optional)
+	 * @returns Validation result with invalid and missing required variables
+	 */
+	validateTemplateVariables(
+		template: string,
+		validVars: readonly string[],
+		requiredVars?: readonly string[]
+	): TemplateValidationResult;
+
+	/**
+	 * Validate branch name template
+	 * @param template - Branch name template to validate
+	 * @returns Validation result
+	 */
+	validateBranchTemplate(template: string): TemplateValidationResult;
+
+	/**
+	 * Validate Claude session template
+	 * @param template - Claude session template to validate
+	 * @returns Validation result
+	 */
+	validateClaudeSessionTemplate(template: string): TemplateValidationResult;
 }
 
 // ============================================================================
