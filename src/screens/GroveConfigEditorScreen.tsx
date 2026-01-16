@@ -537,6 +537,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 			case 'claudeTemplates':
 				// Show terminal type selector for Claude templates
 				setSelectedIndex(0);
+				setEditingField(null); // Don't set editingField for Claude template selection
 				setViewMode('selectClaudeTerminal');
 				break;
 		}
