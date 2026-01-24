@@ -634,13 +634,23 @@ export interface IClaudeSessionService {
 	): string;
 
 	/**
-	 * Apply template by replacing ${WORKING_DIR} and ${AGENT_COMMAND} placeholders
+	 * Apply template by replacing placeholders:
+	 * - ${WORKING_DIR}: Working directory path
+	 * - ${AGENT_COMMAND}: Agent command (defaults to 'claude')
+	 * - ${GROVE_NAME}: Full grove name
+	 * - ${GROVE_NAME_SHORT}: Shortened grove name (max 10 chars)
 	 * @param template - Template content
 	 * @param workingDir - Working directory path
 	 * @param agentCommand - Optional agent command (defaults to 'claude')
+	 * @param groveName - Optional grove name for template variables
 	 * @returns Template with placeholders replaced
 	 */
-	applyTemplate(template: string, workingDir: string, agentCommand?: string): string;
+	applyTemplate(
+		template: string,
+		workingDir: string,
+		agentCommand?: string,
+		groveName?: string
+	): string;
 
 	/**
 	 * Open Claude in a terminal session with the working directory set
@@ -649,12 +659,14 @@ export interface IClaudeSessionService {
 	 * @param repositoryPath - Repository path for template lookup
 	 * @param projectPath - Optional project path for template lookup (for monorepos)
 	 * @param terminalType - Optional terminal type to use (if not provided, uses setting or auto-detects)
+	 * @param groveName - Optional grove name for template variables (${GROVE_NAME}, ${GROVE_NAME_SHORT})
 	 */
 	openSession(
 		workingDir: string,
 		repositoryPath: string,
 		projectPath?: string,
-		terminalType?: ClaudeTerminalType
+		terminalType?: ClaudeTerminalType,
+		groveName?: string
 	): ClaudeSessionResult;
 
 	/**
@@ -662,11 +674,13 @@ export interface IClaudeSessionService {
 	 * @param sessionId - The session ID to resume
 	 * @param workingDir - Directory to set as working directory
 	 * @param terminalType - Terminal type to use
+	 * @param groveName - Optional grove name for template variables (${GROVE_NAME}, ${GROVE_NAME_SHORT})
 	 */
 	resumeSession(
 		sessionId: string,
 		workingDir: string,
-		terminalType: ClaudeTerminalType
+		terminalType: ClaudeTerminalType,
+		groveName?: string
 	): ClaudeSessionResult;
 }
 
