@@ -135,12 +135,40 @@ launch --title "cmd" bash
 	}
 
 	/**
-	 * Apply template by replacing ${WORKING_DIR} and ${AGENT_COMMAND} placeholders
+	 * Shorten a grove name to max 10 characters
+	 * Uses smart truncation: keeps the beginning, truncates the rest
 	 */
-	applyTemplate(template: string, workingDir: string, agentCommand: string = 'claude'): string {
-		return template
+	private shortenGroveName(groveName: string): string {
+		if (groveName.length <= 10) {
+			return groveName;
+		}
+		return groveName.slice(0, 10);
+	}
+
+	/**
+	 * Apply template by replacing placeholders:
+	 * - ${WORKING_DIR}: Working directory path
+	 * - ${AGENT_COMMAND}: Agent command (defaults to 'claude')
+	 * - ${GROVE_NAME}: Full grove name
+	 * - ${GROVE_NAME_SHORT}: Shortened grove name (max 10 chars)
+	 */
+	applyTemplate(
+		template: string,
+		workingDir: string,
+		agentCommand: string = 'claude',
+		groveName?: string
+	): string {
+		let result = template
 			.replace(/\$\{WORKING_DIR\}/g, workingDir)
 			.replace(/\$\{AGENT_COMMAND\}/g, agentCommand);
+
+		if (groveName) {
+			result = result
+				.replace(/\$\{GROVE_NAME\}/g, groveName)
+				.replace(/\$\{GROVE_NAME_SHORT\}/g, this.shortenGroveName(groveName));
+		}
+
+		return result;
 	}
 
 	/**
@@ -168,7 +196,8 @@ launch --title "cmd" bash
 		workingDir: string,
 		repositoryPath: string,
 		projectPath?: string,
-		terminalType?: ClaudeTerminalType
+		terminalType?: ClaudeTerminalType,
+		groveName?: string
 	): ClaudeSessionResult {
 		// Determine which terminal to use
 		let terminal: ClaudeTerminalType | undefined = terminalType;
@@ -213,8 +242,8 @@ launch --title "cmd" bash
 			// Get the appropriate template (always uses repo-specific lookup)
 			const template = this.getTemplateForRepo(terminal, repositoryPath, projectPath);
 
-			// Apply template with working directory
-			const sessionContent = this.applyTemplate(template, workingDir);
+			// Apply template with working directory and grove name
+			const sessionContent = this.applyTemplate(template, workingDir, 'claude', groveName);
 
 			// Generate unique filename for the session file
 			const sessionId = crypto.randomBytes(8).toString('hex');
@@ -323,7 +352,8 @@ launch --title "cmd" bash
 	resumeSession(
 		sessionId: string,
 		workingDir: string,
-		terminalType: ClaudeTerminalType
+		terminalType: ClaudeTerminalType,
+		groveName?: string
 	): ClaudeSessionResult {
 		// Verify the selected terminal is actually available
 		if (!this.commandExists(terminalType)) {
@@ -350,8 +380,8 @@ launch --title "cmd" bash
 			// Build the agent command with --resume flag
 			const agentCommand = `claude --resume ${sessionId}`;
 
-			// Apply template with working directory and resume command
-			const sessionContent = this.applyTemplate(template, workingDir, agentCommand);
+			// Apply template with working directory, resume command, and grove name
+			const sessionContent = this.applyTemplate(template, workingDir, agentCommand, groveName);
 
 			// Generate unique filename for the session file
 			const tmpSessionId = crypto.randomBytes(8).toString('hex');

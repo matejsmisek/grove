@@ -43,10 +43,14 @@ export type ClaudeTerminalType = 'konsole' | 'kitty';
 
 /**
  * Template for Claude session/tabs file
- * Contains the file content with ${WORKING_DIR} placeholder
+ * Contains the file content with placeholders:
+ * - ${WORKING_DIR}: Working directory path
+ * - ${AGENT_COMMAND}: Agent command (e.g., 'claude' or 'claude --resume <id>')
+ * - ${GROVE_NAME}: Full grove name
+ * - ${GROVE_NAME_SHORT}: Shortened grove name (max 10 chars)
  */
 export interface ClaudeSessionTemplate {
-	/** Template content with ${WORKING_DIR} placeholder */
+	/** Template content with placeholders */
 	content: string;
 }
 
@@ -83,7 +87,11 @@ export interface Settings {
 	selectedClaudeTerminal?: ClaudeTerminalType;
 	/**
 	 * Custom Claude session templates for different terminal types.
-	 * Templates use ${WORKING_DIR} placeholder for the working directory.
+	 * Templates support placeholders:
+	 * - ${WORKING_DIR}: Working directory path
+	 * - ${AGENT_COMMAND}: Agent command (e.g., 'claude' or 'claude --resume <id>')
+	 * - ${GROVE_NAME}: Full grove name
+	 * - ${GROVE_NAME_SHORT}: Shortened grove name (max 10 chars)
 	 * If not set for a terminal type, default template will be used.
 	 */
 	claudeSessionTemplates?: ClaudeSessionTemplates;
@@ -334,7 +342,11 @@ export interface GroveRepoConfig {
 	ide?: GroveIDEConfig;
 	/**
 	 * Custom Claude session templates for different terminal types.
-	 * Templates use ${WORKING_DIR} placeholder for the working directory.
+	 * Templates support placeholders:
+	 * - ${WORKING_DIR}: Working directory path
+	 * - ${AGENT_COMMAND}: Agent command (e.g., 'claude' or 'claude --resume <id>')
+	 * - ${GROVE_NAME}: Full grove name
+	 * - ${GROVE_NAME_SHORT}: Shortened grove name (max 10 chars)
 	 * When set, these templates will be used instead of global templates from settings.
 	 */
 	claudeSessionTemplates?: ClaudeSessionTemplates;

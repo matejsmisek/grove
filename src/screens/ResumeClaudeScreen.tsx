@@ -172,7 +172,8 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 			const result = claudeSessionService.resumeSession(
 				session.sessionId,
 				session.workspacePath,
-				terminalToUse!
+				terminalToUse!,
+				groveRef.name
 			);
 			if (result.success) {
 				goBack();
@@ -195,7 +196,8 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 			const result = claudeSessionService.resumeSession(
 				session.sessionId,
 				session.workspacePath,
-				terminal
+				terminal,
+				groveName
 			);
 			if (result.success) {
 				goBack();
@@ -212,7 +214,8 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 		const result = claudeSessionService.resumeSession(
 			session.sessionId,
 			session.workspacePath,
-			selectedTerminal!
+			selectedTerminal!,
+			groveName
 		);
 		if (result.success) {
 			setResultMessage(`Resumed Claude session`);

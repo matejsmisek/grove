@@ -197,7 +197,9 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 		const result = claudeSessionService.openSession(
 			targetPath,
 			selectedWorktree.repositoryPath,
-			selectedWorktree.projectPath
+			selectedWorktree.projectPath,
+			undefined,
+			groveName
 		);
 		setShowActions(false);
 		if (result.success) {
