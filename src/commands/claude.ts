@@ -1,9 +1,8 @@
-import fs from 'fs';
 import path from 'path';
 
 import { getContainer } from '../di/index.js';
 import { ClaudeSessionServiceToken, GrovesServiceToken } from '../services/tokens.js';
-import type { GroveMetadata, Worktree } from '../storage/types.js';
+import type { GroveMetadata, GroveReference, Worktree } from '../storage/types.js';
 
 /**
  * Result of grove claude command
@@ -14,33 +13,20 @@ export interface ClaudeResult {
 }
 
 /**
- * Check if the given directory is a grove folder
- * A grove folder contains a grove.json file
+ * Find which grove the current directory belongs to
+ * Compares cwd against all known grove paths from the groves index
+ * Works at any depth within a grove folder
  */
-function isGrovePath(dirPath: string): boolean {
-	const groveJsonPath = path.join(dirPath, 'grove.json');
-	return fs.existsSync(groveJsonPath);
-}
+function findGroveForPath(resolvedCwd: string, groves: GroveReference[]): GroveReference | null {
+	// Ensure cwd ends with separator for accurate prefix matching
+	const cwdWithSep = resolvedCwd.endsWith(path.sep) ? resolvedCwd : resolvedCwd + path.sep;
 
-/**
- * Find the grove folder from a path
- * Checks the path itself and parent directories up to 3 levels
- * Also checks if we're inside a worktree folder within a grove
- */
-function findGrovePath(startPath: string): string | null {
-	let currentPath = path.resolve(startPath);
-
-	// Check up to 5 levels (to account for being inside worktree/project folders)
-	for (let i = 0; i < 5; i++) {
-		if (isGrovePath(currentPath)) {
-			return currentPath;
+	for (const grove of groves) {
+		const grovePathWithSep = grove.path.endsWith(path.sep) ? grove.path : grove.path + path.sep;
+		// Check if cwd is the grove path or inside it
+		if (resolvedCwd === grove.path || cwdWithSep.startsWith(grovePathWithSep)) {
+			return grove;
 		}
-		const parentPath = path.dirname(currentPath);
-		if (parentPath === currentPath) {
-			// Reached root
-			break;
-		}
-		currentPath = parentPath;
 	}
 	return null;
 }
@@ -49,13 +35,15 @@ function findGrovePath(startPath: string): string | null {
  * Find which worktree matches the current directory
  * Returns the worktree if we're inside one, null otherwise
  */
-function findCurrentWorktree(cwd: string, metadata: GroveMetadata): Worktree | null {
-	const resolvedCwd = path.resolve(cwd);
+function findCurrentWorktree(resolvedCwd: string, metadata: GroveMetadata): Worktree | null {
+	const cwdWithSep = resolvedCwd.endsWith(path.sep) ? resolvedCwd : resolvedCwd + path.sep;
 
-	// Check if we're in or under a worktree path
 	for (const worktree of metadata.worktrees) {
-		const resolvedWorktreePath = path.resolve(worktree.worktreePath);
-		if (resolvedCwd.startsWith(resolvedWorktreePath)) {
+		const worktreePathWithSep = worktree.worktreePath.endsWith(path.sep)
+			? worktree.worktreePath
+			: worktree.worktreePath + path.sep;
+		// Check if cwd is the worktree path or inside it
+		if (resolvedCwd === worktree.worktreePath || cwdWithSep.startsWith(worktreePathWithSep)) {
 			return worktree;
 		}
 	}
@@ -64,34 +52,37 @@ function findCurrentWorktree(cwd: string, metadata: GroveMetadata): Worktree | n
 
 /**
  * Open Claude session for the current grove
- * If in a grove folder or worktree, opens Claude with the appropriate working directory
+ * Detects grove by comparing cwd against known grove paths from the index
  * @param cwd - Current working directory (defaults to process.cwd())
  * @returns Result indicating success or failure
  */
 export function openClaude(cwd?: string): ClaudeResult {
 	try {
-		const currentDir = cwd || process.cwd();
-
-		// Find the grove folder
-		const grovePath = findGrovePath(currentDir);
-		if (!grovePath) {
-			return {
-				success: false,
-				message: 'Not in a grove folder. Navigate to a grove folder or worktree first.',
-			};
-		}
+		const currentDir = path.resolve(cwd || process.cwd());
 
 		// Get services from DI container
 		const container = getContainer();
 		const grovesService = container.resolve(GrovesServiceToken);
 		const claudeSessionService = container.resolve(ClaudeSessionServiceToken);
 
+		// Get all known groves from the index
+		const allGroves = grovesService.getAllGroves();
+
+		// Find which grove we're in
+		const groveRef = findGroveForPath(currentDir, allGroves);
+		if (!groveRef) {
+			return {
+				success: false,
+				message: 'Not in a grove folder. Navigate to a grove folder or worktree first.',
+			};
+		}
+
 		// Read grove metadata
-		const metadata = grovesService.readGroveMetadata(grovePath);
+		const metadata = grovesService.readGroveMetadata(groveRef.path);
 		if (!metadata) {
 			return {
 				success: false,
-				message: `Could not read grove metadata from ${grovePath}`,
+				message: `Could not read grove metadata from ${groveRef.path}`,
 			};
 		}
 
