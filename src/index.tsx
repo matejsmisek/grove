@@ -4,8 +4,10 @@ import React from 'react';
 import { render } from 'ink';
 
 import {
+	createGrove,
 	handleSessionHook,
 	initWorkspace,
+	openClaude,
 	registerRepository,
 	setupAgentHooks,
 	verifyAgentHooks,
@@ -74,6 +76,45 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 			process.exit(1);
 		}
 	})();
+} else if (args[0] === 'create') {
+	// Handle create command: grove create <name> <repository>
+	(async () => {
+		const name = args[1];
+		const repository = args[2];
+
+		if (!name || !repository) {
+			console.error('✗ Usage: grove create <name> <repository>');
+			console.error('  repository format: reponame or reponame.projectfolder');
+			process.exit(1);
+		}
+
+		const result = await createGrove(name, repository);
+
+		if (result.success) {
+			console.log('✓', result.message);
+			if (result.grovePath) {
+				console.log('  Path:', result.grovePath);
+			}
+			if (result.groveId) {
+				console.log('  ID:', result.groveId);
+			}
+			process.exit(0);
+		} else {
+			console.error('✗', result.message);
+			process.exit(1);
+		}
+	})();
+} else if (args[0] === 'claude') {
+	// Handle claude command: grove claude
+	const result = openClaude();
+
+	if (result.success) {
+		console.log('✓', result.message);
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		process.exit(1);
+	}
 } else if (args.includes('--register')) {
 	// Handle --register flag
 	const result = registerRepository();
