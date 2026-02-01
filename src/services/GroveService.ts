@@ -585,8 +585,14 @@ Completed at: ${new Date().toISOString()}
 		const grovePath = groveRef.path;
 		const repo = selection.repository;
 
+		// Extract grove identifier from the grove folder name (last 5 characters after the final hyphen)
+		const groveFolderName = path.basename(grovePath);
+		const groveIdentifier = groveFolderName.slice(-5);
+
 		// Normalize worktree name for use in folder and branch (lowercase)
-		const normalizedWorktreeName = worktreeName.toLowerCase().replace(/\s+/g, '-');
+		const baseWorktreeName = worktreeName.toLowerCase().replace(/\s+/g, '-');
+		// Append grove identifier for consistency with other worktrees in the grove
+		const normalizedWorktreeName = `${baseWorktreeName}-${groveIdentifier}`;
 
 		// Check if worktree name already exists in this grove
 		const existingWorktreeNames = new Set(
