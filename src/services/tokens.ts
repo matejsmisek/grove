@@ -3,6 +3,9 @@
  * These tokens are used to register and resolve services from the container
  */
 import { createToken } from '../di/index.js';
+import type { IPluginRegistry } from '../plugins/types.js';
+import type { ISessionsService } from '../storage/SessionsService.js';
+import type { ISessionTrackingService } from './SessionTrackingService.js';
 import type {
 	IClaudeSessionService,
 	IContextService,
@@ -16,8 +19,6 @@ import type {
 	ISettingsService,
 	IWorkspaceService,
 } from './interfaces.js';
-import type { ISessionsService } from '../storage/SessionsService.js';
-import type { ISessionTrackingService } from './SessionTrackingService.js';
 
 // Storage service tokens
 export const SettingsServiceToken = createToken<ISettingsService>('SettingsService');
@@ -34,4 +35,8 @@ export const GroveServiceToken = createToken<IGroveService>('GroveService');
 export const ClaudeSessionServiceToken = createToken<IClaudeSessionService>('ClaudeSessionService');
 export const LLMServiceToken = createToken<ILLMService>('LLMService');
 export const WorkspaceServiceToken = createToken<IWorkspaceService>('WorkspaceService');
-export const SessionTrackingServiceToken = createToken<ISessionTrackingService>('SessionTrackingService');
+export const SessionTrackingServiceToken =
+	createToken<ISessionTrackingService>('SessionTrackingService');
+
+// Plugin system tokens
+export const PluginRegistryToken = createToken<IPluginRegistry>('PluginRegistry');

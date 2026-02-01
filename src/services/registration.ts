@@ -2,9 +2,11 @@
  * Service Registration Module
  * Registers all services in the DI container with their dependencies
  */
+import { AdapterRegistry, ClaudeAdapter } from '../agents/index.js';
 import type { IMutableContainer } from '../di/index.js';
 import { Container, getContainer } from '../di/index.js';
-import { AdapterRegistry, ClaudeAdapter } from '../agents/index.js';
+import { AsanaPlugin } from '../plugins/asana/index.js';
+import { PluginRegistry } from '../plugins/index.js';
 import {
 	GroveConfigService,
 	GrovesService,
@@ -30,9 +32,10 @@ import {
 	GroveServiceToken,
 	GrovesServiceToken,
 	LLMServiceToken,
+	PluginRegistryToken,
 	RepositoryServiceToken,
-	SessionsServiceToken,
 	SessionTrackingServiceToken,
+	SessionsServiceToken,
 	SettingsServiceToken,
 	WorkspaceServiceToken,
 } from './tokens.js';
@@ -55,6 +58,7 @@ import {
  * - LLMService: depends on SettingsService
  * - GroveService: depends on SettingsService, GrovesService, GroveConfigService, GitService, ContextService, FileService
  * - SessionTrackingService: depends on SessionsService, GrovesService, AdapterRegistry (ClaudeAdapter)
+ * - PluginRegistry: depends on SettingsService (registers AsanaPlugin)
  *
  * @param container - Container to register services in (defaults to global container)
  * @param workspaceContext - Optional workspace context to use for storage paths
@@ -88,14 +92,11 @@ export function registerServices(
 	c.registerSingleton(GroveConfigServiceToken, () => new GroveConfigService());
 
 	// SessionsService depends on SettingsService (for sessions path)
-	c.registerSingleton(
-		SessionsServiceToken,
-		(cont) => {
-			const settingsService = cont.resolve(SettingsServiceToken);
-			const config = settingsService.getStorageConfig();
-			return new SessionsService({ sessionsPath: config.sessionsPath });
-		}
-	);
+	c.registerSingleton(SessionsServiceToken, (cont) => {
+		const settingsService = cont.resolve(SettingsServiceToken);
+		const config = settingsService.getStorageConfig();
+		return new SessionsService({ sessionsPath: config.sessionsPath });
+	});
 
 	// Register utility services (no dependencies)
 	c.registerSingleton(GitServiceToken, () => new GitService());
@@ -130,21 +131,27 @@ export function registerServices(
 	);
 
 	// SessionTrackingService depends on SessionsService, GrovesService, and AdapterRegistry
-	c.registerSingleton(
-		SessionTrackingServiceToken,
-		(cont) => {
-			// Create and configure adapter registry
-			const adapterRegistry = new AdapterRegistry();
-			adapterRegistry.register(new ClaudeAdapter());
-			// Future: Add more adapters here (Gemini, Codex, etc.)
+	c.registerSingleton(SessionTrackingServiceToken, (cont) => {
+		// Create and configure adapter registry
+		const adapterRegistry = new AdapterRegistry();
+		adapterRegistry.register(new ClaudeAdapter());
+		// Future: Add more adapters here (Gemini, Codex, etc.)
 
-			return new SessionTrackingService(
-				cont.resolve(SessionsServiceToken),
-				cont.resolve(GrovesServiceToken),
-				adapterRegistry
-			);
-		}
-	);
+		return new SessionTrackingService(
+			cont.resolve(SessionsServiceToken),
+			cont.resolve(GrovesServiceToken),
+			adapterRegistry
+		);
+	});
+
+	// PluginRegistry depends on SettingsService
+	c.registerSingleton(PluginRegistryToken, (cont) => {
+		const pluginRegistry = new PluginRegistry(cont.resolve(SettingsServiceToken));
+		// Register available plugins
+		pluginRegistry.register(new AsanaPlugin());
+		// Future: Add more plugins here
+		return pluginRegistry;
+	});
 }
 
 /**

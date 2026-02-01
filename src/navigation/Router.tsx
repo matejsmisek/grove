@@ -14,6 +14,7 @@ import { LLMSettingsScreen } from '../screens/LLMSettingsScreen.js';
 import { OpenClaudeScreen } from '../screens/OpenClaudeScreen.js';
 import { OpenIDEScreen } from '../screens/OpenIDEScreen.js';
 import { OpenTerminalScreen } from '../screens/OpenTerminalScreen.js';
+import { PluginSettingsScreen } from '../screens/PluginSettingsScreen.js';
 import { RepositoriesScreen } from '../screens/RepositoriesScreen.js';
 import { ResumeClaudeScreen } from '../screens/ResumeClaudeScreen.js';
 import { SettingsScreen } from '../screens/SettingsScreen.js';
@@ -77,6 +78,8 @@ export function Router() {
 			return <WorkingFolderScreen />;
 		case 'repositories':
 			return <RepositoriesScreen />;
+		case 'pluginSettings':
+			return <PluginSettingsScreen />;
 		default:
 			return (
 				<Box padding={1}>
