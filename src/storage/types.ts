@@ -200,6 +200,8 @@ export interface RepositorySelection {
  * Represents a worktree within a grove
  */
 export interface Worktree {
+	/** Display name for this worktree */
+	name?: string;
 	/** Name of the repository */
 	repositoryName: string;
 	/** Path to the repository root */

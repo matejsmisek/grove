@@ -539,11 +539,13 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 										paddingX={1}
 										marginBottom={1}
 									>
-										{/* Repository Name with Session Indicator */}
+										{/* Worktree Name with Session Indicator */}
 										<Box>
 											<Text bold color={isSelected ? 'cyan' : undefined}>
-												{detail.worktree.repositoryName}
-												{detail.worktree.projectPath && <Text dimColor> / {detail.worktree.projectPath}</Text>}
+												{detail.worktree.name ||
+													(detail.worktree.projectPath
+														? `${detail.worktree.repositoryName}/${detail.worktree.projectPath}`
+														: detail.worktree.repositoryName)}
 											</Text>
 											{(sessionCounts.activeCount > 0 ||
 												sessionCounts.idleCount > 0 ||

@@ -508,8 +508,19 @@ Completed at: ${new Date().toISOString()}
 					}
 				}
 
+				// Determine worktree display name
+				// For single worktree groves, use the grove name
+				// For multiple worktrees, use repo name (or repo/project for monorepos)
+				const worktreeDisplayName =
+					selections.length === 1
+						? name
+						: selection.projectPath
+							? `${repo.name}/${selection.projectPath}`
+							: repo.name;
+
 				// Create worktree entry
 				const worktree: Worktree = {
+					name: worktreeDisplayName,
 					repositoryName: repo.name,
 					repositoryPath: repo.path,
 					worktreePath,
@@ -736,6 +747,7 @@ Completed at: ${new Date().toISOString()}
 
 			// Create worktree entry
 			const worktree: Worktree = {
+				name: worktreeName,
 				repositoryName: repo.name,
 				repositoryPath: repo.path,
 				worktreePath,
