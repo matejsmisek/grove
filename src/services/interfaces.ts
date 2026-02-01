@@ -702,6 +702,21 @@ export interface IGroveService {
 	): Promise<GroveMetadata>;
 
 	/**
+	 * Add a worktree to an existing grove
+	 * @param groveId - ID of the grove to add the worktree to
+	 * @param selection - Repository selection (with optional project path for monorepos)
+	 * @param worktreeName - Custom name for the worktree (will be used for folder and branch)
+	 * @param onLog - Optional callback for progress logging
+	 * @returns Updated grove metadata
+	 */
+	addWorktreeToGrove(
+		groveId: string,
+		selection: RepositorySelection,
+		worktreeName: string,
+		onLog?: (message: string) => void
+	): Promise<GroveMetadata>;
+
+	/**
 	 * Close a grove - removes worktrees and deletes folder
 	 */
 	closeGrove(groveId: string): Promise<CloseGroveResult>;

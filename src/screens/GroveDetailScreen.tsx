@@ -352,6 +352,9 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 				} else if (input === 'c' && isSingleWorktreeMode) {
 					// Allow closing grove from single-worktree mode
 					navigate('closeGrove', { groveId });
+				} else if (input === 'a' && isSingleWorktreeMode) {
+					// Allow adding worktree from single-worktree mode
+					navigate('addWorktree', { groveId });
 				}
 			} else {
 				// Main screen navigation (multiple worktrees)
@@ -366,6 +369,8 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 					setSelectedActionIndex(0);
 				} else if (input === 'c') {
 					navigate('closeGrove', { groveId });
+				} else if (input === 'a') {
+					navigate('addWorktree', { groveId });
 				}
 			}
 		},
@@ -621,13 +626,13 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 					<Box marginTop={1} flexDirection="column">
 						{isSingleWorktreeMode ? (
 							<Text dimColor>
-								↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>c</Text> Close Grove •{' '}
-								<Text bold>ESC</Text> Back
+								↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>a</Text> Add Worktree •{' '}
+								<Text bold>c</Text> Close Grove • <Text bold>ESC</Text> Back
 							</Text>
 						) : (
 							<Text dimColor>
-								↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>c</Text> Close Grove •{' '}
-								<Text bold>ESC</Text> Back
+								↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>a</Text> Add Worktree •{' '}
+								<Text bold>c</Text> Close Grove • <Text bold>ESC</Text> Back
 							</Text>
 						)}
 					</Box>
