@@ -4,8 +4,10 @@ import React from 'react';
 import { render } from 'ink';
 
 import {
+	createGrove,
 	handleSessionHook,
 	initWorkspace,
+	openClaude,
 	registerRepository,
 	setupAgentHooks,
 	verifyAgentHooks,
@@ -74,6 +76,49 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 			process.exit(1);
 		}
 	})();
+} else if (args[0] === 'create') {
+	// Handle create command: grove create <name> <repository>
+	// Name can have spaces - all args between 'create' and last arg are joined as the name
+	// Last argument is always the repository
+	(async () => {
+		const createArgs = args.slice(1);
+		if (createArgs.length < 2) {
+			console.error('✗ Usage: grove create <name> <repository>');
+			console.error('  repository format: reponame or reponame.projectfolder');
+			process.exit(1);
+		}
+
+		const repository = createArgs[createArgs.length - 1];
+		const name = createArgs.slice(0, -1).join(' ');
+
+		const result = await createGrove(name, repository);
+
+		if (result.success) {
+			console.log('✓', result.message);
+			if (result.grovePath) {
+				console.log('  Path:', result.grovePath);
+			}
+			if (result.groveId) {
+				console.log('  ID:', result.groveId);
+			}
+			process.exit(0);
+		} else {
+			console.error('✗', result.message);
+			process.exit(1);
+		}
+	})();
+} else if (args[0] === 'claude') {
+	// Handle claude command: grove claude [grove-id]
+	const groveId = args[1]; // Optional grove ID
+	const result = openClaude(groveId);
+
+	if (result.success) {
+		console.log('✓', result.message);
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		process.exit(1);
+	}
 } else if (args.includes('--register')) {
 	// Handle --register flag
 	const result = registerRepository();
