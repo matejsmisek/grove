@@ -10,7 +10,7 @@ import type {
 	RepositorySelection,
 	Worktree,
 } from '../storage/types.js';
-import { generateGroveIdentifier, normalizeGroveName } from '../utils/index.js';
+import { generateGroveIdentifier, normalizeGroveName, normalizeName } from '../utils/index.js';
 import type {
 	CloseGroveResult,
 	IContextService,
@@ -595,8 +595,9 @@ Completed at: ${new Date().toISOString()}
 			metadata.identifier = groveIdentifier;
 		}
 
-		// Normalize worktree name for use in folder and branch (lowercase)
-		const baseWorktreeName = worktreeName.toLowerCase().replace(/\s+/g, '-');
+		// Normalize worktree name for use in folder and branch
+		// Uses same normalization as grove names: lowercase, remove special chars, collapse hyphens
+		const baseWorktreeName = normalizeName(worktreeName, 40, 'worktree');
 		// Append grove identifier for consistency with other worktrees in the grove
 		const normalizedWorktreeName = `${baseWorktreeName}-${groveIdentifier}`;
 

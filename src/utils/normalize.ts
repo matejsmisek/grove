@@ -14,24 +14,23 @@ export function generateGroveIdentifier(name: string): string {
 }
 
 /**
- * Normalize and shorten a grove name for use in folder paths and branch names
+ * Normalize a name for use in folder paths and branch names
  *
  * This function:
  * 1. Converts to lowercase
  * 2. Replaces spaces and special characters with hyphens
  * 3. Removes invalid characters for file paths and git branches
  * 4. Truncates to a maximum length
- * 5. Appends the provided identifier for uniqueness
  *
- * @param name - The original grove name
- * @param identifier - The unique identifier to append (from generateGroveIdentifier)
- * @param maxLength - Maximum length before adding suffix (default: 40)
- * @returns Normalized name with identifier suffix (e.g., "my-grove-abc12")
+ * @param name - The original name
+ * @param maxLength - Maximum length (default: 40)
+ * @param fallback - Fallback name if result is empty (default: 'item')
+ * @returns Normalized name safe for folders and git branches
  */
-export function normalizeGroveName(
+export function normalizeName(
 	name: string,
-	identifier: string,
-	maxLength: number = 40
+	maxLength: number = 40,
+	fallback: string = 'item'
 ): string {
 	// Step 1: Convert to lowercase
 	let normalized = name.toLowerCase();
@@ -57,12 +56,35 @@ export function normalizeGroveName(
 		normalized = normalized.replace(/-+$/, '');
 	}
 
-	// Step 6: Combine normalized name with identifier
-	// If normalized name is empty (all special chars), use a default
+	// Step 6: If normalized name is empty (all special chars), use fallback
 	if (normalized.length === 0) {
-		normalized = 'grove';
+		normalized = fallback;
 	}
 
+	return normalized;
+}
+
+/**
+ * Normalize and shorten a grove name for use in folder paths and branch names
+ *
+ * This function:
+ * 1. Converts to lowercase
+ * 2. Replaces spaces and special characters with hyphens
+ * 3. Removes invalid characters for file paths and git branches
+ * 4. Truncates to a maximum length
+ * 5. Appends the provided identifier for uniqueness
+ *
+ * @param name - The original grove name
+ * @param identifier - The unique identifier to append (from generateGroveIdentifier)
+ * @param maxLength - Maximum length before adding suffix (default: 40)
+ * @returns Normalized name with identifier suffix (e.g., "my-grove-abc12")
+ */
+export function normalizeGroveName(
+	name: string,
+	identifier: string,
+	maxLength: number = 40
+): string {
+	const normalized = normalizeName(name, maxLength, 'grove');
 	return `${normalized}-${identifier}`;
 }
 
