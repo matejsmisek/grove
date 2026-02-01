@@ -3,7 +3,7 @@
  * Integrates Grove with Asana task management
  */
 import type { IPlugin, PluginMetadata } from '../types.js';
-import type { AsanaPluginSettings } from './types.js';
+import type { AsanaApiError, AsanaApiResponse, AsanaPluginSettings, AsanaUser } from './types.js';
 
 /**
  * Plugin ID constant
@@ -11,8 +11,30 @@ import type { AsanaPluginSettings } from './types.js';
 export const ASANA_PLUGIN_ID = 'asana';
 
 /**
+ * Environment variable name for Asana token
+ */
+export const ASANA_TOKEN_ENV_VAR = 'ASANA_TOKEN';
+
+/**
+ * Asana API base URL
+ */
+const ASANA_API_BASE_URL = 'https://app.asana.com/api/1.0';
+
+/**
+ * Error thrown when Asana token validation fails
+ */
+export class AsanaTokenValidationError extends Error {
+	constructor(
+		message: string,
+		public readonly cause?: unknown
+	) {
+		super(message);
+		this.name = 'AsanaTokenValidationError';
+	}
+}
+
+/**
  * Asana Plugin Implementation
- * Currently a scaffold - actual functionality to be implemented
  */
 export class AsanaPlugin implements IPlugin {
 	readonly metadata: PluginMetadata = {
@@ -24,17 +46,84 @@ export class AsanaPlugin implements IPlugin {
 
 	private settings: AsanaPluginSettings = {};
 	private initialized = false;
+	private currentUser: AsanaUser | null = null;
+
+	/**
+	 * Get the Asana access token
+	 * Priority: 1. ASANA_TOKEN env var, 2. Settings accessToken
+	 */
+	getAccessToken(): string | undefined {
+		return process.env[ASANA_TOKEN_ENV_VAR] || this.settings.accessToken;
+	}
+
+	/**
+	 * Validate the Asana token by calling the /users/me endpoint
+	 * @throws AsanaTokenValidationError if token is missing or invalid
+	 */
+	async validateToken(): Promise<AsanaUser> {
+		const token = this.getAccessToken();
+
+		if (!token) {
+			throw new AsanaTokenValidationError(
+				`Asana token not found. Set the ${ASANA_TOKEN_ENV_VAR} environment variable or configure accessToken in plugin settings.`
+			);
+		}
+
+		try {
+			const response = await fetch(`${ASANA_API_BASE_URL}/users/me`, {
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${token}`,
+					Accept: 'application/json',
+				},
+			});
+
+			if (!response.ok) {
+				if (response.status === 401) {
+					throw new AsanaTokenValidationError('Invalid Asana token. The token is expired or incorrect.');
+				}
+
+				// Try to parse error response
+				try {
+					const errorBody = (await response.json()) as AsanaApiError;
+					const errorMessage = errorBody.errors?.[0]?.message || `HTTP ${response.status}`;
+					throw new AsanaTokenValidationError(`Asana API error: ${errorMessage}`);
+				} catch (parseError) {
+					if (parseError instanceof AsanaTokenValidationError) {
+						throw parseError;
+					}
+					throw new AsanaTokenValidationError(`Asana API returned status ${response.status}`);
+				}
+			}
+
+			const result = (await response.json()) as AsanaApiResponse<AsanaUser>;
+			return result.data;
+		} catch (error) {
+			if (error instanceof AsanaTokenValidationError) {
+				throw error;
+			}
+
+			// Network or other fetch errors
+			throw new AsanaTokenValidationError(
+				'Failed to connect to Asana API. Check your network connection.',
+				error
+			);
+		}
+	}
 
 	/**
 	 * Initialize the plugin
 	 * Called when the plugin is enabled
+	 * Validates the token by calling the Asana API
+	 * @throws AsanaTokenValidationError if token validation fails
 	 */
 	async initialize(): Promise<void> {
 		if (this.initialized) {
 			return;
 		}
-		// TODO: Initialize Asana API client
-		// TODO: Validate access token
+
+		// Validate token by calling Asana API
+		this.currentUser = await this.validateToken();
 		this.initialized = true;
 	}
 
@@ -43,17 +132,16 @@ export class AsanaPlugin implements IPlugin {
 	 * Called when the plugin is disabled or app shuts down
 	 */
 	async cleanup(): Promise<void> {
-		// TODO: Cleanup any resources
+		this.currentUser = null;
 		this.initialized = false;
 	}
 
 	/**
 	 * Check if the plugin is available/configured
-	 * Returns false if required configuration is missing
+	 * Returns true if ASANA_TOKEN env var or accessToken setting is present
 	 */
 	async isAvailable(): Promise<boolean> {
-		// Plugin is available if access token is configured
-		return !!this.settings.accessToken;
+		return !!this.getAccessToken();
 	}
 
 	/**
@@ -68,6 +156,21 @@ export class AsanaPlugin implements IPlugin {
 	 */
 	getSettings(): AsanaPluginSettings {
 		return { ...this.settings };
+	}
+
+	/**
+	 * Get the current authenticated user
+	 * Returns null if not initialized
+	 */
+	getCurrentUser(): AsanaUser | null {
+		return this.currentUser;
+	}
+
+	/**
+	 * Check if the plugin is initialized
+	 */
+	isInitialized(): boolean {
+		return this.initialized;
 	}
 
 	// ============================================
