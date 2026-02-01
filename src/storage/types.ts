@@ -59,6 +59,18 @@ export interface ClaudeSessionTemplate {
  */
 export type ClaudeSessionTemplates = Partial<Record<ClaudeTerminalType, ClaudeSessionTemplate>>;
 
+/**
+ * Plugin configuration stored in settings
+ */
+export interface PluginConfig {
+	/** Plugin ID */
+	pluginId: string;
+	/** Whether the plugin is enabled */
+	enabled: boolean;
+	/** Plugin-specific settings */
+	settings?: Record<string, unknown>;
+}
+
 export interface Settings {
 	/**
 	 * The working folder path where worktrees are created.
@@ -118,6 +130,11 @@ export interface Settings {
 	 * Used for X-Title header
 	 */
 	llmAppName?: string;
+	/**
+	 * Plugin configurations
+	 * Each plugin can have its own enabled state and settings
+	 */
+	plugins?: PluginConfig[];
 }
 
 export interface StorageConfig {
