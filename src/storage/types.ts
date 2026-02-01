@@ -271,6 +271,8 @@ export interface GroveMetadata {
 	id: string;
 	/** Grove name */
 	name: string;
+	/** Short identifier (5-char hash) used for worktree/branch naming */
+	identifier?: string;
 	/** List of worktrees in this grove */
 	worktrees: Worktree[];
 	/** Timestamp when the grove was created */

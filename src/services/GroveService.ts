@@ -364,6 +364,7 @@ Completed at: ${new Date().toISOString()}
 		const metadata: GroveMetadata = {
 			id: groveId,
 			name,
+			identifier: groveIdentifier,
 			worktrees: [],
 			createdAt: now,
 			updatedAt: now,
@@ -585,9 +586,14 @@ Completed at: ${new Date().toISOString()}
 		const grovePath = groveRef.path;
 		const repo = selection.repository;
 
-		// Extract grove identifier from the grove folder name (last 5 characters after the final hyphen)
-		const groveFolderName = path.basename(grovePath);
-		const groveIdentifier = groveFolderName.slice(-5);
+		// Get grove identifier from metadata, or generate for backward compatibility with existing groves
+		let groveIdentifier = metadata.identifier;
+		if (!groveIdentifier) {
+			// Generate identifier from grove name for backward compatibility
+			groveIdentifier = generateGroveIdentifier(metadata.name);
+			// Save it to metadata for future use
+			metadata.identifier = groveIdentifier;
+		}
 
 		// Normalize worktree name for use in folder and branch (lowercase)
 		const baseWorktreeName = worktreeName.toLowerCase().replace(/\s+/g, '-');
