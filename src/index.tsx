@@ -78,15 +78,18 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 	})();
 } else if (args[0] === 'create') {
 	// Handle create command: grove create <name> <repository>
+	// Name can have spaces - all args between 'create' and last arg are joined as the name
+	// Last argument is always the repository
 	(async () => {
-		const name = args[1];
-		const repository = args[2];
-
-		if (!name || !repository) {
+		const createArgs = args.slice(1);
+		if (createArgs.length < 2) {
 			console.error('✗ Usage: grove create <name> <repository>');
 			console.error('  repository format: reponame or reponame.projectfolder');
 			process.exit(1);
 		}
+
+		const repository = createArgs[createArgs.length - 1];
+		const name = createArgs.slice(0, -1).join(' ');
 
 		const result = await createGrove(name, repository);
 
