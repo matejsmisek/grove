@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 
 import { Box, Text, useApp, useInput } from 'ink';
 
@@ -19,8 +19,9 @@ export function HomeScreen() {
 	const [selectedGroveIndex, setSelectedGroveIndex] = useState(0);
 	const [showMenu, setShowMenu] = useState(false);
 	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
-	const [isUpdatingSessions, setIsUpdatingSessions] = useState(false);
-	const [sessionRefreshTick, setSessionRefreshTick] = useState(0);
+	// DISABLED: Session fetching temporarily disabled
+	const [_isUpdatingSessions, _setIsUpdatingSessions] = useState(false);
+	const [sessionRefreshTick, _setSessionRefreshTick] = useState(0);
 	const [columnCount, setColumnCount] = useState(4); // Default to 4, will be updated by GroveGrid
 
 	// Get workspace-aware groves service
@@ -31,46 +32,47 @@ export function HomeScreen() {
 	const sessionTrackingService = useService(SessionTrackingServiceToken);
 
 	// Background session polling - updates every 10 seconds
-	useEffect(() => {
-		let isMounted = true;
-
-		async function updateSessions() {
-			setIsUpdatingSessions(true);
-			try {
-				const updateResult = await sessionTrackingService.updateAllSessions();
-				const cleanedUp = await sessionTrackingService.cleanupStale();
-
-				// Only trigger re-render if something actually changed
-				const hasChanges =
-					updateResult.added > 0 ||
-					updateResult.updated > 0 ||
-					updateResult.removed > 0 ||
-					cleanedUp > 0;
-
-				if (isMounted && hasChanges) {
-					// Trigger re-render to update session indicators
-					setSessionRefreshTick((tick) => tick + 1);
-				}
-			} catch {
-				// Silent fail - don't block UI
-			} finally {
-				if (isMounted) {
-					setIsUpdatingSessions(false);
-				}
-			}
-		}
-
-		// Initial update
-		updateSessions();
-
-		// Poll every 10 seconds
-		const interval = setInterval(updateSessions, 10000);
-
-		return () => {
-			isMounted = false;
-			clearInterval(interval);
-		};
-	}, [sessionTrackingService]);
+	// DISABLED: Session fetching temporarily disabled
+	// useEffect(() => {
+	// 	let isMounted = true;
+	//
+	// 	async function updateSessions() {
+	// 		setIsUpdatingSessions(true);
+	// 		try {
+	// 			const updateResult = await sessionTrackingService.updateAllSessions();
+	// 			const cleanedUp = await sessionTrackingService.cleanupStale();
+	//
+	// 			// Only trigger re-render if something actually changed
+	// 			const hasChanges =
+	// 				updateResult.added > 0 ||
+	// 				updateResult.updated > 0 ||
+	// 				updateResult.removed > 0 ||
+	// 				cleanedUp > 0;
+	//
+	// 			if (isMounted && hasChanges) {
+	// 				// Trigger re-render to update session indicators
+	// 				setSessionRefreshTick((tick) => tick + 1);
+	// 			}
+	// 		} catch {
+	// 			// Silent fail - don't block UI
+	// 		} finally {
+	// 			if (isMounted) {
+	// 				setIsUpdatingSessions(false);
+	// 			}
+	// 		}
+	// 	}
+	//
+	// 	// Initial update
+	// 	updateSessions();
+	//
+	// 	// Poll every 10 seconds
+	// 	const interval = setInterval(updateSessions, 10000);
+	//
+	// 	return () => {
+	// 		isMounted = false;
+	// 		clearInterval(interval);
+	// 	};
+	// }, [sessionTrackingService]);
 
 	// Get workspace context to display workspace name
 	const workspaceService = useService(WorkspaceServiceToken);
@@ -162,11 +164,12 @@ export function HomeScreen() {
 					</Box>
 
 					{/* Session update status */}
-					{isUpdatingSessions && (
+					{/* DISABLED: Session fetching temporarily disabled */}
+					{/* {isUpdatingSessions && (
 						<Box marginBottom={1}>
 							<Text dimColor>Updating Claude sessions...</Text>
 						</Box>
-					)}
+					)} */}
 
 					{/* Groves Grid */}
 					<Box flexDirection="column" marginTop={1}>
