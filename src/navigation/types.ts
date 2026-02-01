@@ -16,6 +16,7 @@ export type Routes = {
 	ideSettings: Record<string, never>;
 	claudeTerminalSettings: Record<string, never>;
 	llmSettings: Record<string, never>;
+	pluginSettings: Record<string, never>;
 };
 
 // Navigation state for current screen and params

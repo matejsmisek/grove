@@ -39,6 +39,10 @@ export function SettingsScreen({ section }: SettingsScreenProps) {
 			action: () => navigate('llmSettings', {}),
 		},
 		{
+			label: 'Plugins',
+			action: () => navigate('pluginSettings', {}),
+		},
+		{
 			label: 'Display Preferences (coming soon)',
 			action: () => {}, // Placeholder
 		},
