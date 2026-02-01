@@ -51,3 +51,32 @@ export interface AsanaProject {
 	/** Workspace the project belongs to */
 	workspaceGid: string;
 }
+
+/**
+ * Asana user info (from /users/me)
+ */
+export interface AsanaUser {
+	/** User GID */
+	gid: string;
+	/** User name */
+	name: string;
+	/** User email */
+	email: string;
+}
+
+/**
+ * Asana API response wrapper
+ */
+export interface AsanaApiResponse<T> {
+	data: T;
+}
+
+/**
+ * Asana API error response
+ */
+export interface AsanaApiError {
+	errors: Array<{
+		message: string;
+		help?: string;
+	}>;
+}
