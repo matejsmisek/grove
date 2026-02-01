@@ -537,8 +537,9 @@ Completed at: ${new Date().toISOString()}
 			}
 		}
 
-		// If no worktrees were created, clean up and throw error
-		if (worktrees.length === 0) {
+		// If selections were provided but no worktrees were created, that's an error
+		// Empty selections (empty grove) is allowed - worktrees can be added later
+		if (selections.length > 0 && worktrees.length === 0) {
 			fs.rmSync(grovePath, { recursive: true, force: true });
 			throw new Error(`Failed to create any worktrees:\n${errors.join('\n')}`);
 		}
