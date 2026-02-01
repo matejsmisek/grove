@@ -242,18 +242,14 @@ export function CreateGroveScreen() {
 				}
 			} else if (key.return) {
 				// Proceed to next step
-				if (!hasAnySelection) {
-					setError('Please select at least one repository');
-					setStep('error');
-					return;
-				}
+				// Allow empty grove creation (no repositories selected) - worktrees can be added later
 
 				// If any monorepos are selected (not via recent), go to project selection step
 				if (hasMonorepos && allProjects.length > 0) {
 					setProjectCursor(0);
 					setStep('projects');
 				} else {
-					// No monorepos, proceed directly to creation
+					// No monorepos (or no selections), proceed directly to creation
 					createGrove();
 				}
 			} else if (key.escape) {
@@ -570,7 +566,10 @@ export function CreateGroveScreen() {
 				<Box marginTop={1} flexDirection="column">
 					<Text dimColor>• Use ↑/↓ to navigate</Text>
 					<Text dimColor>• Space to toggle selection</Text>
-					<Text dimColor>• Enter to {hasMonorepos ? 'select projects' : 'create grove'}</Text>
+					<Text dimColor>
+						• Enter to {hasMonorepos ? 'select projects' : 'create grove'}
+						{!hasAnySelection && ' (empty grove - add worktrees later)'}
+					</Text>
 					<Text dimColor>• Esc to cancel</Text>
 				</Box>
 
