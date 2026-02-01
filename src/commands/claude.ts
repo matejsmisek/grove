@@ -51,15 +51,12 @@ function findCurrentWorktree(resolvedCwd: string, metadata: GroveMetadata): Work
 }
 
 /**
- * Open Claude session for the current grove
- * Detects grove by comparing cwd against known grove paths from the index
- * @param cwd - Current working directory (defaults to process.cwd())
+ * Open Claude session for a grove
+ * @param groveId - Optional grove ID. If not provided, detects grove from cwd.
  * @returns Result indicating success or failure
  */
-export function openClaude(cwd?: string): ClaudeResult {
+export function openClaude(groveId?: string): ClaudeResult {
 	try {
-		const currentDir = path.resolve(cwd || process.cwd());
-
 		// Get services from DI container
 		const container = getContainer();
 		const grovesService = container.resolve(GrovesServiceToken);
@@ -68,13 +65,28 @@ export function openClaude(cwd?: string): ClaudeResult {
 		// Get all known groves from the index
 		const allGroves = grovesService.getAllGroves();
 
-		// Find which grove we're in
-		const groveRef = findGroveForPath(currentDir, allGroves);
-		if (!groveRef) {
-			return {
-				success: false,
-				message: 'Not in a grove folder. Navigate to a grove folder or worktree first.',
-			};
+		let groveRef: GroveReference | null = null;
+		let currentDir: string | null = null;
+
+		if (groveId) {
+			// Find grove by ID
+			groveRef = allGroves.find((g) => g.id === groveId) || null;
+			if (!groveRef) {
+				return {
+					success: false,
+					message: `Grove with ID '${groveId}' not found.`,
+				};
+			}
+		} else {
+			// Detect grove from current directory
+			currentDir = path.resolve(process.cwd());
+			groveRef = findGroveForPath(currentDir, allGroves);
+			if (!groveRef) {
+				return {
+					success: false,
+					message: 'Not in a grove folder. Navigate to a grove or provide a grove ID.',
+				};
+			}
 		}
 
 		// Read grove metadata
@@ -97,22 +109,35 @@ export function openClaude(cwd?: string): ClaudeResult {
 		// Determine which worktree to use
 		let targetWorktree: Worktree;
 
-		// Check if we're inside a specific worktree
-		const currentWorktree = findCurrentWorktree(currentDir, metadata);
-		if (currentWorktree) {
-			targetWorktree = currentWorktree;
-		} else if (metadata.worktrees.length === 1) {
-			// Only one worktree, use it
-			targetWorktree = metadata.worktrees[0];
+		// If we detected grove from cwd, check if we're inside a specific worktree
+		if (currentDir) {
+			const currentWorktree = findCurrentWorktree(currentDir, metadata);
+			if (currentWorktree) {
+				targetWorktree = currentWorktree;
+			} else if (metadata.worktrees.length === 1) {
+				targetWorktree = metadata.worktrees[0];
+			} else {
+				const worktreeNames = metadata.worktrees
+					.map((w) => `  - ${w.repositoryName}${w.projectPath ? `/${w.projectPath}` : ''}`)
+					.join('\n');
+				return {
+					success: false,
+					message: `Grove has multiple worktrees. Navigate to a specific worktree or specify which one:\n${worktreeNames}`,
+				};
+			}
 		} else {
-			// Multiple worktrees and not in a specific one - list them
-			const worktreeNames = metadata.worktrees
-				.map((w) => `  - ${w.repositoryName}${w.projectPath ? `/${w.projectPath}` : ''}`)
-				.join('\n');
-			return {
-				success: false,
-				message: `Grove has multiple worktrees. Navigate to a specific worktree or specify which one:\n${worktreeNames}`,
-			};
+			// Grove ID provided - use first worktree if only one, else error
+			if (metadata.worktrees.length === 1) {
+				targetWorktree = metadata.worktrees[0];
+			} else {
+				const worktreeNames = metadata.worktrees
+					.map((w) => `  - ${w.repositoryName}${w.projectPath ? `/${w.projectPath}` : ''}`)
+					.join('\n');
+				return {
+					success: false,
+					message: `Grove has multiple worktrees:\n${worktreeNames}`,
+				};
+			}
 		}
 
 		// Determine working directory (project path if monorepo, otherwise worktree root)

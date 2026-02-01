@@ -108,8 +108,9 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 		}
 	})();
 } else if (args[0] === 'claude') {
-	// Handle claude command: grove claude
-	const result = openClaude();
+	// Handle claude command: grove claude [grove-id]
+	const groveId = args[1]; // Optional grove ID
+	const result = openClaude(groveId);
 
 	if (result.success) {
 		console.log('✓', result.message);
