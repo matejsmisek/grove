@@ -10,7 +10,7 @@ import type {
 	RepositorySelection,
 	Worktree,
 } from '../storage/types.js';
-import { generateGroveIdentifier, normalizeGroveName } from '../utils/index.js';
+import { generateGroveIdentifier, normalizeGroveName, normalizeName } from '../utils/index.js';
 import type {
 	CloseGroveResult,
 	IContextService,
@@ -364,6 +364,7 @@ Completed at: ${new Date().toISOString()}
 		const metadata: GroveMetadata = {
 			id: groveId,
 			name,
+			identifier: groveIdentifier,
 			worktrees: [],
 			createdAt: now,
 			updatedAt: now,
@@ -507,8 +508,19 @@ Completed at: ${new Date().toISOString()}
 					}
 				}
 
+				// Determine worktree display name
+				// For single worktree groves, use the grove name
+				// For multiple worktrees, use repo name (or repo/project for monorepos)
+				const worktreeDisplayName =
+					selections.length === 1
+						? name
+						: selection.projectPath
+							? `${repo.name}/${selection.projectPath}`
+							: repo.name;
+
 				// Create worktree entry
 				const worktree: Worktree = {
+					name: worktreeDisplayName,
 					repositoryName: repo.name,
 					repositoryPath: repo.path,
 					worktreePath,
@@ -554,6 +566,212 @@ Completed at: ${new Date().toISOString()}
 		}
 
 		return metadata;
+	}
+
+	/**
+	 * Add a worktree to an existing grove
+	 * @param groveId - ID of the grove to add the worktree to
+	 * @param selection - Repository selection (with optional project path for monorepos)
+	 * @param worktreeName - Custom name for the worktree (will be used for folder and branch)
+	 * @param onLog - Optional callback for progress logging
+	 * @returns Updated grove metadata
+	 */
+	async addWorktreeToGrove(
+		groveId: string,
+		selection: RepositorySelection,
+		worktreeName: string,
+		onLog?: (message: string) => void
+	): Promise<GroveMetadata> {
+		// Get grove reference
+		const groveRef = this.grovesService.getGroveById(groveId);
+		if (!groveRef) {
+			throw new Error('Grove not found');
+		}
+
+		// Read existing grove metadata
+		const metadata = this.grovesService.readGroveMetadata(groveRef.path);
+		if (!metadata) {
+			throw new Error('Grove metadata not found');
+		}
+
+		const grovePath = groveRef.path;
+		const repo = selection.repository;
+
+		// Get grove identifier from metadata, or generate for backward compatibility with existing groves
+		let groveIdentifier = metadata.identifier;
+		if (!groveIdentifier) {
+			// Generate identifier from grove name for backward compatibility
+			groveIdentifier = generateGroveIdentifier(metadata.name);
+			// Save it to metadata for future use
+			metadata.identifier = groveIdentifier;
+		}
+
+		// Normalize worktree name for use in folder and branch
+		// Uses same normalization as grove names: lowercase, remove special chars, collapse hyphens
+		const baseWorktreeName = normalizeName(worktreeName, 40, 'worktree');
+		// Append grove identifier for consistency with other worktrees in the grove
+		const normalizedWorktreeName = `${baseWorktreeName}-${groveIdentifier}`;
+
+		// Check if worktree name already exists in this grove
+		const existingWorktreeNames = new Set(
+			metadata.worktrees.map((w) => path.basename(w.worktreePath))
+		);
+		if (existingWorktreeNames.has(normalizedWorktreeName)) {
+			throw new Error(`Worktree with name "${normalizedWorktreeName}" already exists in this grove`);
+		}
+
+		try {
+			// Log worktree creation start
+			const displayName = selection.projectPath ? `${repo.name}/${selection.projectPath}` : repo.name;
+			if (onLog) {
+				onLog(`Creating worktree for ${displayName}...`);
+			}
+
+			// Ensure repository is up-to-date before creating worktree
+			const { needsReset, mainBranch } = await this.ensureRepoUpToDate(repo.path, onLog);
+
+			// Read merged repository/project grove configuration
+			const mergedConfig = this.groveConfigService.readMergedConfig(repo.path, selection.projectPath);
+
+			// Generate branch name using the custom worktree name
+			// Use the branchNameTemplate from config but replace with our custom name
+			const branchTemplate = mergedConfig.branchNameTemplate || '${GROVE_NAME}';
+			const branchBase = this.groveConfigService.applyBranchNameTemplate(
+				branchTemplate,
+				normalizedWorktreeName
+			);
+			// Lowercase the project path suffix for uniform identifiers
+			const branchSuffix = selection.projectPath ? `-${selection.projectPath.toLowerCase()}` : '';
+			const branchName = branchBase + branchSuffix;
+
+			// Create worktree path
+			const worktreePath = path.join(grovePath, normalizedWorktreeName);
+
+			// Add worktree (creates new branch from HEAD)
+			const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, 'HEAD');
+
+			if (!result.success) {
+				throw new Error(result.stderr || 'Failed to create worktree');
+			}
+
+			// If we need to reset the worktree to the latest main branch, do it now
+			if (needsReset) {
+				if (onLog) {
+					onLog(`Resetting worktree to latest ${mainBranch}...`);
+				}
+
+				// Fetch in the new worktree
+				const fetchResult = await this.gitService.fetch(worktreePath);
+				if (!fetchResult.success) {
+					console.warn(`Warning: Failed to fetch in worktree: ${fetchResult.stderr}`);
+				}
+
+				// Get the SHA of the remote main branch
+				const revParseResult = await this.gitService.revParse(worktreePath, `origin/${mainBranch}`);
+
+				if (revParseResult.success) {
+					const targetCommit = revParseResult.stdout.trim();
+
+					// Reset to the latest remote commit
+					const resetResult = await this.gitService.reset(worktreePath, targetCommit, true);
+
+					if (!resetResult.success) {
+						console.warn(`Warning: Failed to reset worktree: ${resetResult.stderr}`);
+					} else if (onLog) {
+						onLog(`Worktree reset to latest ${mainBranch} (${targetCommit.substring(0, 7)})`);
+					}
+				} else {
+					console.warn(`Warning: Failed to resolve origin/${mainBranch}: ${revParseResult.stderr}`);
+				}
+			}
+
+			// Copy files matching patterns from repository root to worktree
+			if (mergedConfig.rootFileCopyPatterns.length > 0) {
+				const copyResult = await this.fileService.copyFilesFromPatterns(
+					repo.path,
+					worktreePath,
+					mergedConfig.rootFileCopyPatterns
+				);
+
+				if (!copyResult.success && copyResult.errors.length > 0) {
+					console.warn(
+						`Warning: Failed to copy some files from ${repo.name} root:\n${copyResult.errors.join('\n')}`
+					);
+				}
+			}
+
+			// Copy files matching patterns from project folder to worktree (for monorepos)
+			if (selection.projectPath && mergedConfig.projectFileCopyPatterns.length > 0) {
+				const projectSourcePath = path.join(repo.path, selection.projectPath);
+				const projectDestPath = path.join(worktreePath, selection.projectPath);
+
+				const copyResult = await this.fileService.copyFilesFromPatterns(
+					projectSourcePath,
+					projectDestPath,
+					mergedConfig.projectFileCopyPatterns
+				);
+
+				if (!copyResult.success && copyResult.errors.length > 0) {
+					console.warn(
+						`Warning: Failed to copy some files from ${repo.name}/${selection.projectPath}:\n${copyResult.errors.join('\n')}`
+					);
+				}
+			}
+
+			// Execute initActions if configured
+			let initActionsStatus: InitActionsStatus | undefined;
+			const initActions = [...mergedConfig.rootInitActions, ...mergedConfig.projectInitActions];
+			if (initActions.length > 0) {
+				try {
+					initActionsStatus = await this.executeInitActions(
+						initActions,
+						grovePath,
+						normalizedWorktreeName,
+						worktreePath,
+						selection.projectPath,
+						onLog
+					);
+
+					if (!initActionsStatus.success) {
+						console.warn(
+							`Warning: InitActions failed for ${repo.name}${selection.projectPath ? `/${selection.projectPath}` : ''}: ${initActionsStatus.errorMessage}`
+						);
+					}
+				} catch (error) {
+					const errMsg = error instanceof Error ? error.message : 'Unknown error';
+					console.warn(
+						`Warning: Failed to execute initActions for ${repo.name}${selection.projectPath ? `/${selection.projectPath}` : ''}: ${errMsg}`
+					);
+				}
+			}
+
+			// Create worktree entry
+			const worktree: Worktree = {
+				name: worktreeName,
+				repositoryName: repo.name,
+				repositoryPath: repo.path,
+				worktreePath,
+				branch: branchName,
+				projectPath: selection.projectPath,
+				initActionsStatus,
+			};
+
+			// Add worktree to metadata
+			metadata.worktrees.push(worktree);
+			metadata.updatedAt = new Date().toISOString();
+
+			// Save updated grove metadata
+			this.grovesService.writeGroveMetadata(grovePath, metadata);
+
+			// Update grove in index
+			this.grovesService.updateGroveInIndex(groveId, { updatedAt: metadata.updatedAt });
+
+			return metadata;
+		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+			const displayName = selection.projectPath ? `${repo.name}/${selection.projectPath}` : repo.name;
+			throw new Error(`Failed to add worktree for ${displayName}: ${errorMsg}`);
+		}
 	}
 
 	/**

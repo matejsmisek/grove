@@ -2,6 +2,7 @@ import React from 'react';
 
 import { Box, Text } from 'ink';
 
+import { AddWorktreeScreen } from '../screens/AddWorktreeScreen.js';
 import { ChatScreen } from '../screens/ChatScreen.js';
 import { ClaudeTerminalSettingsScreen } from '../screens/ClaudeTerminalSettingsScreen.js';
 import { CloseGroveScreen } from '../screens/CloseGroveScreen.js';
@@ -39,6 +40,9 @@ export function Router() {
 		case 'closeGrove':
 			// Type narrowing: we know params is { groveId: string } here
 			return <CloseGroveScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
+		case 'addWorktree':
+			// Type narrowing: we know params is { groveId: string } here
+			return <AddWorktreeScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
 		case 'openTerminal':
 			// Type narrowing: we know params is { groveId: string } here
 			return (
