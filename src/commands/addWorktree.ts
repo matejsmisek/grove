@@ -7,6 +7,8 @@ import { GroveServiceToken, RepositoryServiceToken } from '../services/tokens.js
 export interface AddWorktreeResult {
 	success: boolean;
 	message: string;
+	worktreeId?: string;
+	worktreeName?: string;
 	worktreePath?: string;
 }
 
@@ -90,6 +92,8 @@ export async function addWorktree(
 		return {
 			success: true,
 			message: `Worktree '${worktreeName}' added to grove '${metadata.name}'`,
+			worktreeId: newWorktree?.name,
+			worktreeName: worktreeName,
 			worktreePath: newWorktree?.worktreePath,
 		};
 	} catch (error) {

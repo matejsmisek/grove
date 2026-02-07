@@ -145,8 +145,14 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 
 		if (result.success) {
 			console.log('✓', result.message);
+			if (result.worktreeId) {
+				console.log('  ID:', result.worktreeId);
+			}
+			if (result.worktreeName) {
+				console.log('  Name:', result.worktreeName);
+			}
 			if (result.worktreePath) {
-				console.log('  Path:', result.worktreePath);
+				console.log('  Folder:', result.worktreePath);
 			}
 			process.exit(0);
 		} else {
