@@ -1,6 +1,10 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+	esbuild: {
+		jsx: 'automatic',
+		target: 'es2022',
+	},
 	test: {
 		globals: true,
 		environment: 'node',
@@ -11,8 +15,6 @@ export default defineConfig({
 				'node_modules/',
 				'dist/',
 				'src/index.tsx',
-				'src/components/**',
-				'src/screens/**',
 				'src/navigation/**',
 				'**/*.d.ts',
 				'**/__tests__/**',
