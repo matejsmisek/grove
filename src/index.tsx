@@ -48,7 +48,7 @@ workspaceServiceFromDI.setCurrentContext(workspaceContext);
 // Detect terminal on first startup if not already configured
 const settings = settingsService.readSettings();
 if (!settings.terminal) {
-	const terminalConfig = detectTerminal();
+	const terminalConfig = detectTerminal(settings.selectedClaudeTerminal);
 	if (terminalConfig) {
 		settingsService.updateSettings({ terminal: terminalConfig });
 	}

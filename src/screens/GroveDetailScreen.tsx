@@ -9,6 +9,7 @@ import { SessionIndicator } from '../components/SessionIndicator.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
+	detectTerminal,
 	getIDEDisplayName,
 	openIDEInPath,
 	openTerminalInPath,
@@ -212,7 +213,13 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 
 	const handleOpenInTerminal = () => {
 		const settings = settingsService.readSettings();
-		if (!settings.terminal) {
+
+		// Resolve terminal config, respecting Claude terminal preference
+		const terminalConfig = settings.selectedClaudeTerminal
+			? (detectTerminal(settings.selectedClaudeTerminal) ?? settings.terminal)
+			: settings.terminal;
+
+		if (!terminalConfig) {
 			setShowActions(false);
 			setError('No terminal configured. Please restart Grove to detect available terminals.');
 			return;
@@ -220,7 +227,7 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 
 		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selectedWorktree);
-		const result = openTerminalInPath(targetPath, settings.terminal);
+		const result = openTerminalInPath(targetPath, terminalConfig);
 		setShowActions(false);
 		if (result.success) {
 			setResultMessage(`Opened terminal in ${selectedWorktree.repositoryName}`);
