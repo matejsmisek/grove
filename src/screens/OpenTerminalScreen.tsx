@@ -6,7 +6,7 @@ import path from 'path';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { openTerminalInPath } from '../services/index.js';
+import { detectTerminal, openTerminalInPath } from '../services/index.js';
 import { GrovesServiceToken, SettingsServiceToken } from '../services/tokens.js';
 import type { TerminalConfig, Worktree } from '../storage/index.js';
 
@@ -37,14 +37,18 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
 
 	useEffect(() => {
-		// Read terminal config from settings
+		// Read terminal config, respecting Claude terminal preference
 		const settings = settingsService.readSettings();
-		if (!settings.terminal) {
+		const resolvedConfig = settings.selectedClaudeTerminal
+			? (detectTerminal(settings.selectedClaudeTerminal) ?? settings.terminal)
+			: settings.terminal;
+
+		if (!resolvedConfig) {
 			setError('No terminal configured. Please restart Grove to detect available terminals.');
 			setLoading(false);
 			return;
 		}
-		setTerminalConfig(settings.terminal);
+		setTerminalConfig(resolvedConfig);
 
 		const groveRef = grovesService.getGroveById(groveId);
 		if (!groveRef) {
@@ -71,7 +75,7 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 		// If only one worktree, open terminal directly
 		if (metadata.worktrees.length === 1) {
 			const terminalPath = getTerminalPath(metadata.worktrees[0]);
-			const result = openTerminalInPath(terminalPath, settings.terminal);
+			const result = openTerminalInPath(terminalPath, resolvedConfig);
 			if (result.success) {
 				goBack();
 			} else {

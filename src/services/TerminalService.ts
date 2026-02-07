@@ -68,9 +68,10 @@ function commandExists(command: string): boolean {
 
 /**
  * Detect the available terminal on the system
- * This should be called once on first startup and saved to config
+ * If preferredCommand is provided, that terminal will be tried first before
+ * falling back to the default detection order.
  */
-export function detectTerminal(): TerminalConfig | null {
+export function detectTerminal(preferredCommand?: string): TerminalConfig | null {
 	const platform = os.platform();
 
 	switch (platform) {
@@ -82,8 +83,17 @@ export function detectTerminal(): TerminalConfig | null {
 			};
 		}
 		case 'linux': {
+			// Build ordered list, prioritizing the preferred terminal
+			let terminals = LINUX_TERMINALS;
+			if (preferredCommand) {
+				const preferred = LINUX_TERMINALS.find((t) => t.command === preferredCommand);
+				if (preferred) {
+					terminals = [preferred, ...LINUX_TERMINALS.filter((t) => t.command !== preferredCommand)];
+				}
+			}
+
 			// Try each terminal in order of preference
-			for (const terminal of LINUX_TERMINALS) {
+			for (const terminal of terminals) {
 				if (commandExists(terminal.command)) {
 					return {
 						command: terminal.command,
