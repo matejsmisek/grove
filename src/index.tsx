@@ -4,6 +4,7 @@ import React from 'react';
 import { render } from 'ink';
 
 import {
+	addWorktree,
 	createGrove,
 	handleSessionHook,
 	initWorkspace,
@@ -77,19 +78,37 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 		}
 	})();
 } else if (args[0] === 'create') {
-	// Handle create command: grove create <name> <repository>
-	// Name can have spaces - all args between 'create' and last arg are joined as the name
-	// Last argument is always the repository
+	// Handle create command: grove create <name> [repository]
+	// Name can have spaces - all args between 'create' and last non-repo arg are joined as the name
+	// If --empty flag is present, creates grove without worktrees
+	// Last argument is the repository (unless --empty is used)
 	(async () => {
 		const createArgs = args.slice(1);
-		if (createArgs.length < 2) {
-			console.error('✗ Usage: grove create <name> <repository>');
+		const isEmpty = createArgs.includes('--empty');
+		const filteredArgs = createArgs.filter((a) => a !== '--empty');
+
+		if (filteredArgs.length < 1) {
+			console.error('✗ Usage: grove create <name> [repository]');
+			console.error('  grove create <name> --empty');
 			console.error('  repository format: reponame or reponame.projectfolder');
 			process.exit(1);
 		}
 
-		const repository = createArgs[createArgs.length - 1];
-		const name = createArgs.slice(0, -1).join(' ');
+		let name: string;
+		let repository: string | undefined;
+
+		if (isEmpty) {
+			// All remaining args form the name
+			name = filteredArgs.join(' ');
+		} else if (filteredArgs.length < 2) {
+			console.error('✗ Usage: grove create <name> <repository>');
+			console.error('  grove create <name> --empty');
+			console.error('  repository format: reponame or reponame.projectfolder');
+			process.exit(1);
+		} else {
+			repository = filteredArgs[filteredArgs.length - 1];
+			name = filteredArgs.slice(0, -1).join(' ');
+		}
 
 		const result = await createGrove(name, repository);
 
@@ -100,6 +119,40 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 			}
 			if (result.groveId) {
 				console.log('  ID:', result.groveId);
+			}
+			process.exit(0);
+		} else {
+			console.error('✗', result.message);
+			process.exit(1);
+		}
+	})();
+} else if (args[0] === 'add-worktree') {
+	// Handle add-worktree command: grove add-worktree <grove-id> <name> <repository>
+	// Adds a worktree to an existing grove
+	(async () => {
+		const addArgs = args.slice(1);
+		if (addArgs.length < 3) {
+			console.error('✗ Usage: grove add-worktree <grove-id> <name> <repository>');
+			console.error('  repository format: reponame or reponame.projectfolder');
+			process.exit(1);
+		}
+
+		const groveId = addArgs[0];
+		const repository = addArgs[addArgs.length - 1];
+		const worktreeName = addArgs.slice(1, -1).join(' ');
+
+		const result = await addWorktree(groveId, worktreeName, repository);
+
+		if (result.success) {
+			console.log('✓', result.message);
+			if (result.worktreeId) {
+				console.log('  ID:', result.worktreeId);
+			}
+			if (result.worktreeName) {
+				console.log('  Name:', result.worktreeName);
+			}
+			if (result.worktreePath) {
+				console.log('  Folder:', result.worktreePath);
 			}
 			process.exit(0);
 		} else {
