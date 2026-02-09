@@ -13,6 +13,7 @@ import type {
 import { generateGroveIdentifier, normalizeGroveName, normalizeName } from '../utils/index.js';
 import type {
 	CloseGroveResult,
+	CloseWorktreeResult,
 	IContextService,
 	IFileService,
 	IGitService,
@@ -23,7 +24,7 @@ import type {
 } from './interfaces.js';
 
 // Re-export types for backward compatibility
-export type { CloseGroveResult, CreateGroveResult } from './interfaces.js';
+export type { CloseGroveResult, CloseWorktreeResult, CreateGroveResult } from './interfaces.js';
 
 /**
  * Service for grove lifecycle operations (create, close)
@@ -832,5 +833,78 @@ Completed at: ${new Date().toISOString()}
 		}
 
 		return { success: true, errors: [], message: 'Grove closed successfully' };
+	}
+
+	/**
+	 * Close a single worktree within a grove
+	 * Removes the git worktree and updates grove metadata
+	 * @param groveId - ID of the grove containing the worktree
+	 * @param worktreePath - Path of the worktree to close
+	 * @returns Success status and any error messages
+	 */
+	async closeWorktree(groveId: string, worktreePath: string): Promise<CloseWorktreeResult> {
+		// Get grove reference
+		const groveRef = this.grovesService.getGroveById(groveId);
+		if (!groveRef) {
+			return { success: false, errors: [], message: 'Grove not found' };
+		}
+
+		// Read grove metadata
+		const metadata = this.grovesService.readGroveMetadata(groveRef.path);
+		if (!metadata) {
+			return { success: false, errors: [], message: 'Grove metadata not found' };
+		}
+
+		// Find the worktree in metadata
+		const worktreeIndex = metadata.worktrees.findIndex((w) => w.worktreePath === worktreePath);
+		if (worktreeIndex === -1) {
+			return { success: false, errors: [], message: 'Worktree not found in grove' };
+		}
+
+		const worktree = metadata.worktrees[worktreeIndex];
+		const errors: string[] = [];
+
+		// Remove the git worktree
+		try {
+			const result = await this.gitService.removeWorktree(
+				worktree.repositoryPath,
+				worktree.worktreePath,
+				true
+			);
+
+			if (!result.success) {
+				errors.push(`Failed to remove worktree ${worktree.repositoryName}: ${result.stderr}`);
+			}
+		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+			errors.push(`Error removing worktree ${worktree.repositoryName}: ${errorMsg}`);
+		}
+
+		// Remove worktree from metadata
+		metadata.worktrees.splice(worktreeIndex, 1);
+		metadata.updatedAt = new Date().toISOString();
+
+		// Save updated grove metadata
+		this.grovesService.writeGroveMetadata(groveRef.path, metadata);
+
+		// Delete the worktree folder if it still exists
+		if (fs.existsSync(worktree.worktreePath)) {
+			try {
+				fs.rmSync(worktree.worktreePath, { recursive: true, force: true });
+			} catch (error) {
+				const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+				errors.push(`Failed to delete worktree folder: ${errorMsg}`);
+			}
+		}
+
+		if (errors.length > 0) {
+			return {
+				success: false,
+				errors,
+				message: 'Worktree closed with some errors',
+			};
+		}
+
+		return { success: true, errors: [], message: 'Worktree closed successfully' };
 	}
 }

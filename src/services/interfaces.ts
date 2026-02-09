@@ -670,6 +670,15 @@ export interface CloseGroveResult {
 }
 
 /**
+ * Worktree close result
+ */
+export interface CloseWorktreeResult {
+	success: boolean;
+	errors: string[];
+	message?: string;
+}
+
+/**
  * Claude session result
  */
 export interface ClaudeSessionResult {
@@ -811,6 +820,14 @@ export interface IGroveService {
 	 * Close a grove - removes worktrees and deletes folder
 	 */
 	closeGrove(groveId: string): Promise<CloseGroveResult>;
+
+	/**
+	 * Close a single worktree within a grove
+	 * Removes the git worktree and updates grove metadata
+	 * @param groveId - ID of the grove containing the worktree
+	 * @param worktreePath - Path of the worktree to close
+	 */
+	closeWorktree(groveId: string, worktreePath: string): Promise<CloseWorktreeResult>;
 }
 
 /**

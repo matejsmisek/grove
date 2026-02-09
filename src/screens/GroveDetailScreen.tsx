@@ -284,6 +284,12 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 		}
 	};
 
+	const handleCloseWorktree = () => {
+		const selected = worktreeDetails[selectedIndex].worktree;
+		setShowActions(false);
+		navigate('closeWorktree', { groveId, worktreePath: selected.worktreePath });
+	};
+
 	// Worktree action options (dynamically built based on worktree state)
 	const selectedWorktree = worktreeDetails[selectedIndex]?.worktree;
 	// Check if there are active Claude sessions for the selected worktree
@@ -325,6 +331,10 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 					},
 				]
 			: []),
+		{
+			label: 'Close Worktree',
+			action: handleCloseWorktree,
+		},
 	];
 
 	// Determine if we're in single-worktree shortcut mode
