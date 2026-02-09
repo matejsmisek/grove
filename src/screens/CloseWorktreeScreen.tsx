@@ -17,18 +17,20 @@ interface WorktreeCheck {
 	upstreamStatus: BranchUpstreamStatus;
 }
 
-interface CloseGroveScreenProps {
+interface CloseWorktreeScreenProps {
 	groveId: string;
+	worktreePath: string;
 }
 
-export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
-	const { goBack, navigate } = useNavigation();
+export function CloseWorktreeScreen({ groveId, worktreePath }: CloseWorktreeScreenProps) {
+	const { goBack } = useNavigation();
 	const gitService = useService(GitServiceToken);
 	const groveService = useService(GroveServiceToken);
 	const grovesService = useService(GrovesServiceToken);
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
-	const [checks, setChecks] = useState<WorktreeCheck[]>([]);
+	const [worktreeName, setWorktreeName] = useState('');
+	const [check, setCheck] = useState<WorktreeCheck | null>(null);
 	const [hasIssues, setHasIssues] = useState(false);
 	const [confirmationInput, setConfirmationInput] = useState('');
 	const [isProcessing, setIsProcessing] = useState(false);
@@ -56,41 +58,41 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 					return;
 				}
 
-				const checkResults: WorktreeCheck[] = [];
-				let foundIssues = false;
-
-				for (const worktree of metadata.worktrees) {
-					// Skip checks for already-closed worktrees
-					if (worktree.closed) {
-						continue;
-					}
-
-					const [uncommitted, unpushed, upstreamStatus] = await Promise.all([
-						gitService.hasUncommittedChanges(worktree.worktreePath),
-						gitService.hasUnpushedCommits(worktree.worktreePath),
-						gitService.getBranchUpstreamStatus(worktree.worktreePath),
-					]);
-
-					// Issue if:
-					// - dirty tree (uncommitted changes)
-					// - unpushed commits
-					// - pushed but not merged (upstream is 'active')
-					// - no upstream configured (might be local-only)
-					// No issue only if upstream is 'gone' (merged)
-					if (uncommitted || unpushed || upstreamStatus !== 'gone') {
-						foundIssues = true;
-					}
-
-					checkResults.push({
-						repositoryName: worktree.repositoryName,
-						worktreePath: worktree.worktreePath,
-						hasUncommittedChanges: uncommitted,
-						hasUnpushedCommits: unpushed,
-						upstreamStatus,
-					});
+				const worktree = metadata.worktrees.find((w) => w.worktreePath === worktreePath);
+				if (!worktree) {
+					setError('Worktree not found in grove');
+					setLoading(false);
+					return;
 				}
 
-				setChecks(checkResults);
+				if (worktree.closed) {
+					setError('Worktree is already closed');
+					setLoading(false);
+					return;
+				}
+
+				setWorktreeName(
+					worktree.name ||
+						(worktree.projectPath
+							? `${worktree.repositoryName}/${worktree.projectPath}`
+							: worktree.repositoryName)
+				);
+
+				const [uncommitted, unpushed, upstreamStatus] = await Promise.all([
+					gitService.hasUncommittedChanges(worktree.worktreePath),
+					gitService.hasUnpushedCommits(worktree.worktreePath),
+					gitService.getBranchUpstreamStatus(worktree.worktreePath),
+				]);
+
+				const foundIssues = uncommitted || unpushed || upstreamStatus !== 'gone';
+
+				setCheck({
+					repositoryName: worktree.repositoryName,
+					worktreePath: worktree.worktreePath,
+					hasUncommittedChanges: uncommitted,
+					hasUnpushedCommits: unpushed,
+					upstreamStatus,
+				});
 				setHasIssues(foundIssues);
 				setLoading(false);
 				setAwaitingConfirmation(true);
@@ -102,14 +104,13 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 		}
 
 		runChecks();
-	}, [groveId]);
+	}, [groveId, worktreePath]);
 
 	// Handle confirmation
 	const handleConfirm = async () => {
-		// Check confirmation requirements
 		if (hasIssues) {
 			if (confirmationInput !== 'delete') {
-				return; // Don't proceed if not typed "delete"
+				return;
 			}
 		}
 
@@ -117,23 +118,22 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 		setAwaitingConfirmation(false);
 
 		try {
-			const result = await groveService.closeGrove(groveId);
+			const result = await groveService.closeWorktree(groveId, worktreePath);
 
 			if (result.success) {
-				// Success - show success message and navigate to home
 				setSuccess(true);
 				setIsProcessing(false);
-				// Auto-navigate after 2 seconds
+				// Auto-navigate back after 2 seconds
 				setTimeout(() => {
-					navigate('home', {});
+					goBack();
 				}, 2000);
 			} else {
-				setError(`Failed to close grove: ${result.message}\n${result.errors.join('\n')}`);
+				setError(`Failed to close worktree: ${result.message}\n${result.errors.join('\n')}`);
 				setIsProcessing(false);
 			}
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-			setError(`Failed to close grove: ${errorMsg}`);
+			setError(`Failed to close worktree: ${errorMsg}`);
 			setIsProcessing(false);
 		}
 	};
@@ -160,11 +160,11 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 		{ isActive: awaitingConfirmation && !hasIssues && !isProcessing }
 	);
 
-	// Handle Enter key press on success screen to immediately navigate to home
+	// Handle Enter key press on success screen to immediately go back
 	useInput(
 		(_input, key) => {
 			if (key.return) {
-				navigate('home', {});
+				goBack();
 			}
 		},
 		{ isActive: success }
@@ -173,7 +173,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 	if (loading) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Text>Loading grove information...</Text>
+				<Text>Loading worktree information...</Text>
 			</Box>
 		);
 	}
@@ -190,7 +190,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 	if (isProcessing) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Text>Closing grove...</Text>
+				<Text>Closing worktree...</Text>
 			</Box>
 		);
 	}
@@ -200,7 +200,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
 					<Text color="green" bold>
-						✓ Grove "{groveName}" successfully closed
+						✓ Worktree "{worktreeName}" successfully closed
 					</Text>
 				</Box>
 				<Text dimColor>Press Enter to continue or wait to be redirected...</Text>
@@ -211,15 +211,17 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 	return (
 		<Box flexDirection="column" padding={1}>
 			<Box marginBottom={1}>
-				<Text bold>Close Grove: {groveName}</Text>
+				<Text bold>
+					Close Worktree: {worktreeName} (Grove: {groveName})
+				</Text>
 			</Box>
 
-			<Box flexDirection="column" marginBottom={1}>
-				<Text bold underline>
-					Safety Checks:
-				</Text>
-				{checks.map((check) => (
-					<Box key={check.repositoryName} flexDirection="column" marginLeft={2} marginTop={1}>
+			{check && (
+				<Box flexDirection="column" marginBottom={1}>
+					<Text bold underline>
+						Safety Checks:
+					</Text>
+					<Box flexDirection="column" marginLeft={2} marginTop={1}>
 						<Text bold>{check.repositoryName}</Text>
 						<Box marginLeft={2}>
 							<Text>
@@ -254,19 +256,19 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 							</Text>
 						</Box>
 					</Box>
-				))}
-			</Box>
+				</Box>
+			)}
 
 			{hasIssues ? (
 				<Box flexDirection="column" marginTop={1}>
 					<Box marginBottom={1}>
 						<Text color="yellow" bold>
-							⚠ Warning: This grove has unfinished work.
+							⚠ Warning: This worktree has unfinished work.
 						</Text>
 					</Box>
 					<Box marginBottom={1} flexDirection="column">
-						<Text>Some worktrees have uncommitted changes, unpushed commits, or unmerged branches.</Text>
-						<Text>Closing this grove will permanently delete all worktrees and their contents.</Text>
+						<Text>This worktree has uncommitted changes, unpushed commits, or an unmerged branch.</Text>
+						<Text>Closing this worktree will permanently delete it and its contents.</Text>
 					</Box>
 					<Box flexDirection="column" marginBottom={1}>
 						<Text bold>Type "delete" to confirm deletion:</Text>
@@ -281,10 +283,10 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 			) : (
 				<Box flexDirection="column" marginTop={1}>
 					<Box marginBottom={1}>
-						<Text color="green">✓ All branches are merged and clean.</Text>
+						<Text color="green">✓ Branch is merged and clean.</Text>
 					</Box>
 					<Box marginBottom={1}>
-						<Text>Are you sure you want to close this grove? This will delete all worktrees.</Text>
+						<Text>Are you sure you want to close this worktree? This will delete the worktree.</Text>
 					</Box>
 					<Text>
 						Press <Text bold>Y</Text> to confirm or <Text bold>N</Text> to cancel

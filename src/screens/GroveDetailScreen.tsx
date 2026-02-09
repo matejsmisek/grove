@@ -141,6 +141,17 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 
 				// Fetch details for each worktree in parallel
 				const detailsPromises = metadata.worktrees.map(async (worktree) => {
+					// Skip git checks for closed worktrees (no longer on disk)
+					if (worktree.closed) {
+						return {
+							worktree,
+							branch: worktree.branch,
+							fileStats: { modified: 0, added: 0, deleted: 0, untracked: 0, total: 0 },
+							hasUnpushedCommits: false,
+							upstreamStatus: 'none' as const,
+						};
+					}
+
 					const [branch, fileStats, hasUnpushed, upstreamStatus] = await Promise.all([
 						gitService.getCurrentBranch(worktree.worktreePath),
 						gitService.getFileChangeStats(worktree.worktreePath),
@@ -284,48 +295,62 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 		}
 	};
 
+	const handleCloseWorktree = () => {
+		const selected = worktreeDetails[selectedIndex].worktree;
+		setShowActions(false);
+		navigate('closeWorktree', { groveId, worktreePath: selected.worktreePath });
+	};
+
 	// Worktree action options (dynamically built based on worktree state)
 	const selectedWorktree = worktreeDetails[selectedIndex]?.worktree;
+	const isSelectedWorktreeClosed = selectedWorktree?.closed === true;
 	// Check if there are active Claude sessions for the selected worktree
 	const hasActiveSessions =
 		selectedWorktree &&
+		!isSelectedWorktreeClosed &&
 		groveSessions.some(
 			(s) =>
 				s.worktreePath === selectedWorktree.worktreePath && s.isRunning && s.agentType === 'claude'
 		);
 
-	const worktreeActions = [
-		// Conditionally add "Resume claude" if there are active sessions
-		...(hasActiveSessions
-			? [
-					{
-						label: 'Resume claude',
-						action: handleResumeClaude,
-					},
-				]
-			: []),
-		{
-			label: 'Open in Claude',
-			action: handleOpenInClaude,
-		},
-		{
-			label: 'Open in Terminal',
-			action: handleOpenInTerminal,
-		},
-		{
-			label: 'Open in IDE',
-			action: handleOpenInIDE,
-		},
-		// Conditionally add "View Init Log" if initActions were executed
-		...(selectedWorktree?.initActionsStatus
-			? [
-					{
-						label: 'View Init Log',
-						action: handleViewInitLog,
-					},
-				]
-			: []),
-	];
+	const worktreeActions = isSelectedWorktreeClosed
+		? []
+		: [
+				// Conditionally add "Resume claude" if there are active sessions
+				...(hasActiveSessions
+					? [
+							{
+								label: 'Resume claude',
+								action: handleResumeClaude,
+							},
+						]
+					: []),
+				{
+					label: 'Open in Claude',
+					action: handleOpenInClaude,
+				},
+				{
+					label: 'Open in Terminal',
+					action: handleOpenInTerminal,
+				},
+				{
+					label: 'Open in IDE',
+					action: handleOpenInIDE,
+				},
+				// Conditionally add "View Init Log" if initActions were executed
+				...(selectedWorktree?.initActionsStatus
+					? [
+							{
+								label: 'View Init Log',
+								action: handleViewInitLog,
+							},
+						]
+					: []),
+				{
+					label: 'Close Worktree',
+					action: handleCloseWorktree,
+				},
+			];
 
 	// Determine if we're in single-worktree shortcut mode
 	const isSingleWorktreeMode = worktreeDetails.length === 1;
@@ -350,11 +375,11 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 						// Single worktree or main screen: go back to home
 						goBack();
 					}
-				} else if (key.upArrow) {
+				} else if (key.upArrow && worktreeActions.length > 0) {
 					setSelectedActionIndex((prev) => (prev > 0 ? prev - 1 : worktreeActions.length - 1));
-				} else if (key.downArrow) {
+				} else if (key.downArrow && worktreeActions.length > 0) {
 					setSelectedActionIndex((prev) => (prev < worktreeActions.length - 1 ? prev + 1 : 0));
-				} else if (key.return) {
+				} else if (key.return && worktreeActions.length > 0) {
 					worktreeActions[selectedActionIndex].action();
 				} else if (input === 'c' && isSingleWorktreeMode) {
 					// Allow closing grove from single-worktree mode
@@ -371,7 +396,11 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 					setSelectedIndex((prev) => (prev > 0 ? prev - 1 : worktreeDetails.length - 1));
 				} else if (key.downArrow && worktreeDetails.length > 0) {
 					setSelectedIndex((prev) => (prev < worktreeDetails.length - 1 ? prev + 1 : 0));
-				} else if (key.return && worktreeDetails.length > 0) {
+				} else if (
+					key.return &&
+					worktreeDetails.length > 0 &&
+					!worktreeDetails[selectedIndex]?.worktree.closed
+				) {
 					setShowActions(true);
 					setSelectedActionIndex(0);
 				} else if (input === 'c') {
@@ -534,7 +563,8 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 						<Box flexDirection="column">
 							{worktreeDetails.map((detail, index) => {
 								const isSelected = index === selectedIndex;
-								const hasChanges = detail.fileStats.total > 0;
+								const isClosed = detail.worktree.closed === true;
+								const hasChanges = !isClosed && detail.fileStats.total > 0;
 								const sessionCounts = getSessionCounts(detail.worktree.worktreePath);
 
 								return (
@@ -542,66 +572,76 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 										key={detail.worktree.worktreePath}
 										flexDirection="column"
 										borderStyle={isSelected ? 'round' : 'single'}
-										borderColor={isSelected ? 'cyan' : 'gray'}
+										borderColor={isClosed ? 'gray' : isSelected ? 'cyan' : 'gray'}
 										paddingX={1}
 										marginBottom={1}
 									>
 										{/* Worktree Name with Session Indicator */}
 										<Box>
-											<Text bold color={isSelected ? 'cyan' : undefined}>
+											<Text bold color={isClosed ? 'gray' : isSelected ? 'cyan' : undefined}>
 												{detail.worktree.name ||
 													(detail.worktree.projectPath
 														? `${detail.worktree.repositoryName}/${detail.worktree.projectPath}`
 														: detail.worktree.repositoryName)}
 											</Text>
-											{(sessionCounts.activeCount > 0 ||
-												sessionCounts.idleCount > 0 ||
-												sessionCounts.attentionCount > 0 ||
-												sessionCounts.closedCount > 0) && (
-												<Box marginLeft={1}>
-													<SessionIndicator
-														activeCount={sessionCounts.activeCount}
-														idleCount={sessionCounts.idleCount}
-														attentionCount={sessionCounts.attentionCount}
-														closedCount={sessionCounts.closedCount}
-													/>
+											{isClosed && <Text dimColor> (Closed)</Text>}
+											{!isClosed &&
+												(sessionCounts.activeCount > 0 ||
+													sessionCounts.idleCount > 0 ||
+													sessionCounts.attentionCount > 0 ||
+													sessionCounts.closedCount > 0) && (
+													<Box marginLeft={1}>
+														<SessionIndicator
+															activeCount={sessionCounts.activeCount}
+															idleCount={sessionCounts.idleCount}
+															attentionCount={sessionCounts.attentionCount}
+															closedCount={sessionCounts.closedCount}
+														/>
+													</Box>
+												)}
+										</Box>
+
+										{isClosed ? (
+											<Box>
+												<Text dimColor>Branch: {detail.branch}</Text>
+											</Box>
+										) : (
+											<>
+												{/* Branch */}
+												<Box marginTop={0}>
+													<Text dimColor>Branch: </Text>
+													<Text color="yellow">{detail.branch}</Text>
+													{detail.upstreamStatus === 'gone' && <Text color="green"> (Merged)</Text>}
 												</Box>
-											)}
-										</Box>
 
-										{/* Branch */}
-										<Box marginTop={0}>
-											<Text dimColor>Branch: </Text>
-											<Text color="yellow">{detail.branch}</Text>
-											{detail.upstreamStatus === 'gone' && <Text color="green"> (Merged)</Text>}
-										</Box>
+												{/* File Changes */}
+												<Box>
+													<Text dimColor>Files: </Text>
+													<Text color={hasChanges ? 'yellow' : 'green'}>
+														{hasChanges ? `${detail.fileStats.total} changed` : 'Clean'}
+													</Text>
+													{hasChanges && <Text dimColor> ({formatFileStats(detail.fileStats)})</Text>}
+												</Box>
 
-										{/* File Changes */}
-										<Box>
-											<Text dimColor>Files: </Text>
-											<Text color={hasChanges ? 'yellow' : 'green'}>
-												{hasChanges ? `${detail.fileStats.total} changed` : 'Clean'}
-											</Text>
-											{hasChanges && <Text dimColor> ({formatFileStats(detail.fileStats)})</Text>}
-										</Box>
+												{/* Unpushed Commits */}
+												{detail.hasUnpushedCommits && (
+													<Box>
+														<Text color="yellow">⚠ Unpushed commits</Text>
+													</Box>
+												)}
 
-										{/* Unpushed Commits */}
-										{detail.hasUnpushedCommits && (
-											<Box>
-												<Text color="yellow">⚠ Unpushed commits</Text>
-											</Box>
-										)}
-
-										{/* InitActions Status */}
-										{detail.worktree.initActionsStatus && (
-											<Box>
-												<Text dimColor>Init Actions: </Text>
-												<Text color={detail.worktree.initActionsStatus.success ? 'green' : 'red'}>
-													{detail.worktree.initActionsStatus.success ? '✓' : '✗'}{' '}
-													{detail.worktree.initActionsStatus.successfulActions}/
-													{detail.worktree.initActionsStatus.totalActions} succeeded
-												</Text>
-											</Box>
+												{/* InitActions Status */}
+												{detail.worktree.initActionsStatus && (
+													<Box>
+														<Text dimColor>Init Actions: </Text>
+														<Text color={detail.worktree.initActionsStatus.success ? 'green' : 'red'}>
+															{detail.worktree.initActionsStatus.success ? '✓' : '✗'}{' '}
+															{detail.worktree.initActionsStatus.successfulActions}/
+															{detail.worktree.initActionsStatus.totalActions} succeeded
+														</Text>
+													</Box>
+												)}
+											</>
 										)}
 									</Box>
 								);

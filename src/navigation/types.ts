@@ -5,6 +5,7 @@ export type Routes = {
 	createGrove: Record<string, never>;
 	groveDetail: { groveId: string };
 	closeGrove: { groveId: string };
+	closeWorktree: { groveId: string; worktreePath: string };
 	addWorktree: { groveId: string };
 	openTerminal: { groveId: string };
 	openIDE: { groveId: string };
