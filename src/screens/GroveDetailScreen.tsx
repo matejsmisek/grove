@@ -170,6 +170,11 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 
 				const details = await Promise.all(detailsPromises);
 				setWorktreeDetails(details);
+				// Set initial selection to first non-closed worktree
+				const firstOpenIndex = details.findIndex((d) => !d.worktree.closed);
+				if (firstOpenIndex !== -1) {
+					setSelectedIndex(firstOpenIndex);
+				}
 				setLoading(false);
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -352,6 +357,20 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 				},
 			];
 
+	// Find the next non-closed worktree index in a given direction (wraps around)
+	const findNextOpenIndex = (current: number, direction: 1 | -1): number => {
+		const len = worktreeDetails.length;
+		if (len === 0) return 0;
+		let next = current;
+		for (let i = 0; i < len; i++) {
+			next = (next + direction + len) % len;
+			if (!worktreeDetails[next]?.worktree.closed) {
+				return next;
+			}
+		}
+		return current; // All closed, stay put
+	};
+
 	// Determine if we're in single-worktree shortcut mode
 	const isSingleWorktreeMode = worktreeDetails.length === 1;
 
@@ -393,9 +412,9 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 				if (key.escape) {
 					goBack();
 				} else if (key.upArrow && worktreeDetails.length > 0) {
-					setSelectedIndex((prev) => (prev > 0 ? prev - 1 : worktreeDetails.length - 1));
+					setSelectedIndex((prev) => findNextOpenIndex(prev, -1));
 				} else if (key.downArrow && worktreeDetails.length > 0) {
-					setSelectedIndex((prev) => (prev < worktreeDetails.length - 1 ? prev + 1 : 0));
+					setSelectedIndex((prev) => findNextOpenIndex(prev, 1));
 				} else if (
 					key.return &&
 					worktreeDetails.length > 0 &&
