@@ -104,7 +104,8 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 				worktree.repositoryPath,
 				worktree.projectPath,
 				terminalToUse!,
-				groveRef.name
+				groveRef.name,
+				worktree.name
 			);
 			if (result.success) {
 				goBack();
@@ -137,7 +138,8 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 			worktree.repositoryPath,
 			worktree.projectPath,
 			selectedTerminal!,
-			groveName
+			groveName,
+			worktree.name
 		);
 		if (result.success) {
 			setResultMessage(`Opened Claude in ${worktree.repositoryName}`);

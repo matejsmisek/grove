@@ -8,7 +8,14 @@ import type { GroveIDEConfig, GroveRepoConfig, IDEConfig, IDEType } from './type
  * Valid template variables for different contexts
  */
 export const BRANCH_TEMPLATE_VARIABLES = ['GROVE_NAME'] as const;
-export const CLAUDE_SESSION_TEMPLATE_VARIABLES = ['WORKING_DIR', 'AGENT_COMMAND'] as const;
+export const CLAUDE_SESSION_TEMPLATE_VARIABLES = [
+	'WORKING_DIR',
+	'AGENT_COMMAND',
+	'GROVE_NAME',
+	'GROVE_NAME_SHORT',
+	'WORKTREE_NAME',
+	'WORKTREE_NAME_SHORT',
+] as const;
 
 /**
  * Validation result for template variables

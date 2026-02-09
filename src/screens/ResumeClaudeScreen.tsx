@@ -10,7 +10,7 @@ import {
 	SessionsServiceToken,
 	SettingsServiceToken,
 } from '../services/tokens.js';
-import type { AgentSession, ClaudeTerminalType } from '../storage/types.js';
+import type { AgentSession, ClaudeTerminalType, Worktree } from '../storage/types.js';
 
 interface ResumeClaudeScreenProps {
 	groveId: string;
@@ -91,6 +91,13 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 	const [availableTerminals, setAvailableTerminals] = useState<ClaudeTerminalType[]>([]);
 	const [selectedTerminal, setSelectedTerminal] = useState<ClaudeTerminalType | null>(null);
 	const [showedTerminalSelection, setShowedTerminalSelection] = useState(false);
+	const [groveWorktrees, setGroveWorktrees] = useState<Worktree[]>([]);
+
+	const getWorktreeNameForSession = (session: AgentSession): string | undefined => {
+		if (!session.worktreePath) return undefined;
+		const wt = groveWorktrees.find((w) => w.worktreePath === session.worktreePath);
+		return wt?.name;
+	};
 
 	useEffect(() => {
 		// Check if supported terminals are available
@@ -131,6 +138,8 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 			return;
 		}
 
+		setGroveWorktrees(metadata.worktrees);
+
 		// Get sessions for this grove
 		let groveSessions = sessionsService
 			.getSessionsByGrove(groveId)
@@ -169,11 +178,15 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 		// If only one session, resume it directly
 		if (groveSessions.length === 1) {
 			const session = groveSessions[0];
+			const worktree = session.worktreePath
+				? metadata.worktrees.find((w) => w.worktreePath === session.worktreePath)
+				: undefined;
 			const result = claudeSessionService.resumeSession(
 				session.sessionId,
 				session.workspacePath,
 				terminalToUse!,
-				groveRef.name
+				groveRef.name,
+				worktree?.name
 			);
 			if (result.success) {
 				goBack();
@@ -197,7 +210,8 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 				session.sessionId,
 				session.workspacePath,
 				terminal,
-				groveName
+				groveName,
+				getWorktreeNameForSession(session)
 			);
 			if (result.success) {
 				goBack();
@@ -215,7 +229,8 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 			session.sessionId,
 			session.workspacePath,
 			selectedTerminal!,
-			groveName
+			groveName,
+			getWorktreeNameForSession(session)
 		);
 		if (result.success) {
 			setResultMessage(`Resumed Claude session`);

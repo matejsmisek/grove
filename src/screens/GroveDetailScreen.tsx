@@ -216,7 +216,8 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 			selectedWorktree.repositoryPath,
 			selectedWorktree.projectPath,
 			undefined,
-			groveName
+			groveName,
+			selectedWorktree.name
 		);
 		setShowActions(false);
 		if (result.success) {

@@ -110,7 +110,7 @@ describe('ClaudeSessionService', () => {
 			expect(result).toBe('title: short');
 		});
 
-		it('should replace ${GROVE_NAME_SHORT} with first 10 chars for long names', () => {
+		it('should replace ${GROVE_NAME_SHORT} with first 15 chars for long names', () => {
 			const template = 'title: ${GROVE_NAME_SHORT}';
 			const result = service.applyTemplate(
 				template,
@@ -119,21 +119,21 @@ describe('ClaudeSessionService', () => {
 				'this-is-a-very-long-grove-name'
 			);
 
-			expect(result).toBe('title: this-is-a-');
+			expect(result).toBe('title: this-is-a-very-');
 		});
 
-		it('should handle exactly 10 character grove name', () => {
+		it('should handle exactly 15 character grove name', () => {
 			const template = 'title: ${GROVE_NAME_SHORT}';
-			const result = service.applyTemplate(template, '/work', 'claude', '1234567890');
+			const result = service.applyTemplate(template, '/work', 'claude', '123456789012345');
 
-			expect(result).toBe('title: 1234567890');
+			expect(result).toBe('title: 123456789012345');
 		});
 
-		it('should handle 11 character grove name (truncates to 10)', () => {
+		it('should handle 16 character grove name (truncates to 15)', () => {
 			const template = 'title: ${GROVE_NAME_SHORT}';
-			const result = service.applyTemplate(template, '/work', 'claude', '12345678901');
+			const result = service.applyTemplate(template, '/work', 'claude', '1234567890123456');
 
-			expect(result).toBe('title: 1234567890');
+			expect(result).toBe('title: 123456789012345');
 		});
 
 		it('should not replace grove name placeholders when groveName is undefined', () => {
@@ -143,33 +143,70 @@ describe('ClaudeSessionService', () => {
 			expect(result).toBe('title: ${GROVE_NAME} - ${GROVE_NAME_SHORT}');
 		});
 
+		it('should replace ${WORKTREE_NAME} placeholder with worktree name', () => {
+			const template = 'title: ${WORKTREE_NAME}';
+			const result = service.applyTemplate(template, '/work', 'claude', 'my-grove', 'my-worktree');
+
+			expect(result).toBe('title: my-worktree');
+		});
+
+		it('should replace ${WORKTREE_NAME_SHORT} with shortened name for short names', () => {
+			const template = 'title: ${WORKTREE_NAME_SHORT}';
+			const result = service.applyTemplate(template, '/work', 'claude', 'grove', 'short');
+
+			expect(result).toBe('title: short');
+		});
+
+		it('should replace ${WORKTREE_NAME_SHORT} with first 15 chars for long names', () => {
+			const template = 'title: ${WORKTREE_NAME_SHORT}';
+			const result = service.applyTemplate(
+				template,
+				'/work',
+				'claude',
+				'my-grove',
+				'this-is-a-very-long-worktree-name'
+			);
+
+			expect(result).toBe('title: this-is-a-very-');
+		});
+
+		it('should not replace worktree name placeholders when worktreeName is undefined', () => {
+			const template = 'title: ${WORKTREE_NAME} - ${WORKTREE_NAME_SHORT}';
+			const result = service.applyTemplate(template, '/work', 'claude', 'my-grove');
+
+			expect(result).toBe('title: ${WORKTREE_NAME} - ${WORKTREE_NAME_SHORT}');
+		});
+
 		it('should replace all placeholders in a complex template', () => {
 			const template = `layout tall
 cd \${WORKING_DIR}
 launch --title "\${GROVE_NAME_SHORT}" \${AGENT_COMMAND}
-launch --title "shell" bash`;
+launch --title "\${WORKTREE_NAME_SHORT}" bash`;
 
 			const result = service.applyTemplate(
 				template,
 				'/home/user/projects/grove',
 				'claude --resume xyz',
-				'feature-add-grove-name-variables'
+				'feature-add-grove-name-variables',
+				'my-worktree-long-name'
 			);
 
 			const expected = `layout tall
 cd /home/user/projects/grove
-launch --title "feature-ad" claude --resume xyz
-launch --title "shell" bash`;
+launch --title "feature-add-gro" claude --resume xyz
+launch --title "my-worktree-lon" bash`;
 
 			expect(result).toBe(expected);
 		});
 
 		it('should replace multiple occurrences of each placeholder', () => {
 			const template =
-				'${WORKING_DIR} - ${WORKING_DIR} | ${GROVE_NAME} - ${GROVE_NAME} | ${GROVE_NAME_SHORT} - ${GROVE_NAME_SHORT}';
-			const result = service.applyTemplate(template, '/path', 'claude', 'test-grove');
+				'${WORKING_DIR} - ${WORKING_DIR} | ${GROVE_NAME} - ${GROVE_NAME} | ${GROVE_NAME_SHORT} - ${GROVE_NAME_SHORT} | ${WORKTREE_NAME} - ${WORKTREE_NAME}';
+			const result = service.applyTemplate(template, '/path', 'claude', 'test-grove', 'test-wt');
 
-			expect(result).toBe('/path - /path | test-grove - test-grove | test-grove - test-grove');
+			expect(result).toBe(
+				'/path - /path | test-grove - test-grove | test-grove - test-grove | test-wt - test-wt'
+			);
 		});
 
 		it('should not replace placeholders for empty grove name', () => {

@@ -151,7 +151,8 @@ export function openClaude(groveId?: string): ClaudeResult {
 			targetWorktree.repositoryPath,
 			targetWorktree.projectPath,
 			undefined, // Use default terminal
-			metadata.name
+			metadata.name,
+			targetWorktree.name
 		);
 
 		if (!result.success) {
