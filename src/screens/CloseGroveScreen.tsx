@@ -10,6 +10,7 @@ import type { BranchUpstreamStatus } from '../services/interfaces.js';
 import { GitServiceToken, GroveServiceToken, GrovesServiceToken } from '../services/tokens.js';
 
 interface WorktreeCheck {
+	displayName: string;
 	repositoryName: string;
 	worktreePath: string;
 	hasUncommittedChanges: boolean;
@@ -81,7 +82,14 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 						foundIssues = true;
 					}
 
+					const displayName =
+						worktree.name ||
+						(worktree.projectPath
+							? `${worktree.repositoryName}/${worktree.projectPath}`
+							: worktree.repositoryName);
+
 					checkResults.push({
+						displayName,
 						repositoryName: worktree.repositoryName,
 						worktreePath: worktree.worktreePath,
 						hasUncommittedChanges: uncommitted,
@@ -219,8 +227,8 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 					Safety Checks:
 				</Text>
 				{checks.map((check) => (
-					<Box key={check.repositoryName} flexDirection="column" marginLeft={2} marginTop={1}>
-						<Text bold>{check.repositoryName}</Text>
+					<Box key={check.displayName} flexDirection="column" marginLeft={2} marginTop={1}>
+						<Text bold>{check.displayName}</Text>
 						<Box marginLeft={2}>
 							<Text>
 								Uncommitted changes:{' '}
