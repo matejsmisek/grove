@@ -47,7 +47,9 @@ export type ClaudeTerminalType = 'konsole' | 'kitty';
  * - ${WORKING_DIR}: Working directory path
  * - ${AGENT_COMMAND}: Agent command (e.g., 'claude' or 'claude --resume <id>')
  * - ${GROVE_NAME}: Full grove name
- * - ${GROVE_NAME_SHORT}: Shortened grove name (max 10 chars)
+ * - ${GROVE_NAME_SHORT}: Shortened grove name (max 15 chars)
+ * - ${WORKTREE_NAME}: Full worktree name
+ * - ${WORKTREE_NAME_SHORT}: Shortened worktree name (max 15 chars)
  */
 export interface ClaudeSessionTemplate {
 	/** Template content with placeholders */
@@ -103,7 +105,9 @@ export interface Settings {
 	 * - ${WORKING_DIR}: Working directory path
 	 * - ${AGENT_COMMAND}: Agent command (e.g., 'claude' or 'claude --resume <id>')
 	 * - ${GROVE_NAME}: Full grove name
-	 * - ${GROVE_NAME_SHORT}: Shortened grove name (max 10 chars)
+	 * - ${GROVE_NAME_SHORT}: Shortened grove name (max 15 chars)
+	 * - ${WORKTREE_NAME}: Full worktree name
+	 * - ${WORKTREE_NAME_SHORT}: Shortened worktree name (max 15 chars)
 	 * If not set for a terminal type, default template will be used.
 	 */
 	claudeSessionTemplates?: ClaudeSessionTemplates;
@@ -375,7 +379,9 @@ export interface GroveRepoConfig {
 	 * - ${WORKING_DIR}: Working directory path
 	 * - ${AGENT_COMMAND}: Agent command (e.g., 'claude' or 'claude --resume <id>')
 	 * - ${GROVE_NAME}: Full grove name
-	 * - ${GROVE_NAME_SHORT}: Shortened grove name (max 10 chars)
+	 * - ${GROVE_NAME_SHORT}: Shortened grove name (max 15 chars)
+	 * - ${WORKTREE_NAME}: Full worktree name
+	 * - ${WORKTREE_NAME_SHORT}: Shortened worktree name (max 15 chars)
 	 * When set, these templates will be used instead of global templates from settings.
 	 */
 	claudeSessionTemplates?: ClaudeSessionTemplates;

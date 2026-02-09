@@ -738,18 +738,22 @@ export interface IClaudeSessionService {
 	 * - ${WORKING_DIR}: Working directory path
 	 * - ${AGENT_COMMAND}: Agent command (defaults to 'claude')
 	 * - ${GROVE_NAME}: Full grove name
-	 * - ${GROVE_NAME_SHORT}: Shortened grove name (max 10 chars)
+	 * - ${GROVE_NAME_SHORT}: Shortened grove name (max 15 chars)
+	 * - ${WORKTREE_NAME}: Full worktree name
+	 * - ${WORKTREE_NAME_SHORT}: Shortened worktree name (max 15 chars)
 	 * @param template - Template content
 	 * @param workingDir - Working directory path
 	 * @param agentCommand - Optional agent command (defaults to 'claude')
 	 * @param groveName - Optional grove name for template variables
+	 * @param worktreeName - Optional worktree name for template variables
 	 * @returns Template with placeholders replaced
 	 */
 	applyTemplate(
 		template: string,
 		workingDir: string,
 		agentCommand?: string,
-		groveName?: string
+		groveName?: string,
+		worktreeName?: string
 	): string;
 
 	/**
@@ -760,13 +764,15 @@ export interface IClaudeSessionService {
 	 * @param projectPath - Optional project path for template lookup (for monorepos)
 	 * @param terminalType - Optional terminal type to use (if not provided, uses setting or auto-detects)
 	 * @param groveName - Optional grove name for template variables (${GROVE_NAME}, ${GROVE_NAME_SHORT})
+	 * @param worktreeName - Optional worktree name for template variables (${WORKTREE_NAME}, ${WORKTREE_NAME_SHORT})
 	 */
 	openSession(
 		workingDir: string,
 		repositoryPath: string,
 		projectPath?: string,
 		terminalType?: ClaudeTerminalType,
-		groveName?: string
+		groveName?: string,
+		worktreeName?: string
 	): ClaudeSessionResult;
 
 	/**
@@ -775,12 +781,14 @@ export interface IClaudeSessionService {
 	 * @param workingDir - Directory to set as working directory
 	 * @param terminalType - Terminal type to use
 	 * @param groveName - Optional grove name for template variables (${GROVE_NAME}, ${GROVE_NAME_SHORT})
+	 * @param worktreeName - Optional worktree name for template variables (${WORKTREE_NAME}, ${WORKTREE_NAME_SHORT})
 	 */
 	resumeSession(
 		sessionId: string,
 		workingDir: string,
 		terminalType: ClaudeTerminalType,
-		groveName?: string
+		groveName?: string,
+		worktreeName?: string
 	): ClaudeSessionResult;
 }
 
