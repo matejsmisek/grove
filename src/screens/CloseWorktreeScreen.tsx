@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
@@ -37,6 +37,17 @@ export function CloseWorktreeScreen({ groveId, worktreePath }: CloseWorktreeScre
 	const [error, setError] = useState<string | null>(null);
 	const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 	const [success, setSuccess] = useState(false);
+	const autoGoBackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Clear auto-navigate timer on unmount to prevent stale goBack() calls
+	// that would drain the navigation history
+	useEffect(() => {
+		return () => {
+			if (autoGoBackTimer.current) {
+				clearTimeout(autoGoBackTimer.current);
+			}
+		};
+	}, []);
 
 	// Run safety checks on mount
 	useEffect(() => {
@@ -124,7 +135,7 @@ export function CloseWorktreeScreen({ groveId, worktreePath }: CloseWorktreeScre
 				setSuccess(true);
 				setIsProcessing(false);
 				// Auto-navigate back after 2 seconds
-				setTimeout(() => {
+				autoGoBackTimer.current = setTimeout(() => {
 					goBack();
 				}, 2000);
 			} else {
@@ -164,6 +175,10 @@ export function CloseWorktreeScreen({ groveId, worktreePath }: CloseWorktreeScre
 	useInput(
 		(_input, key) => {
 			if (key.return) {
+				if (autoGoBackTimer.current) {
+					clearTimeout(autoGoBackTimer.current);
+					autoGoBackTimer.current = null;
+				}
 				goBack();
 			}
 		},
