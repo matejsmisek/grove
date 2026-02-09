@@ -209,7 +209,21 @@ describe('GroveService.closeWorktree', () => {
 		expect(result.message).toBe('Worktree not found in grove');
 	});
 
-	it('should successfully close a worktree', async () => {
+	it('should return error when worktree is already closed', async () => {
+		const worktree = createMockWorktree({ closed: true, closedAt: new Date().toISOString() });
+		const metadata = createMockMetadata([worktree]);
+
+		vi.mocked(mockGrovesService.getGroveById).mockReturnValue(createMockGroveRef());
+		vi.mocked(mockGrovesService.readGroveMetadata).mockReturnValue(metadata);
+
+		const result = await service.closeWorktree('grove-1', worktree.worktreePath);
+
+		expect(result.success).toBe(false);
+		expect(result.message).toBe('Worktree is already closed');
+		expect(mockGitService.removeWorktree).not.toHaveBeenCalled();
+	});
+
+	it('should successfully close a worktree and mark it as closed', async () => {
 		const worktree1 = createMockWorktree();
 		const worktree2 = createMockWorktree({
 			repositoryName: 'other-repo',
@@ -240,16 +254,18 @@ describe('GroveService.closeWorktree', () => {
 			true
 		);
 
-		// Should have updated grove metadata (remaining worktree should still be there)
-		expect(mockGrovesService.writeGroveMetadata).toHaveBeenCalledWith(
-			'/groves/test-grove',
-			expect.objectContaining({
-				worktrees: [worktree2],
-			})
-		);
+		// Metadata should still contain both worktrees, but first one marked as closed
+		const savedMetadata = vi.mocked(mockGrovesService.writeGroveMetadata).mock
+			.calls[0][1] as GroveMetadata;
+		expect(savedMetadata.worktrees).toHaveLength(2);
+		expect(savedMetadata.worktrees[0].repositoryName).toBe('test-repo');
+		expect(savedMetadata.worktrees[0].closed).toBe(true);
+		expect(savedMetadata.worktrees[0].closedAt).toBeDefined();
+		expect(savedMetadata.worktrees[1].repositoryName).toBe('other-repo');
+		expect(savedMetadata.worktrees[1].closed).toBeUndefined();
 	});
 
-	it('should remove worktree from metadata even when git removal fails', async () => {
+	it('should mark worktree as closed even when git removal fails', async () => {
 		const worktree = createMockWorktree();
 		const metadata = createMockMetadata([worktree]);
 
@@ -268,11 +284,16 @@ describe('GroveService.closeWorktree', () => {
 		expect(result.errors).toHaveLength(1);
 		expect(result.errors[0]).toContain('Failed to remove worktree');
 
-		// Metadata should still be updated (worktree removed from list)
+		// Worktree should still be marked as closed in metadata
 		expect(mockGrovesService.writeGroveMetadata).toHaveBeenCalledWith(
 			'/groves/test-grove',
 			expect.objectContaining({
-				worktrees: [],
+				worktrees: [
+					expect.objectContaining({
+						closed: true,
+						closedAt: expect.any(String),
+					}),
+				],
 			})
 		);
 	});
@@ -292,7 +313,7 @@ describe('GroveService.closeWorktree', () => {
 		expect(result.errors[0]).toContain('Error removing worktree');
 		expect(result.errors[0]).toContain('Git command failed');
 
-		// Metadata should still be updated
+		// Metadata should still be updated with closed flag
 		expect(mockGrovesService.writeGroveMetadata).toHaveBeenCalled();
 	});
 
@@ -356,12 +377,15 @@ describe('GroveService.closeWorktree', () => {
 			true
 		);
 
-		// Metadata should have worktree1 and worktree3 remaining
-		expect(mockGrovesService.writeGroveMetadata).toHaveBeenCalledWith(
-			'/groves/test-grove',
-			expect.objectContaining({
-				worktrees: [worktree1, worktree3],
-			})
-		);
+		// All three worktrees should still be in metadata, only worktree2 marked as closed
+		const savedMetadata = vi.mocked(mockGrovesService.writeGroveMetadata).mock
+			.calls[0][1] as GroveMetadata;
+		expect(savedMetadata.worktrees).toHaveLength(3);
+		expect(savedMetadata.worktrees[0].repositoryName).toBe('repo-a');
+		expect(savedMetadata.worktrees[0].closed).toBeUndefined();
+		expect(savedMetadata.worktrees[1].repositoryName).toBe('repo-b');
+		expect(savedMetadata.worktrees[1].closed).toBe(true);
+		expect(savedMetadata.worktrees[2].repositoryName).toBe('repo-c');
+		expect(savedMetadata.worktrees[2].closed).toBeUndefined();
 	});
 });

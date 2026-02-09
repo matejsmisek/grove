@@ -60,6 +60,11 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 				let foundIssues = false;
 
 				for (const worktree of metadata.worktrees) {
+					// Skip checks for already-closed worktrees
+					if (worktree.closed) {
+						continue;
+					}
+
 					const [uncommitted, unpushed, upstreamStatus] = await Promise.all([
 						gitService.hasUncommittedChanges(worktree.worktreePath),
 						gitService.hasUnpushedCommits(worktree.worktreePath),

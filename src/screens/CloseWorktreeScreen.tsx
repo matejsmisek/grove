@@ -65,6 +65,12 @@ export function CloseWorktreeScreen({ groveId, worktreePath }: CloseWorktreeScre
 					return;
 				}
 
+				if (worktree.closed) {
+					setError('Worktree is already closed');
+					setLoading(false);
+					return;
+				}
+
 				setWorktreeName(
 					worktree.name ||
 						(worktree.projectPath

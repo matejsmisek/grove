@@ -837,7 +837,7 @@ Completed at: ${new Date().toISOString()}
 
 	/**
 	 * Close a single worktree within a grove
-	 * Removes the git worktree and updates grove metadata
+	 * Removes the git worktree from disk and marks it as closed in grove metadata
 	 * @param groveId - ID of the grove containing the worktree
 	 * @param worktreePath - Path of the worktree to close
 	 * @returns Success status and any error messages
@@ -856,12 +856,15 @@ Completed at: ${new Date().toISOString()}
 		}
 
 		// Find the worktree in metadata
-		const worktreeIndex = metadata.worktrees.findIndex((w) => w.worktreePath === worktreePath);
-		if (worktreeIndex === -1) {
+		const worktree = metadata.worktrees.find((w) => w.worktreePath === worktreePath);
+		if (!worktree) {
 			return { success: false, errors: [], message: 'Worktree not found in grove' };
 		}
 
-		const worktree = metadata.worktrees[worktreeIndex];
+		if (worktree.closed) {
+			return { success: false, errors: [], message: 'Worktree is already closed' };
+		}
+
 		const errors: string[] = [];
 
 		// Remove the git worktree
@@ -880,8 +883,9 @@ Completed at: ${new Date().toISOString()}
 			errors.push(`Error removing worktree ${worktree.repositoryName}: ${errorMsg}`);
 		}
 
-		// Remove worktree from metadata
-		metadata.worktrees.splice(worktreeIndex, 1);
+		// Mark worktree as closed in metadata (keep the entry)
+		worktree.closed = true;
+		worktree.closedAt = new Date().toISOString();
 		metadata.updatedAt = new Date().toISOString();
 
 		// Save updated grove metadata

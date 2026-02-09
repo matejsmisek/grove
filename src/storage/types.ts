@@ -236,6 +236,14 @@ export interface Worktree {
 	 * Status of initActions execution (if any were configured)
 	 */
 	initActionsStatus?: InitActionsStatus;
+	/**
+	 * Whether this worktree has been closed (removed from disk but kept in metadata)
+	 */
+	closed?: boolean;
+	/**
+	 * Timestamp when the worktree was closed
+	 */
+	closedAt?: string;
 }
 
 /**
