@@ -2,10 +2,35 @@ import fs from 'fs';
 import { glob } from 'glob';
 import path from 'path';
 
-import type { FileCopyResult, FileMatchResult, IFileService } from './interfaces.js';
+import type { FileCopyResult, FileMatchResult } from './types.js';
 
-// Re-export types for backward compatibility
-export type { FileCopyResult, FileMatchResult } from './interfaces.js';
+// Re-export types for convenience
+export type { FileCopyResult, FileMatchResult } from './types.js';
+
+/**
+ * File service interface
+ * Provides file operations including pattern matching and copying
+ */
+export interface IFileService {
+	/** Find files matching a glob pattern */
+	matchPattern(sourceDir: string, pattern: string): Promise<string[]>;
+	/** Find files matching multiple glob patterns */
+	matchPatterns(sourceDir: string, patterns: string[]): Promise<FileMatchResult[]>;
+	/** Copy a single file preserving directory structure */
+	copyFile(sourceDir: string, destDir: string, relativeFilePath: string): void;
+	/** Copy files matching glob patterns */
+	copyFilesFromPatterns(
+		sourceDir: string,
+		destDir: string,
+		patterns: string[]
+	): Promise<FileCopyResult>;
+	/** Check if a path exists */
+	exists(filePath: string): boolean;
+	/** Check if a path is a directory */
+	isDirectory(filePath: string): boolean;
+	/** Check if a path is a file */
+	isFile(filePath: string): boolean;
+}
 
 /**
  * Service for file operations including pattern matching and copying

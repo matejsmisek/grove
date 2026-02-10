@@ -1,24 +1,27 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Volume } from 'memfs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockFs } from '../../__tests__/helpers.js';
 import { ContextService } from '../ContextService.js';
-import type { ContextData } from '../interfaces.js';
+import type { ContextData } from '../types.js';
 
 // Mock filesystem
 let vol: Volume;
 
 vi.mock('fs', () => {
 	return {
-		default: new Proxy({}, {
-			get(_target, prop) {
-				return vol?.[prop as keyof Volume];
-			},
-		}),
+		default: new Proxy(
+			{},
+			{
+				get(_target, prop) {
+					return vol?.[prop as keyof Volume];
+				},
+			}
+		),
 		...Object.fromEntries(
 			Object.getOwnPropertyNames(Volume.prototype)
-				.filter(key => key !== 'constructor')
-				.map(key => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
+				.filter((key) => key !== 'constructor')
+				.map((key) => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
 		),
 	};
 });
@@ -107,9 +110,7 @@ describe('ContextService', () => {
 			const data: ContextData = {
 				name: 'Test Grove',
 				createdAt: '2024-01-01T00:00:00Z',
-				repositories: [
-					{ name: 'repo1', path: '/path/to/repo1', registeredAt: '2024-01-01T00:00:00Z' },
-				],
+				repositories: [{ name: 'repo1', path: '/path/to/repo1', registeredAt: '2024-01-01T00:00:00Z' }],
 				purpose: 'Testing',
 				notes: 'Test notes',
 			};

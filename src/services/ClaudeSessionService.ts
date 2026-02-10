@@ -3,13 +3,56 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
+import type { IGroveConfigService } from '../storage/GroveConfigService.js';
+import type { ISettingsService } from '../storage/SettingsService.js';
 import type { ClaudeTerminalType } from '../storage/types.js';
-import type {
-	ClaudeSessionResult,
-	IClaudeSessionService,
-	IGroveConfigService,
-	ISettingsService,
-} from './interfaces.js';
+import type { ClaudeSessionResult } from './types.js';
+
+/**
+ * Claude session service interface
+ * Launches Claude CLI in terminal sessions with multiple tabs
+ */
+export interface IClaudeSessionService {
+	/** Detect all available supported terminals (konsole or kitty) */
+	detectAvailableTerminals(): ClaudeTerminalType[];
+	/** @deprecated Use detectAvailableTerminals() instead */
+	detectTerminal(): ClaudeTerminalType | null;
+	/** Get the default template for a terminal type */
+	getDefaultTemplate(terminalType: ClaudeTerminalType): string;
+	/** Get the effective template for a terminal type */
+	getEffectiveTemplate(terminalType: ClaudeTerminalType): string;
+	/** Get the template for a specific repository/project */
+	getTemplateForRepo(
+		terminalType: ClaudeTerminalType,
+		repositoryPath: string,
+		projectPath?: string
+	): string;
+	/** Apply template by replacing placeholders */
+	applyTemplate(
+		template: string,
+		workingDir: string,
+		agentCommand?: string,
+		groveName?: string,
+		worktreeName?: string
+	): string;
+	/** Open Claude in a terminal session */
+	openSession(
+		workingDir: string,
+		repositoryPath: string,
+		projectPath?: string,
+		terminalType?: ClaudeTerminalType,
+		groveName?: string,
+		worktreeName?: string
+	): ClaudeSessionResult;
+	/** Resume an existing Claude session */
+	resumeSession(
+		sessionId: string,
+		workingDir: string,
+		terminalType: ClaudeTerminalType,
+		groveName?: string,
+		worktreeName?: string
+	): ClaudeSessionResult;
+}
 
 /**
  * Claude Session Service

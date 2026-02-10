@@ -1,6 +1,19 @@
-import type { IRecentSelectionsService, ISettingsService } from '../services/interfaces.js';
 import { JsonStore } from './JsonStore.js';
+import type { ISettingsService } from './SettingsService.js';
 import type { RecentSelection, RecentSelectionsData, RepositorySelection } from './types.js';
+
+/**
+ * Recent selections service interface
+ * Manages recently used repository/project selections stored in ~/.grove/recent.json
+ */
+export interface IRecentSelectionsService {
+	/** Add selections to recent history (called after a grove is successfully created) */
+	addRecentSelections(selections: RepositorySelection[]): void;
+	/** Get recent selections that are still valid (repository still registered) */
+	getRecentSelections(registeredRepoPaths: Set<string>): RecentSelection[];
+	/** Get display name for a recent selection */
+	getRecentSelectionDisplayName(selection: RecentSelection): string;
+}
 
 const MAX_RECENT_SELECTIONS = 3;
 

@@ -3,6 +3,9 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
+import type { IGroveConfigService } from '../storage/GroveConfigService.js';
+import type { IGrovesService } from '../storage/GrovesService.js';
+import type { ISettingsService } from '../storage/SettingsService.js';
 import type {
 	GroveMetadata,
 	InitActionsStatus,
@@ -11,20 +14,41 @@ import type {
 	Worktree,
 } from '../storage/types.js';
 import { generateGroveIdentifier, normalizeGroveName, normalizeName } from '../utils/index.js';
-import type {
-	CloseGroveResult,
-	CloseWorktreeResult,
-	IContextService,
-	IFileService,
-	IGitService,
-	IGroveConfigService,
-	IGroveService,
-	IGrovesService,
-	ISettingsService,
-} from './interfaces.js';
+import type { IContextService } from './ContextService.js';
+import type { IFileService } from './FileService.js';
+import type { IGitService } from './GitService.js';
+import type { CloseGroveResult, CloseWorktreeResult } from './types.js';
 
-// Re-export types for backward compatibility
-export type { CloseGroveResult, CloseWorktreeResult, CreateGroveResult } from './interfaces.js';
+// Re-export types for convenience
+export type { CloseGroveResult, CloseWorktreeResult, CreateGroveResult } from './types.js';
+
+/**
+ * Grove service interface
+ * Orchestrates grove lifecycle operations
+ */
+export interface IGroveService {
+	/**
+	 * Create a new grove with worktrees for selected repositories
+	 */
+	createGrove(
+		name: string,
+		selections: RepositorySelection[],
+		onLog?: (message: string) => void
+	): Promise<GroveMetadata>;
+	/**
+	 * Add a worktree to an existing grove
+	 */
+	addWorktreeToGrove(
+		groveId: string,
+		selection: RepositorySelection,
+		worktreeName: string,
+		onLog?: (message: string) => void
+	): Promise<GroveMetadata>;
+	/** Close a grove - removes worktrees and deletes folder */
+	closeGrove(groveId: string): Promise<CloseGroveResult>;
+	/** Close a single worktree within a grove */
+	closeWorktree(groveId: string, worktreePath: string): Promise<CloseWorktreeResult>;
+}
 
 /**
  * Service for grove lifecycle operations (create, close)

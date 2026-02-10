@@ -27,28 +27,39 @@ export {
 } from './IDEService.js';
 export type { IDEResult, ResolvedIDEConfig } from './IDEService.js';
 
-// Service interfaces
+// Service interfaces (co-located with implementations)
+export type { IClaudeSessionService } from './ClaudeSessionService.js';
+export type { IContextService } from './ContextService.js';
+export type { IFileService } from './FileService.js';
+export type { IGitService } from './GitService.js';
+export type { IGroveService } from './GroveService.js';
+export type { ILLMService } from './LLMService.js';
+export type { IWorkspaceService } from './WorkspaceService.js';
+
+// Storage service interfaces (co-located with implementations)
+export type { IGroveConfigService } from '../storage/GroveConfigService.js';
+export type { IGrovesService } from '../storage/GrovesService.js';
+export type { IRecentSelectionsService } from '../storage/RecentSelectionsService.js';
+export type { IRepositoryService } from '../storage/RepositoryService.js';
+export type { ISettingsService } from '../storage/SettingsService.js';
+
+// Shared data/result types
 export type {
+	BranchUpstreamStatus,
 	ClaudeSessionResult,
 	CloseGroveResult,
+	CloseWorktreeResult,
 	ContextData,
 	CreateGroveResult,
+	FileChangeStats,
 	FileCopyResult,
 	FileMatchResult,
 	GitCommandResult,
-	IClaudeSessionService,
-	IContextService,
-	IFileService,
-	IGitService,
-	IGroveConfigService,
-	IGroveService,
-	IGrovesService,
-	IRepositoryService,
-	ISettingsService,
-	IRecentSelectionsService,
-	IWorkspaceService,
+	GroveNameGenerationResult,
+	MergedGroveConfig,
+	TemplateValidationResult,
 	WorktreeInfo,
-} from './interfaces.js';
+} from './types.js';
 
 // Re-export ClaudeTerminalType from storage types for convenience
 export type { ClaudeTerminalType } from '../storage/types.js';

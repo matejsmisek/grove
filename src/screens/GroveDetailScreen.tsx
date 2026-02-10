@@ -15,7 +15,6 @@ import {
 	openTerminalInPath,
 	resolveIDEForPath,
 } from '../services/index.js';
-import type { BranchUpstreamStatus, FileChangeStats } from '../services/interfaces.js';
 import {
 	ClaudeSessionServiceToken,
 	GitServiceToken,
@@ -24,6 +23,7 @@ import {
 	SettingsServiceToken,
 	WorkspaceServiceToken,
 } from '../services/tokens.js';
+import type { BranchUpstreamStatus, FileChangeStats } from '../services/types.js';
 import { GroveConfigService } from '../storage/index.js';
 import type { AgentSession, Settings, Worktree } from '../storage/types.js';
 

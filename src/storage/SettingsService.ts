@@ -2,9 +2,27 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import type { ISettingsService } from '../services/interfaces.js';
 import { JsonStore } from './JsonStore.js';
 import type { Settings, StorageConfig, WorkspaceContext } from './types.js';
+
+/**
+ * Settings service interface
+ * Manages application settings stored in ~/.grove/settings.json
+ */
+export interface ISettingsService {
+	/** Get the storage configuration paths */
+	getStorageConfig(): StorageConfig;
+	/** Get default settings values */
+	getDefaultSettings(): Settings;
+	/** Initialize the .grove folder structure if it doesn't exist */
+	initializeStorage(): void;
+	/** Read settings from settings.json */
+	readSettings(): Settings;
+	/** Write settings to settings.json */
+	writeSettings(settings: Settings): void;
+	/** Update specific settings fields */
+	updateSettings(updates: Partial<Settings>): Settings;
+}
 
 /**
  * Service for managing application settings

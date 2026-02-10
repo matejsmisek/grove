@@ -2,13 +2,43 @@ import { spawn } from 'child_process';
 
 import type {
 	BranchUpstreamStatus,
+	FileChangeStats,
 	GitCommandResult,
-	IGitService,
 	WorktreeInfo,
-} from './interfaces.js';
+} from './types.js';
 
-// Re-export types for backward compatibility
-export type { BranchUpstreamStatus, GitCommandResult, WorktreeInfo } from './interfaces.js';
+// Re-export types for convenience
+export type { BranchUpstreamStatus, GitCommandResult, WorktreeInfo } from './types.js';
+
+/**
+ * Git service interface
+ * Provides git operations - all methods accept repoPath as first argument
+ */
+export interface IGitService {
+	addWorktree(
+		repoPath: string,
+		worktreePath: string,
+		branch?: string,
+		commitish?: string
+	): Promise<GitCommandResult>;
+	listWorktrees(repoPath: string, porcelain?: boolean): Promise<GitCommandResult>;
+	parseWorktreeList(porcelainOutput: string): WorktreeInfo[];
+	removeWorktree(repoPath: string, worktreePath: string, force?: boolean): Promise<GitCommandResult>;
+	pruneWorktrees(repoPath: string): Promise<GitCommandResult>;
+	lockWorktree(repoPath: string, worktreePath: string, reason?: string): Promise<GitCommandResult>;
+	unlockWorktree(repoPath: string, worktreePath: string): Promise<GitCommandResult>;
+	moveWorktree(repoPath: string, worktreePath: string, newPath: string): Promise<GitCommandResult>;
+	hasUncommittedChanges(repoPath: string): Promise<boolean>;
+	hasUnpushedCommits(repoPath: string): Promise<boolean>;
+	getCurrentBranch(repoPath: string): Promise<string>;
+	getFileChangeStats(repoPath: string): Promise<FileChangeStats>;
+	detectMainBranch(repoPath: string): Promise<string>;
+	fetch(repoPath: string, remote?: string): Promise<GitCommandResult>;
+	pull(repoPath: string, remote?: string, branch?: string): Promise<GitCommandResult>;
+	reset(repoPath: string, ref: string, hard?: boolean): Promise<GitCommandResult>;
+	revParse(repoPath: string, ref: string): Promise<GitCommandResult>;
+	getBranchUpstreamStatus(repoPath: string): Promise<BranchUpstreamStatus>;
+}
 
 /**
  * Stateless Git Service implementation

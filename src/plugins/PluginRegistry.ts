@@ -2,7 +2,7 @@
  * Plugin Registry
  * Manages plugin registration, enabling, and disabling
  */
-import type { ISettingsService } from '../services/interfaces.js';
+import type { ISettingsService } from '../storage/SettingsService.js';
 import type { PluginConfig } from '../storage/types.js';
 import type { IPlugin, IPluginRegistry, PluginId } from './types.js';
 
