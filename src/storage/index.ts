@@ -29,6 +29,9 @@ export type {
 	Worktree,
 } from './types.js';
 
+// Generic JSON storage
+export { JsonStore, type JsonStoreOptions } from './JsonStore.js';
+
 // Service class exports (for DI)
 export { SettingsService } from './SettingsService.js';
 export { RepositoryService } from './RepositoryService.js';

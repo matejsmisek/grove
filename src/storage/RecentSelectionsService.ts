@@ -1,7 +1,5 @@
-import fs from 'fs';
-
-import type { IRecentSelectionsService } from '../services/interfaces.js';
-import type { SettingsService } from './SettingsService.js';
+import type { IRecentSelectionsService, ISettingsService } from '../services/interfaces.js';
+import { JsonStore } from './JsonStore.js';
 import type { RecentSelection, RecentSelectionsData, RepositorySelection } from './types.js';
 
 const MAX_RECENT_SELECTIONS = 3;
@@ -11,55 +9,33 @@ const MAX_RECENT_SELECTIONS = 3;
  * Manages recently used repository/project selections stored in ~/.grove/recent.json
  */
 export class RecentSelectionsService implements IRecentSelectionsService {
-	constructor(private readonly settingsService: SettingsService) {}
+	private store: JsonStore<RecentSelectionsData>;
 
-	/**
-	 * Get default recent selections data
-	 */
-	private getDefaultRecentSelections(): RecentSelectionsData {
-		return {
-			selections: [],
-		};
+	constructor(private readonly settingsService: ISettingsService) {
+		this.store = new JsonStore<RecentSelectionsData>(
+			() => this.settingsService.getStorageConfig().recentSelectionsPath,
+			() => this.settingsService.getStorageConfig().groveFolder,
+			() => ({ selections: [] }),
+			{
+				label: 'recent selections',
+				createOnFirstRead: false,
+				silentWriteErrors: true,
+			}
+		);
 	}
 
 	/**
 	 * Read recent selections from recent.json
 	 */
 	private readRecentSelections(): RecentSelectionsData {
-		const config = this.settingsService.getStorageConfig();
-
-		try {
-			if (!fs.existsSync(config.recentSelectionsPath)) {
-				return this.getDefaultRecentSelections();
-			}
-
-			const data = fs.readFileSync(config.recentSelectionsPath, 'utf-8');
-			const recentData = JSON.parse(data) as RecentSelectionsData;
-
-			return recentData;
-		} catch {
-			return this.getDefaultRecentSelections();
-		}
+		return this.store.read();
 	}
 
 	/**
 	 * Write recent selections to recent.json
 	 */
 	private writeRecentSelections(data: RecentSelectionsData): void {
-		const config = this.settingsService.getStorageConfig();
-
-		try {
-			// Ensure .grove folder exists
-			if (!fs.existsSync(config.groveFolder)) {
-				fs.mkdirSync(config.groveFolder, { recursive: true });
-			}
-
-			// Write with pretty formatting
-			const jsonData = JSON.stringify(data, null, '\t');
-			fs.writeFileSync(config.recentSelectionsPath, jsonData, 'utf-8');
-		} catch {
-			// Silently fail - recent selections are not critical
-		}
+		this.store.write(data);
 	}
 
 	/**

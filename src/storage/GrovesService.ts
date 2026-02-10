@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-import type { IGrovesService } from '../services/interfaces.js';
-import type { SettingsService } from './SettingsService.js';
+import type { IGrovesService, ISettingsService } from '../services/interfaces.js';
+import { JsonStore } from './JsonStore.js';
 import type { GroveMetadata, GroveReference, GrovesIndex, Worktree } from './types.js';
 
 /**
@@ -11,61 +11,29 @@ import type { GroveMetadata, GroveReference, GrovesIndex, Worktree } from './typ
  * and individual grove.json files
  */
 export class GrovesService implements IGrovesService {
-	constructor(private readonly settingsService: SettingsService) {}
+	private indexStore: JsonStore<GrovesIndex>;
 
-	/**
-	 * Get default groves index
-	 */
-	private getDefaultGrovesIndex(): GrovesIndex {
-		return {
-			groves: [],
-		};
+	constructor(private readonly settingsService: ISettingsService) {
+		this.indexStore = new JsonStore<GrovesIndex>(
+			() => this.settingsService.getStorageConfig().grovesIndexPath,
+			() => this.settingsService.getStorageConfig().groveFolder,
+			() => ({ groves: [] }),
+			{ label: 'groves index' }
+		);
 	}
 
 	/**
 	 * Read groves index from groves.json (internal)
 	 */
 	private readGrovesIndex(): GrovesIndex {
-		const config = this.settingsService.getStorageConfig();
-
-		try {
-			if (!fs.existsSync(config.grovesIndexPath)) {
-				// If groves index doesn't exist, return defaults and create it
-				const defaultIndex = this.getDefaultGrovesIndex();
-				this.writeGrovesIndex(defaultIndex);
-				return defaultIndex;
-			}
-
-			const data = fs.readFileSync(config.grovesIndexPath, 'utf-8');
-			const index = JSON.parse(data) as GrovesIndex;
-
-			return index;
-		} catch (error) {
-			// If there's an error reading or parsing, return defaults
-			console.error('Error reading groves index:', error);
-			return this.getDefaultGrovesIndex();
-		}
+		return this.indexStore.read();
 	}
 
 	/**
 	 * Write groves index to groves.json (internal)
 	 */
 	private writeGrovesIndex(index: GrovesIndex): void {
-		const config = this.settingsService.getStorageConfig();
-
-		try {
-			// Ensure .grove folder exists
-			if (!fs.existsSync(config.groveFolder)) {
-				fs.mkdirSync(config.groveFolder, { recursive: true });
-			}
-
-			// Write index with pretty formatting
-			const jsonData = JSON.stringify(index, null, '\t');
-			fs.writeFileSync(config.grovesIndexPath, jsonData, 'utf-8');
-		} catch (error) {
-			console.error('Error writing groves index:', error);
-			throw error;
-		}
+		this.indexStore.write(index);
 	}
 
 	/**
