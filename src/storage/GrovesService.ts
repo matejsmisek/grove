@@ -1,9 +1,49 @@
 import fs from 'fs';
 import path from 'path';
 
-import type { IGrovesService, ISettingsService } from '../services/interfaces.js';
 import { JsonStore } from './JsonStore.js';
+import type { ISettingsService } from './SettingsService.js';
 import type { GroveMetadata, GroveReference, GrovesIndex, Worktree } from './types.js';
+
+/**
+ * Groves service interface
+ * Manages grove index and metadata stored in ~/.grove/groves.json
+ * and individual grove.json files
+ */
+export interface IGrovesService {
+	/** Add a grove reference to the global index */
+	addGroveToIndex(groveRef: GroveReference): void;
+	/**
+	 * Remove a grove from the index by ID
+	 * @returns The removed grove reference, or null if not found
+	 */
+	removeGroveFromIndex(groveId: string): GroveReference | null;
+	/**
+	 * Update a grove reference in the index
+	 * @returns true if grove was found and updated
+	 */
+	updateGroveInIndex(
+		groveId: string,
+		updates: Partial<Pick<GroveReference, 'name' | 'updatedAt'>>
+	): boolean;
+	/** Read grove metadata from a grove folder */
+	readGroveMetadata(grovePath: string): GroveMetadata | null;
+	/** Write grove metadata to grove.json */
+	writeGroveMetadata(grovePath: string, metadata: GroveMetadata): void;
+	/** Add a worktree entry to a grove's metadata */
+	addWorktreeToGrove(
+		grovePath: string,
+		repositoryName: string,
+		repositoryPath: string,
+		branch: string
+	): Worktree;
+	/** Get all groves from the index */
+	getAllGroves(): GroveReference[];
+	/** Get a grove by its ID */
+	getGroveById(id: string): GroveReference | null;
+	/** Delete a grove (remove from index and optionally delete folder) */
+	deleteGrove(groveId: string, deleteFolder?: boolean): boolean;
+}
 
 /**
  * Groves service implementation

@@ -2,16 +2,14 @@ import { Volume } from 'memfs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockFs } from '../../__tests__/helpers.js';
+import type { IGroveConfigService } from '../../storage/GroveConfigService.js';
+import type { IGrovesService } from '../../storage/GrovesService.js';
+import type { ISettingsService } from '../../storage/SettingsService.js';
 import type { GroveMetadata, GroveReference, Worktree } from '../../storage/types.js';
+import type { IContextService } from '../ContextService.js';
+import type { IFileService } from '../FileService.js';
+import type { IGitService } from '../GitService.js';
 import { GroveService } from '../GroveService.js';
-import type {
-	IContextService,
-	IFileService,
-	IGitService,
-	IGroveConfigService,
-	IGrovesService,
-	ISettingsService,
-} from '../interfaces.js';
 
 let vol: Volume;
 

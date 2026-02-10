@@ -2,8 +2,9 @@ import { Volume } from 'memfs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockFs } from '../../__tests__/helpers.js';
+import type { IGroveConfigService } from '../../storage/GroveConfigService.js';
+import type { ISettingsService } from '../../storage/SettingsService.js';
 import { ClaudeSessionService } from '../ClaudeSessionService.js';
-import type { IGroveConfigService, ISettingsService } from '../interfaces.js';
 
 // Mock filesystem
 let vol: Volume;

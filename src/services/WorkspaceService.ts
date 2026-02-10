@@ -14,10 +14,43 @@ const WORKSPACE_GROVE_FOLDER = '.grove';
 const GLOBAL_WORKSPACES_FILENAME = 'workspaces.json';
 
 /**
+ * Workspace service interface
+ * Manages Grove workspaces - localized configurations with their own repositories and groves
+ */
+export interface IWorkspaceService {
+	/** Discover workspace by walking up directory tree from startDir */
+	discoverWorkspace(startDir: string): string | undefined;
+	/** Read workspace configuration from .grove.workspace.json */
+	readWorkspaceConfig(workspacePath: string): WorkspaceConfig;
+	/** Write workspace configuration to .grove.workspace.json */
+	writeWorkspaceConfig(workspacePath: string, config: WorkspaceConfig): void;
+	/** Initialize a new workspace in the given directory */
+	initWorkspace(workspacePath: string, name: string, grovesFolder: string): void;
+	/** Resolve workspace context from current directory */
+	resolveContext(cwd: string): WorkspaceContext;
+	/** Read global workspaces tracking file */
+	readGlobalWorkspaces(): WorkspacesData;
+	/** Write global workspaces tracking file */
+	writeGlobalWorkspaces(data: WorkspacesData): void;
+	/** Add or update workspace in global tracking */
+	addToGlobalTracking(workspace: WorkspaceReference): void;
+	/** Update last used timestamp for a workspace */
+	updateLastUsed(workspacePath: string): void;
+	/** Remove workspace from global tracking */
+	removeFromGlobalTracking(workspacePath: string): void;
+	/** Check if a directory is a workspace root */
+	isWorkspaceRoot(dirPath: string): boolean;
+	/** Set the current workspace context */
+	setCurrentContext(context: WorkspaceContext): void;
+	/** Get the current workspace context */
+	getCurrentContext(): WorkspaceContext | undefined;
+}
+
+/**
  * Service for managing Grove workspaces
  * Handles workspace discovery, initialization, and context resolution
  */
-export class WorkspaceService {
+export class WorkspaceService implements IWorkspaceService {
 	private currentContext?: WorkspaceContext;
 
 	/**

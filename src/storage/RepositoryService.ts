@@ -1,8 +1,43 @@
 import path from 'path';
 
-import type { IRepositoryService, ISettingsService } from '../services/interfaces.js';
 import { JsonStore } from './JsonStore.js';
+import type { ISettingsService } from './SettingsService.js';
 import type { RepositoriesData, Repository } from './types.js';
+
+/**
+ * Repository service interface
+ * Manages registered repositories stored in ~/.grove/repositories.json
+ */
+export interface IRepositoryService {
+	/** Get default repositories data structure */
+	getDefaultRepositories(): RepositoriesData;
+	/** Read all repository data from storage */
+	readRepositories(): RepositoriesData;
+	/** Write repository data to storage */
+	writeRepositories(data: RepositoriesData): void;
+	/** Check if a repository is already registered */
+	isRepositoryRegistered(repoPath: string): boolean;
+	/**
+	 * Add a new repository to the registry
+	 * @throws Error if repository already registered
+	 */
+	addRepository(repoPath: string): Repository;
+	/**
+	 * Remove a repository from the registry
+	 * @returns true if repository was removed, false if not found
+	 */
+	removeRepository(repoPath: string): boolean;
+	/** Get all registered repositories */
+	getAllRepositories(): Repository[];
+	/**
+	 * Update a repository's properties
+	 * @returns The updated repository, or null if not found
+	 */
+	updateRepository(
+		repoPath: string,
+		updates: Partial<Pick<Repository, 'isMonorepo'>>
+	): Repository | null;
+}
 
 /**
  * Repository service implementation

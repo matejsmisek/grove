@@ -1,10 +1,27 @@
 import fs from 'fs';
 import path from 'path';
 
-import type { ContextData, IContextService } from './interfaces.js';
+import type { ContextData } from './types.js';
 
-// Re-export types for backward compatibility
-export type { ContextData } from './interfaces.js';
+// Re-export types for convenience
+export type { ContextData } from './types.js';
+
+/**
+ * Context service interface
+ * Manages CONTEXT.md files in groves
+ */
+export interface IContextService {
+	/** Generate markdown content for CONTEXT.md */
+	generateContent(data: ContextData): string;
+	/** Create a CONTEXT.md file in a grove folder */
+	createContextFile(grovePath: string, data: ContextData): void;
+	/** Check if CONTEXT.md exists in a grove folder */
+	contextFileExists(grovePath: string): boolean;
+	/** Read the raw content of CONTEXT.md */
+	readContextFile(grovePath: string): string | null;
+	/** Get the full path to CONTEXT.md for a grove */
+	getContextFilePath(grovePath: string): string;
+}
 
 /**
  * Service for managing grove context files (CONTEXT.md)

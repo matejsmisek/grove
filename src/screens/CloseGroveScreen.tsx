@@ -6,8 +6,8 @@ import TextInput from 'ink-text-input';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import type { BranchUpstreamStatus } from '../services/interfaces.js';
 import { GitServiceToken, GroveServiceToken, GrovesServiceToken } from '../services/tokens.js';
+import type { BranchUpstreamStatus } from '../services/types.js';
 
 interface WorktreeCheck {
 	displayName: string;

@@ -4,22 +4,20 @@
  */
 import { createToken } from '../di/index.js';
 import type { IPluginRegistry } from '../plugins/types.js';
+import type { IGroveConfigService } from '../storage/GroveConfigService.js';
+import type { IGrovesService } from '../storage/GrovesService.js';
+import type { IRecentSelectionsService } from '../storage/RecentSelectionsService.js';
+import type { IRepositoryService } from '../storage/RepositoryService.js';
 import type { ISessionsService } from '../storage/SessionsService.js';
+import type { ISettingsService } from '../storage/SettingsService.js';
+import type { IClaudeSessionService } from './ClaudeSessionService.js';
+import type { IContextService } from './ContextService.js';
+import type { IFileService } from './FileService.js';
+import type { IGitService } from './GitService.js';
+import type { IGroveService } from './GroveService.js';
+import type { ILLMService } from './LLMService.js';
 import type { ISessionTrackingService } from './SessionTrackingService.js';
-import type {
-	IClaudeSessionService,
-	IContextService,
-	IFileService,
-	IGitService,
-	IGroveConfigService,
-	IGroveService,
-	IGrovesService,
-	ILLMService,
-	IRecentSelectionsService,
-	IRepositoryService,
-	ISettingsService,
-	IWorkspaceService,
-} from './interfaces.js';
+import type { IWorkspaceService } from './WorkspaceService.js';
 
 // Storage service tokens
 export const SettingsServiceToken = createToken<ISettingsService>('SettingsService');

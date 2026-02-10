@@ -1,7 +1,7 @@
 import { AdapterRegistry } from '../agents/AdapterRegistry.js';
 import { SessionUpdateResult } from '../agents/types.js';
+import type { IGrovesService } from '../storage/GrovesService.js';
 import { ISessionsService } from '../storage/SessionsService.js';
-import { IGrovesService } from './interfaces.js';
 
 export interface ISessionTrackingService {
 	/**

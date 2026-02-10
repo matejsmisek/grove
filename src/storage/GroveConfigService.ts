@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-import type { IGroveConfigService, MergedGroveConfig } from '../services/interfaces.js';
+import type { MergedGroveConfig, TemplateValidationResult } from '../services/types.js';
 import type { GroveIDEConfig, GroveRepoConfig, IDEConfig, IDEType } from './types.js';
 
 /**
@@ -18,12 +18,58 @@ export const CLAUDE_SESSION_TEMPLATE_VARIABLES = [
 ] as const;
 
 /**
- * Validation result for template variables
+ * Grove repository configuration service interface
+ * Reads and writes .grove.json and .grove.local.json from repositories
  */
-export interface TemplateValidationResult {
-	valid: boolean;
-	invalidVars: string[];
-	missingRequired: string[];
+export interface IGroveConfigService {
+	/** Read and merge .grove.json and .grove.local.json from a repository */
+	readGroveRepoConfig(repositoryPath: string): GroveRepoConfig;
+	/**
+	 * Read and merge configs for a repository selection
+	 * For monorepo projects, reads both root and project-level .grove.json files
+	 */
+	readMergedConfig(repositoryPath: string, projectPath?: string): MergedGroveConfig;
+	/** Validate branch name template contains ${GROVE_NAME} */
+	validateBranchNameTemplate(template: string): boolean;
+	/** Apply branch name template by replacing ${GROVE_NAME} */
+	applyBranchNameTemplate(template: string, groveName: string): string;
+	/** Get branch name for a repository based on config or default */
+	getBranchNameForRepo(repositoryPath: string, groveName: string): string;
+	/** Get branch name for a repository selection (with optional project path) */
+	getBranchNameForSelection(repositoryPath: string, groveName: string, projectPath?: string): string;
+	/** Check if an IDE config is a reference (starts with @) */
+	isIDEReference(config: GroveIDEConfig): config is `@${IDEType}`;
+	/** Parse an IDE reference to get the IDE type */
+	parseIDEReference(reference: `@${IDEType}`): IDEType;
+	/** Get the resolved IDE config for a repository selection */
+	getIDEConfigForSelection(
+		repositoryPath: string,
+		projectPath?: string
+	): { ideType: IDEType } | { ideConfig: IDEConfig } | undefined;
+	/** Write .grove.json configuration to a repository */
+	writeGroveConfig(repositoryPath: string, config: GroveRepoConfig, projectPath?: string): void;
+	/** Write .grove.local.json configuration to a repository */
+	writeGroveLocalConfig(repositoryPath: string, config: GroveRepoConfig, projectPath?: string): void;
+	/** Read just the .grove.json file (without merging with .grove.local.json) */
+	readGroveConfigOnly(repositoryPath: string, projectPath?: string): GroveRepoConfig;
+	/** Read just the .grove.local.json file (without merging) */
+	readGroveLocalConfigOnly(repositoryPath: string, projectPath?: string): GroveRepoConfig;
+	/** Check if a .grove.json file exists */
+	groveConfigExists(repositoryPath: string, projectPath?: string): boolean;
+	/** Check if a .grove.local.json file exists */
+	groveLocalConfigExists(repositoryPath: string, projectPath?: string): boolean;
+	/** Get list of project folders in a monorepo that have .grove.json files */
+	getProjectsWithGroveConfig(repositoryPath: string): string[];
+	/** Validate template variables in a string */
+	validateTemplateVariables(
+		template: string,
+		validVars: readonly string[],
+		requiredVars?: readonly string[]
+	): TemplateValidationResult;
+	/** Validate branch name template */
+	validateBranchTemplate(template: string): TemplateValidationResult;
+	/** Validate Claude session template */
+	validateClaudeSessionTemplate(template: string): TemplateValidationResult;
 }
 
 /**

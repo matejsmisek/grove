@@ -2,7 +2,21 @@
  * LLM Service
  * Provides AI-powered features using OpenRouter API
  */
-import type { ILLMService, ISettingsService, GroveNameGenerationResult } from './interfaces.js';
+import type { ISettingsService } from '../storage/SettingsService.js';
+import type { GroveNameGenerationResult } from './types.js';
+
+/**
+ * LLM service interface
+ * Provides AI-powered features using OpenRouter/Anthropic
+ */
+export interface ILLMService {
+	/** Check if the LLM service is configured with an API key */
+	isConfigured(): boolean;
+	/** Generate a grove name from a description */
+	generateGroveName(description: string): Promise<GroveNameGenerationResult>;
+	/** Get the current model being used */
+	getModel(): string;
+}
 
 /**
  * Default LLM configuration
