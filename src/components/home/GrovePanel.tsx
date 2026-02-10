@@ -2,8 +2,9 @@ import React from 'react';
 
 import { Box, Text } from 'ink';
 
+import { useService } from '../../di/index.js';
+import { GrovesServiceToken } from '../../services/tokens.js';
 import type { GroveReference } from '../../storage/index.js';
-import { readGroveMetadata } from '../../storage/index.js';
 import { formatTimeAgo } from '../../utils/time.js';
 import { SessionIndicator } from '../SessionIndicator.js';
 
@@ -20,11 +21,13 @@ type GrovePanelProps = {
 };
 
 export function GrovePanel({ grove, isSelected, sessionCounts, width = 24 }: GrovePanelProps) {
+	const grovesService = useService(GrovesServiceToken);
+
 	// Get grove metadata to count worktrees
 	let worktreeCount = 0;
 	let repoDisplayName = '';
 	try {
-		const metadata = readGroveMetadata(grove.path);
+		const metadata = grovesService.readGroveMetadata(grove.path);
 		if (metadata) {
 			worktreeCount = metadata.worktrees.length;
 			// For single worktree groves, get the repo name
