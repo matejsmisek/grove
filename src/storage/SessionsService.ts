@@ -1,5 +1,6 @@
-import fs from 'fs';
+import path from 'path';
 
+import { JsonStore } from './JsonStore.js';
 import { AgentSession, SessionsData, SessionsIndex } from './types.js';
 
 export interface ISessionsService {
@@ -17,31 +18,35 @@ export interface ISessionsService {
 }
 
 export class SessionsService implements ISessionsService {
-	constructor(private storageConfig: { sessionsPath: string }) {}
+	private store: JsonStore<SessionsData>;
 
-	private getDefaultData(): SessionsData {
-		return {
-			sessions: [],
-			version: '1.0.0',
-			lastUpdated: new Date().toISOString(),
-		};
+	constructor(private storageConfig: { sessionsPath: string }) {
+		this.store = new JsonStore<SessionsData>(
+			() => this.storageConfig.sessionsPath,
+			() => path.dirname(this.storageConfig.sessionsPath),
+			() => ({
+				sessions: [],
+				version: '1.0.0',
+				lastUpdated: new Date().toISOString(),
+			}),
+			{
+				label: 'sessions',
+				indent: 2,
+				createOnFirstRead: false,
+				beforeWrite: (data) => ({
+					...data,
+					lastUpdated: new Date().toISOString(),
+				}),
+			}
+		);
 	}
 
 	readSessions(): SessionsData {
-		try {
-			const data = fs.readFileSync(this.storageConfig.sessionsPath, 'utf8');
-			return JSON.parse(data) as SessionsData;
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-				return this.getDefaultData();
-			}
-			throw error;
-		}
+		return this.store.read();
 	}
 
 	writeSessions(data: SessionsData): void {
-		data.lastUpdated = new Date().toISOString();
-		fs.writeFileSync(this.storageConfig.sessionsPath, JSON.stringify(data, null, 2), 'utf8');
+		this.store.write(data);
 	}
 
 	addSession(session: AgentSession): void {

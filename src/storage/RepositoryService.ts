@@ -1,8 +1,7 @@
-import fs from 'fs';
 import path from 'path';
 
-import type { IRepositoryService } from '../services/interfaces.js';
-import type { SettingsService } from './SettingsService.js';
+import type { IRepositoryService, ISettingsService } from '../services/interfaces.js';
+import { JsonStore } from './JsonStore.js';
 import type { RepositoriesData, Repository } from './types.js';
 
 /**
@@ -10,7 +9,16 @@ import type { RepositoriesData, Repository } from './types.js';
  * Manages registered repositories stored in ~/.grove/repositories.json
  */
 export class RepositoryService implements IRepositoryService {
-	constructor(private readonly settingsService: SettingsService) {}
+	private store: JsonStore<RepositoriesData>;
+
+	constructor(private readonly settingsService: ISettingsService) {
+		this.store = new JsonStore<RepositoriesData>(
+			() => this.settingsService.getStorageConfig().repositoriesPath,
+			() => this.settingsService.getStorageConfig().groveFolder,
+			() => this.getDefaultRepositories(),
+			{ label: 'repositories' }
+		);
+	}
 
 	/**
 	 * Get default repositories data structure
@@ -25,46 +33,14 @@ export class RepositoryService implements IRepositoryService {
 	 * Read all repository data from storage
 	 */
 	readRepositories(): RepositoriesData {
-		const config = this.settingsService.getStorageConfig();
-
-		try {
-			if (!fs.existsSync(config.repositoriesPath)) {
-				// If repositories file doesn't exist, return defaults and create it
-				const defaultData = this.getDefaultRepositories();
-				this.writeRepositories(defaultData);
-				return defaultData;
-			}
-
-			const data = fs.readFileSync(config.repositoriesPath, 'utf-8');
-			const repositories = JSON.parse(data) as RepositoriesData;
-
-			return repositories;
-		} catch (error) {
-			// If there's an error reading or parsing, return defaults
-			console.error('Error reading repositories:', error);
-			return this.getDefaultRepositories();
-		}
+		return this.store.read();
 	}
 
 	/**
 	 * Write repository data to storage
 	 */
 	writeRepositories(data: RepositoriesData): void {
-		const config = this.settingsService.getStorageConfig();
-
-		try {
-			// Ensure .grove folder exists
-			if (!fs.existsSync(config.groveFolder)) {
-				fs.mkdirSync(config.groveFolder, { recursive: true });
-			}
-
-			// Write repositories with pretty formatting
-			const jsonData = JSON.stringify(data, null, '\t');
-			fs.writeFileSync(config.repositoriesPath, jsonData, 'utf-8');
-		} catch (error) {
-			console.error('Error writing repositories:', error);
-			throw error;
-		}
+		this.store.write(data);
 	}
 
 	/**

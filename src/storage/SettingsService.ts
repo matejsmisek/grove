@@ -3,6 +3,7 @@ import os from 'os';
 import path from 'path';
 
 import type { ISettingsService } from '../services/interfaces.js';
+import { JsonStore } from './JsonStore.js';
 import type { Settings, StorageConfig, WorkspaceContext } from './types.js';
 
 /**
@@ -11,6 +12,7 @@ import type { Settings, StorageConfig, WorkspaceContext } from './types.js';
  */
 export class SettingsService implements ISettingsService {
 	private context?: WorkspaceContext;
+	private store: JsonStore<Settings>;
 
 	/**
 	 * Create a new SettingsService
@@ -18,6 +20,15 @@ export class SettingsService implements ISettingsService {
 	 */
 	constructor(context?: WorkspaceContext) {
 		this.context = context;
+		this.store = new JsonStore<Settings>(
+			() => this.getStorageConfig().settingsPath,
+			() => this.getStorageConfig().groveFolder,
+			() => this.getDefaultSettings(),
+			{
+				label: 'settings',
+				afterRead: (data, defaults) => ({ ...defaults, ...data }),
+			}
+		);
 	}
 
 	/**
@@ -81,62 +92,23 @@ export class SettingsService implements ISettingsService {
 	 * Read settings from settings.json
 	 */
 	readSettings(): Settings {
-		const config = this.getStorageConfig();
-
-		try {
-			if (!fs.existsSync(config.settingsPath)) {
-				// If settings file doesn't exist, return defaults and create it
-				const defaultSettings = this.getDefaultSettings();
-				this.writeSettings(defaultSettings);
-				return defaultSettings;
-			}
-
-			const data = fs.readFileSync(config.settingsPath, 'utf-8');
-			const settings = JSON.parse(data) as Settings;
-
-			// Merge with defaults to ensure all required fields exist
-			return {
-				...this.getDefaultSettings(),
-				...settings,
-			};
-		} catch (error) {
-			// If there's an error reading or parsing, return defaults
-			console.error('Error reading settings:', error);
-			return this.getDefaultSettings();
-		}
+		return this.store.read();
 	}
 
 	/**
 	 * Write settings to settings.json
 	 */
 	writeSettings(settings: Settings): void {
-		const config = this.getStorageConfig();
-
-		try {
-			// Ensure .grove folder exists
-			if (!fs.existsSync(config.groveFolder)) {
-				fs.mkdirSync(config.groveFolder, { recursive: true });
-			}
-
-			// Write settings with pretty formatting
-			const data = JSON.stringify(settings, null, '\t');
-			fs.writeFileSync(config.settingsPath, data, 'utf-8');
-		} catch (error) {
-			console.error('Error writing settings:', error);
-			throw error;
-		}
+		this.store.write(settings);
 	}
 
 	/**
 	 * Update specific settings fields
 	 */
 	updateSettings(updates: Partial<Settings>): Settings {
-		const currentSettings = this.readSettings();
-		const newSettings = {
-			...currentSettings,
+		return this.store.update((current) => ({
+			...current,
 			...updates,
-		};
-		this.writeSettings(newSettings);
-		return newSettings;
+		}));
 	}
 }
