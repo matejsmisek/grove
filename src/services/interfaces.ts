@@ -10,6 +10,7 @@ import type {
 	GroveRepoConfig,
 	IDEConfig,
 	IDEType,
+	RecentSelection,
 	RepositoriesData,
 	Repository,
 	RepositorySelection,
@@ -358,6 +359,29 @@ export interface IGroveConfigService {
 	 * @returns Validation result
 	 */
 	validateClaudeSessionTemplate(template: string): TemplateValidationResult;
+}
+
+/**
+ * Recent selections service interface
+ * Manages recently used repository/project selections stored in ~/.grove/recent.json
+ */
+export interface IRecentSelectionsService {
+	/**
+	 * Add selections to recent history
+	 * Called after a grove is successfully created
+	 */
+	addRecentSelections(selections: RepositorySelection[]): void;
+
+	/**
+	 * Get recent selections that are still valid (repository still registered)
+	 */
+	getRecentSelections(registeredRepoPaths: Set<string>): RecentSelection[];
+
+	/**
+	 * Get display name for a recent selection
+	 * Format: "repoName" or "repoName.projectFolder" for monorepo projects
+	 */
+	getRecentSelectionDisplayName(selection: RecentSelection): string;
 }
 
 // ============================================================================

@@ -7,12 +7,12 @@ import TextInput from 'ink-text-input';
 import { useService } from '../di/index.js';
 import { getMonorepoProjects } from '../git/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { GroveServiceToken, LLMServiceToken, RepositoryServiceToken } from '../services/tokens.js';
 import {
-	addRecentSelections,
-	getRecentSelectionDisplayName,
-	getRecentSelections,
-} from '../storage/index.js';
+	GroveServiceToken,
+	LLMServiceToken,
+	RecentSelectionsServiceToken,
+	RepositoryServiceToken,
+} from '../services/tokens.js';
 import type { RecentSelection, Repository, RepositorySelection } from '../storage/index.js';
 
 type CreateStep =
@@ -45,6 +45,7 @@ export function CreateGroveScreen() {
 	const groveService = useService(GroveServiceToken);
 	const llmService = useService(LLMServiceToken);
 	const repositoryService = useService(RepositoryServiceToken);
+	const recentSelectionsService = useService(RecentSelectionsServiceToken);
 
 	// Start at 'description' if LLM is configured, otherwise start at 'name' (offline mode)
 	const [step, setStep] = useState<CreateStep>(() =>
@@ -68,7 +69,7 @@ export function CreateGroveScreen() {
 	// Get recent selections (filtered to registered repos)
 	const recentSelections = useMemo(() => {
 		const registeredPaths = new Set(repositories.map((r) => r.path));
-		return getRecentSelections(registeredPaths);
+		return recentSelectionsService.getRecentSelections(registeredPaths);
 	}, [repositories]);
 
 	// Build combined list of recent items + repositories
@@ -80,7 +81,7 @@ export function CreateGroveScreen() {
 			items.push({
 				type: 'recent',
 				recent,
-				displayName: getRecentSelectionDisplayName(recent),
+				displayName: recentSelectionsService.getRecentSelectionDisplayName(recent),
 			});
 		}
 
@@ -391,7 +392,7 @@ export function CreateGroveScreen() {
 			.createGrove(groveName, selections, handleLog)
 			.then((metadata) => {
 				// Save selections to recent history
-				addRecentSelections(selections);
+				recentSelectionsService.addRecentSelections(selections);
 				setStep('done');
 				setTimeout(() => replace('groveDetail', { groveId: metadata.id }), 1500);
 			})

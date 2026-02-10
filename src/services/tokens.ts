@@ -15,6 +15,7 @@ import type {
 	IGroveService,
 	IGrovesService,
 	ILLMService,
+	IRecentSelectionsService,
 	IRepositoryService,
 	ISettingsService,
 	IWorkspaceService,
@@ -26,6 +27,8 @@ export const RepositoryServiceToken = createToken<IRepositoryService>('Repositor
 export const GrovesServiceToken = createToken<IGrovesService>('GrovesService');
 export const GroveConfigServiceToken = createToken<IGroveConfigService>('GroveConfigService');
 export const SessionsServiceToken = createToken<ISessionsService>('SessionsService');
+export const RecentSelectionsServiceToken =
+	createToken<IRecentSelectionsService>('RecentSelectionsService');
 
 // Other service tokens
 export const GitServiceToken = createToken<IGitService>('GitService');

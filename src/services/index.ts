@@ -45,6 +45,7 @@ export type {
 	IGrovesService,
 	IRepositoryService,
 	ISettingsService,
+	IRecentSelectionsService,
 	IWorkspaceService,
 	WorktreeInfo,
 } from './interfaces.js';
@@ -61,6 +62,7 @@ export {
 	GroveConfigServiceToken,
 	GroveServiceToken,
 	GrovesServiceToken,
+	RecentSelectionsServiceToken,
 	RepositoryServiceToken,
 	SessionsServiceToken,
 	SessionTrackingServiceToken,

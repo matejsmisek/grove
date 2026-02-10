@@ -1,44 +1,3 @@
-export {
-	getDefaultSettings,
-	getStorageConfig,
-	getStorageConfigForContext,
-	initializeStorage,
-	readSettings,
-	updateSettings,
-	writeSettings,
-} from './storage.js';
-export {
-	addRepository,
-	getAllRepositories,
-	getDefaultRepositories,
-	isRepositoryRegistered,
-	readRepositories,
-	removeRepository,
-	updateRepository,
-	writeRepositories,
-} from './repositories.js';
-export {
-	addGroveToIndex,
-	addWorktreeToGrove,
-	deleteGrove,
-	getAllGroves,
-	getGroveById,
-	readGroveMetadata,
-	removeGroveFromIndex,
-	updateGroveInIndex,
-	writeGroveMetadata,
-} from './groves.js';
-export {
-	applyBranchNameTemplate,
-	getBranchNameForRepo,
-	readGroveRepoConfig,
-	validateBranchNameTemplate,
-} from './groveConfig.js';
-export {
-	addRecentSelections,
-	getRecentSelectionDisplayName,
-	getRecentSelections,
-} from './recentSelections.js';
 export type {
 	AgentSession,
 	AgentType,
@@ -76,3 +35,4 @@ export { RepositoryService } from './RepositoryService.js';
 export { GrovesService } from './GrovesService.js';
 export { GroveConfigService } from './GroveConfigService.js';
 export { SessionsService, type ISessionsService } from './SessionsService.js';
+export { RecentSelectionsService } from './RecentSelectionsService.js';

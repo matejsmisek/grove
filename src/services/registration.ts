@@ -10,6 +10,7 @@ import { PluginRegistry } from '../plugins/index.js';
 import {
 	GroveConfigService,
 	GrovesService,
+	RecentSelectionsService,
 	RepositoryService,
 	SessionsService,
 	SettingsService,
@@ -33,6 +34,7 @@ import {
 	GrovesServiceToken,
 	LLMServiceToken,
 	PluginRegistryToken,
+	RecentSelectionsServiceToken,
 	RepositoryServiceToken,
 	SessionTrackingServiceToken,
 	SessionsServiceToken,
@@ -50,6 +52,7 @@ import {
  * - RepositoryService: depends on SettingsService
  * - GrovesService: depends on SettingsService
  * - GroveConfigService: no dependencies
+ * - RecentSelectionsService: depends on SettingsService
  * - SessionsService: depends on SettingsService (for sessions path)
  * - GitService: no dependencies
  * - ContextService: no dependencies
@@ -90,6 +93,12 @@ export function registerServices(
 
 	// GroveConfigService has no dependencies
 	c.registerSingleton(GroveConfigServiceToken, () => new GroveConfigService());
+
+	// RecentSelectionsService depends on SettingsService
+	c.registerSingleton(
+		RecentSelectionsServiceToken,
+		(cont) => new RecentSelectionsService(cont.resolve(SettingsServiceToken))
+	);
 
 	// SessionsService depends on SettingsService (for sessions path)
 	c.registerSingleton(SessionsServiceToken, (cont) => {
