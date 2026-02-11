@@ -189,7 +189,7 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 			.addWorktreeToGrove(groveId, selection, worktreeName, handleLog)
 			.then(() => {
 				setStep('done');
-				setTimeout(() => replace('groveDetail', { groveId }), 1500);
+				setTimeout(() => replace('groveDetail', { groveId, focusWorktreeName: worktreeName }), 1500);
 			})
 			.catch((err) => {
 				setError(err instanceof Error ? err.message : 'Failed to add worktree');
