@@ -37,6 +37,7 @@ interface WorktreeDetails {
 
 interface GroveDetailScreenProps {
 	groveId: string;
+	focusWorktreeName?: string;
 }
 
 // Singleton instance for GroveConfigService
@@ -88,7 +89,7 @@ function getIDEConfigForWorktree(worktree: Worktree, settings: Settings, targetP
 	return { config, resolvedType };
 }
 
-export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
+export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScreenProps) {
 	const { goBack, navigate } = useNavigation();
 	const gitService = useService(GitServiceToken);
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
@@ -170,10 +171,29 @@ export function GroveDetailScreen({ groveId }: GroveDetailScreenProps) {
 
 				const details = await Promise.all(detailsPromises);
 				setWorktreeDetails(details);
-				// Set initial selection to first non-closed worktree
-				const firstOpenIndex = details.findIndex((d) => !d.worktree.closed);
-				if (firstOpenIndex !== -1) {
-					setSelectedIndex(firstOpenIndex);
+
+				// If focusWorktreeName is provided, select that worktree and show actions
+				if (focusWorktreeName && details.length > 1) {
+					const focusIndex = details.findIndex(
+						(d) => !d.worktree.closed && d.worktree.name === focusWorktreeName
+					);
+					if (focusIndex !== -1) {
+						setSelectedIndex(focusIndex);
+						setShowActions(true);
+						setSelectedActionIndex(0);
+					} else {
+						// Fallback: select first non-closed worktree
+						const firstOpenIndex = details.findIndex((d) => !d.worktree.closed);
+						if (firstOpenIndex !== -1) {
+							setSelectedIndex(firstOpenIndex);
+						}
+					}
+				} else {
+					// Set initial selection to first non-closed worktree
+					const firstOpenIndex = details.findIndex((d) => !d.worktree.closed);
+					if (firstOpenIndex !== -1) {
+						setSelectedIndex(firstOpenIndex);
+					}
 				}
 				setLoading(false);
 			} catch (err) {

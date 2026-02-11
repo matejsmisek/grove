@@ -3,7 +3,7 @@ export type Routes = {
 	home: Record<string, never>;
 	chat: Record<string, never>;
 	createGrove: Record<string, never>;
-	groveDetail: { groveId: string };
+	groveDetail: { groveId: string; focusWorktreeName?: string };
 	closeGrove: { groveId: string };
 	closeWorktree: { groveId: string; worktreePath: string };
 	addWorktree: { groveId: string };

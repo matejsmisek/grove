@@ -38,8 +38,15 @@ export function Router() {
 		case 'createGrove':
 			return <CreateGroveScreen />;
 		case 'groveDetail':
-			// Type narrowing: we know params is { groveId: string } here
-			return <GroveDetailScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
+			// Type narrowing: we know params is { groveId: string; focusWorktreeName?: string } here
+			return (
+				<GroveDetailScreen
+					groveId={'groveId' in current.params ? current.params.groveId : ''}
+					focusWorktreeName={
+						'focusWorktreeName' in current.params ? current.params.focusWorktreeName : undefined
+					}
+				/>
+			);
 		case 'closeGrove':
 			// Type narrowing: we know params is { groveId: string } here
 			return <CloseGroveScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
