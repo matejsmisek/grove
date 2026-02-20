@@ -58,6 +58,42 @@ if (!settings.terminal) {
 // Parse command-line arguments
 const args = process.argv.slice(2);
 
+// Handle --help / -h flag
+if (args.includes('--help') || args.includes('-h')) {
+	const version = '1.0.0';
+	console.log(`Grove v${version} - Git worktree management CLI`);
+	console.log('');
+	console.log('Usage: grove [command] [options]');
+	console.log('');
+	console.log('Commands:');
+	console.log('  (no command)                                  Open interactive UI');
+	console.log('  create <name> <repository>                    Create a new grove with a worktree');
+	console.log(
+		'  create <name> --empty                         Create an empty grove without worktrees'
+	);
+	console.log('  add-worktree <grove-id> <name> <repository>   Add a worktree to an existing grove');
+	console.log('  claude [grove-id]                             Open Claude CLI for a grove');
+	console.log(
+		'  workspace init                                Initialize a workspace in the current directory'
+	);
+	console.log('  session-hook [--agent-type <type>]             Handle session lifecycle hooks');
+	console.log('');
+	console.log('Options:');
+	console.log(
+		'  --register                                    Register current directory as a repository'
+	);
+	console.log(
+		'  --setup-hooks [--agent <type>]                 Set up agent hooks (default: claude)'
+	);
+	console.log('  --verify-hooks [--agent <type>]                Verify agent hooks are configured');
+	console.log('  -h, --help                                    Show this help message');
+	console.log('');
+	console.log('Repository format: reponame or reponame.projectfolder');
+	console.log('');
+	console.log('Run grove without arguments to launch the interactive terminal UI.');
+	process.exit(0);
+}
+
 // Handle workspace commands
 if (args[0] === 'workspace' && args[1] === 'init') {
 	(async () => {
