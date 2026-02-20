@@ -1,3 +1,5 @@
+import path from 'path';
+
 import { getContainer } from '../di/index.js';
 import { GrovesServiceToken } from '../services/tokens.js';
 import type { GroveMetadata, GroveReference, Worktree } from '../storage/types.js';
@@ -22,7 +24,7 @@ export interface WorktreeListEntry {
 	repositoryName: string;
 	branch: string;
 	worktreePath: string;
-	projectPath?: string;
+	projectPath: string;
 }
 
 /**
@@ -42,9 +44,9 @@ function mapWorktree(wt: Worktree): WorktreeListEntry {
 		repositoryName: wt.repositoryName,
 		branch: wt.branch,
 		worktreePath: wt.worktreePath,
+		projectPath: wt.projectPath ? path.join(wt.worktreePath, wt.projectPath) : wt.worktreePath,
 	};
 	if (wt.name) entry.name = wt.name;
-	if (wt.projectPath) entry.projectPath = wt.projectPath;
 	return entry;
 }
 
@@ -76,10 +78,10 @@ function formatGroveText(grove: GroveListEntry): string[] {
 
 	for (const wt of grove.worktrees) {
 		const displayName = wt.name || wt.repositoryName;
-		const project = wt.projectPath ? ` (${wt.projectPath})` : '';
-		lines.push(`    - ${displayName}${project}`);
-		lines.push(`      Branch: ${wt.branch}`);
-		lines.push(`      Path:   ${wt.worktreePath}`);
+		lines.push(`    - ${displayName}`);
+		lines.push(`      Branch:  ${wt.branch}`);
+		lines.push(`      Path:    ${wt.worktreePath}`);
+		lines.push(`      Project: ${wt.projectPath}`);
 	}
 
 	return lines;
