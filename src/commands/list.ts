@@ -23,7 +23,6 @@ export interface WorktreeListEntry {
 	branch: string;
 	worktreePath: string;
 	projectPath?: string;
-	closed?: boolean;
 }
 
 /**
@@ -46,7 +45,6 @@ function mapWorktree(wt: Worktree): WorktreeListEntry {
 	};
 	if (wt.name) entry.name = wt.name;
 	if (wt.projectPath) entry.projectPath = wt.projectPath;
-	if (wt.closed) entry.closed = wt.closed;
 	return entry;
 }
 
@@ -60,7 +58,7 @@ function buildGroveEntry(groveRef: GroveReference, metadata: GroveMetadata | nul
 		path: groveRef.path,
 		createdAt: groveRef.createdAt,
 		updatedAt: groveRef.updatedAt,
-		worktrees: metadata ? metadata.worktrees.map(mapWorktree) : [],
+		worktrees: metadata ? metadata.worktrees.filter((wt) => !wt.closed).map(mapWorktree) : [],
 	};
 }
 
@@ -69,25 +67,19 @@ function buildGroveEntry(groveRef: GroveReference, metadata: GroveMetadata | nul
  */
 function formatGroveText(grove: GroveListEntry): string[] {
 	const lines: string[] = [];
-	const activeWorktrees = grove.worktrees.filter((wt) => !wt.closed);
-	const closedWorktrees = grove.worktrees.filter((wt) => wt.closed);
 
 	lines.push(`${grove.name} (${grove.id})`);
 	lines.push(`  Path:       ${grove.path}`);
 	lines.push(`  Created:    ${grove.createdAt}`);
 	lines.push(`  Updated:    ${grove.updatedAt}`);
-	lines.push(`  Worktrees:  ${activeWorktrees.length} active`);
+	lines.push(`  Worktrees:  ${grove.worktrees.length}`);
 
-	for (const wt of activeWorktrees) {
+	for (const wt of grove.worktrees) {
 		const displayName = wt.name || wt.repositoryName;
 		const project = wt.projectPath ? ` (${wt.projectPath})` : '';
 		lines.push(`    - ${displayName}${project}`);
 		lines.push(`      Branch: ${wt.branch}`);
 		lines.push(`      Path:   ${wt.worktreePath}`);
-	}
-
-	if (closedWorktrees.length > 0) {
-		lines.push(`  Closed:     ${closedWorktrees.length} worktree(s)`);
 	}
 
 	return lines;
