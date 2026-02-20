@@ -11,6 +11,7 @@ export {
 	handleSessionStart,
 } from './sessions.js';
 export { setupAgentHooks, verifyAgentHooks } from './setupHooks.js';
+export { formatGrovesText, listGroves } from './list.js';
 export type { RegisterResult, WorkspaceInitResult } from './types.js';
 export type { CreateResult } from './create.js';
 export type { AddWorktreeResult } from './addWorktree.js';
