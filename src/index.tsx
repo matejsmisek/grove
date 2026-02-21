@@ -6,8 +6,10 @@ import { render } from 'ink';
 import {
 	addWorktree,
 	createGrove,
+	formatGrovesText,
 	handleSessionHook,
 	initWorkspace,
+	listGroves,
 	openClaude,
 	registerRepository,
 	setupAgentHooks,
@@ -73,6 +75,7 @@ if (args.includes('--help') || args.includes('-h')) {
 	);
 	console.log('  add-worktree <grove-id> <name> <repository>   Add a worktree to an existing grove');
 	console.log('  claude [grove-id]                             Open Claude CLI for a grove');
+	console.log('  list [--json]                                 List all groves and their worktrees');
 	console.log(
 		'  workspace init                                Initialize a workspace in the current directory'
 	);
@@ -203,6 +206,22 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 
 	if (result.success) {
 		console.log('✓', result.message);
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		process.exit(1);
+	}
+} else if (args[0] === 'list') {
+	// Handle list command: grove list [--json]
+	const jsonOutput = args.includes('--json');
+	const result = listGroves();
+
+	if (result.success) {
+		if (jsonOutput) {
+			console.log(JSON.stringify(result.groves, null, 2));
+		} else {
+			console.log(formatGrovesText(result));
+		}
 		process.exit(0);
 	} else {
 		console.error('✗', result.message);
