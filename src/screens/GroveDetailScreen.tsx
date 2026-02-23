@@ -222,10 +222,24 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	};
 
 	// Worktree action handlers
-	const handleResumeClaude = () => {
-		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
+	const handleContinueInClaude = () => {
+		const selected = worktreeDetails[selectedIndex].worktree;
+		const targetPath = getWorktreePath(selected);
+		const result = claudeSessionService.continueSession(
+			targetPath,
+			selected.repositoryPath,
+			selected.projectPath,
+			undefined,
+			groveName,
+			selected.name
+		);
 		setShowActions(false);
-		navigate('resumeClaude', { groveId, worktreePath: selectedWorktree.worktreePath });
+		if (result.success) {
+			setResultMessage(`Continuing Claude session in ${selected.repositoryName}`);
+			setTimeout(() => setResultMessage(null), 2000);
+		} else {
+			setError(result.message);
+		}
 	};
 
 	const handleOpenInClaude = () => {
@@ -330,24 +344,23 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	// Worktree action options (dynamically built based on worktree state)
 	const selectedWorktree = worktreeDetails[selectedIndex]?.worktree;
 	const isSelectedWorktreeClosed = selectedWorktree?.closed === true;
-	// Check if there are active Claude sessions for the selected worktree
-	const hasActiveSessions =
+	// Check if there are any past Claude sessions for the selected worktree
+	const hasPastSessions =
 		selectedWorktree &&
 		!isSelectedWorktreeClosed &&
 		groveSessions.some(
-			(s) =>
-				s.worktreePath === selectedWorktree.worktreePath && s.isRunning && s.agentType === 'claude'
+			(s) => s.worktreePath === selectedWorktree.worktreePath && s.agentType === 'claude'
 		);
 
 	const worktreeActions = isSelectedWorktreeClosed
 		? []
 		: [
-				// Conditionally add "Resume claude" if there are active sessions
-				...(hasActiveSessions
+				// Conditionally add "Continue in Claude" if there are past sessions
+				...(hasPastSessions
 					? [
 							{
-								label: 'Resume claude',
-								action: handleResumeClaude,
+								label: 'Continue in Claude',
+								action: handleContinueInClaude,
 							},
 						]
 					: []),

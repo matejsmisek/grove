@@ -52,6 +52,15 @@ export interface IClaudeSessionService {
 		groveName?: string,
 		worktreeName?: string
 	): ClaudeSessionResult;
+	/** Continue the most recent Claude session in a directory */
+	continueSession(
+		workingDir: string,
+		repositoryPath: string,
+		projectPath?: string,
+		terminalType?: ClaudeTerminalType,
+		groveName?: string,
+		worktreeName?: string
+	): ClaudeSessionResult;
 }
 
 /**
@@ -403,6 +412,78 @@ launch --title "cmd" bash
 			success: true,
 			message: 'Opened Claude session',
 		};
+	}
+
+	/**
+	 * Continue the most recent Claude session in a directory using `claude --continue`
+	 */
+	continueSession(
+		workingDir: string,
+		repositoryPath: string,
+		projectPath?: string,
+		terminalType?: ClaudeTerminalType,
+		groveName?: string,
+		worktreeName?: string
+	): ClaudeSessionResult {
+		// Determine which terminal to use (same logic as openSession)
+		let terminal: ClaudeTerminalType | undefined = terminalType;
+		if (!terminal) {
+			const settings = this.settingsService.readSettings();
+			if (settings.selectedClaudeTerminal) {
+				terminal = settings.selectedClaudeTerminal;
+			} else {
+				const detected = this.detectTerminal();
+				terminal = detected ?? undefined;
+			}
+		}
+
+		if (!terminal) {
+			return {
+				success: false,
+				message: 'No supported terminal found. This feature requires KDE Konsole or Kitty.',
+			};
+		}
+
+		if (!this.commandExists(terminal)) {
+			return {
+				success: false,
+				message: `Selected terminal '${terminal}' is not available on this system.`,
+			};
+		}
+
+		if (!this.commandExists('claude')) {
+			return {
+				success: false,
+				message: 'Claude CLI not found. Please install Claude CLI first.',
+			};
+		}
+
+		try {
+			this.ensureTmpDir();
+
+			const template = this.getTemplateForRepo(terminal, repositoryPath, projectPath);
+			const sessionContent = this.applyTemplate(
+				template,
+				workingDir,
+				'claude --continue',
+				groveName,
+				worktreeName
+			);
+
+			const sessionId = crypto.randomBytes(8).toString('hex');
+			const tmpDir = this.getTmpDir();
+
+			if (terminal === 'konsole') {
+				return this.launchKonsole(sessionContent, tmpDir, sessionId);
+			} else {
+				return this.launchKitty(sessionContent, tmpDir, sessionId);
+			}
+		} catch (error) {
+			return {
+				success: false,
+				message: `Failed to continue Claude session: ${error instanceof Error ? error.message : String(error)}`,
+			};
+		}
 	}
 
 	/**
