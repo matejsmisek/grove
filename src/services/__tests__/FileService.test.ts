@@ -1,6 +1,6 @@
+import { Volume } from 'memfs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Volume } from 'memfs';
 
 import { createFile, createMockFs } from '../../__tests__/helpers.js';
 import { FileService } from '../FileService.js';
@@ -10,15 +10,18 @@ let vol: Volume;
 
 vi.mock('fs', () => {
 	return {
-		default: new Proxy({}, {
-			get(_target, prop) {
-				return vol?.[prop as keyof Volume];
-			},
-		}),
+		default: new Proxy(
+			{},
+			{
+				get(_target, prop) {
+					return vol?.[prop as keyof Volume];
+				},
+			}
+		),
 		...Object.fromEntries(
 			Object.getOwnPropertyNames(Volume.prototype)
-				.filter(key => key !== 'constructor')
-				.map(key => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
+				.filter((key) => key !== 'constructor')
+				.map((key) => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
 		),
 	};
 });
@@ -60,7 +63,7 @@ vi.mock('glob', () => ({
 		walk(cwd);
 
 		// Filter files based on pattern
-		const filtered = files.filter(file => {
+		const filtered = files.filter((file) => {
 			// Simple pattern matching
 			if (pattern === '*.txt') return file.endsWith('.txt') && !file.includes('/');
 			if (pattern === '*.md') return file.endsWith('.md') && !file.includes('/');
@@ -239,19 +242,18 @@ describe('FileService', () => {
 
 			expect(result.success).toBe(true);
 			expect(result.copiedFiles).toContain('file1.txt');
+			expect(result.linkedFiles).toHaveLength(0);
 			expect(result.errors).toHaveLength(0);
 			expect(vol.existsSync(path.join(destDir, 'file1.txt'))).toBe(true);
 		});
 
 		it('should copy files from multiple patterns', async () => {
-			const result = await service.copyFilesFromPatterns(sourceDir, destDir, [
-				'*.txt',
-				'*.md',
-			]);
+			const result = await service.copyFilesFromPatterns(sourceDir, destDir, ['*.txt', '*.md']);
 
 			expect(result.success).toBe(true);
 			expect(result.copiedFiles).toContain('file1.txt');
 			expect(result.copiedFiles).toContain('file2.md');
+			expect(result.linkedFiles).toHaveLength(0);
 			expect(result.errors).toHaveLength(0);
 		});
 
@@ -269,6 +271,7 @@ describe('FileService', () => {
 
 			expect(result.success).toBe(true);
 			expect(result.copiedFiles).toHaveLength(0);
+			expect(result.linkedFiles).toHaveLength(0);
 			expect(result.errors).toHaveLength(0);
 		});
 
@@ -292,7 +295,29 @@ describe('FileService', () => {
 
 			expect(result).toHaveProperty('success');
 			expect(result).toHaveProperty('copiedFiles');
+			expect(result).toHaveProperty('linkedFiles');
 			expect(result).toHaveProperty('errors');
+		});
+
+		it('should handle tuple pattern entries with copy mode', async () => {
+			const result = await service.copyFilesFromPatterns(sourceDir, destDir, [['*.txt', 'copy']]);
+
+			expect(result.success).toBe(true);
+			expect(result.copiedFiles).toContain('file1.txt');
+			expect(result.linkedFiles).toHaveLength(0);
+			expect(vol.existsSync(path.join(destDir, 'file1.txt'))).toBe(true);
+		});
+
+		it('should handle mixed string and tuple pattern entries', async () => {
+			const result = await service.copyFilesFromPatterns(sourceDir, destDir, [
+				'*.txt',
+				['*.md', 'copy'],
+			]);
+
+			expect(result.success).toBe(true);
+			expect(result.copiedFiles).toContain('file1.txt');
+			expect(result.copiedFiles).toContain('file2.md');
+			expect(result.linkedFiles).toHaveLength(0);
 		});
 	});
 

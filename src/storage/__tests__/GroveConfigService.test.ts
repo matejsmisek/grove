@@ -1,9 +1,9 @@
+import { Volume } from 'memfs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Volume } from 'memfs';
 
 import { createMockFs } from '../../__tests__/helpers.js';
-import { GroveConfigService } from '../GroveConfigService.js';
+import { GroveConfigService, getPatternString } from '../GroveConfigService.js';
 import type { GroveRepoConfig } from '../types.js';
 
 // Mock filesystem
@@ -11,15 +11,18 @@ let vol: Volume;
 
 vi.mock('fs', () => {
 	return {
-		default: new Proxy({}, {
-			get(_target, prop) {
-				return vol?.[prop as keyof Volume];
-			},
-		}),
+		default: new Proxy(
+			{},
+			{
+				get(_target, prop) {
+					return vol?.[prop as keyof Volume];
+				},
+			}
+		),
 		...Object.fromEntries(
 			Object.getOwnPropertyNames(Volume.prototype)
-				.filter(key => key !== 'constructor')
-				.map(key => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
+				.filter((key) => key !== 'constructor')
+				.map((key) => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
 		),
 	};
 });
@@ -55,10 +58,7 @@ describe('GroveConfigService', () => {
 				fileCopyPatterns: ['*.md'],
 			};
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(groveConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(groveConfig, null, 2));
 
 			const config = service.readGroveRepoConfig(repoPath);
 
@@ -75,13 +75,10 @@ describe('GroveConfigService', () => {
 				branchNameTemplate: 'local/${GROVE_NAME}',
 			};
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(groveConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(groveConfig, null, 2));
 			vol.writeFileSync(
 				path.join(repoPath, '.grove.local.json'),
-				JSON.stringify(localConfig, null, 2),
+				JSON.stringify(localConfig, null, 2)
 			);
 
 			const config = service.readGroveRepoConfig(repoPath);
@@ -98,18 +95,69 @@ describe('GroveConfigService', () => {
 				fileCopyPatterns: ['*.txt', '*.json'],
 			};
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(groveConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(groveConfig, null, 2));
 			vol.writeFileSync(
 				path.join(repoPath, '.grove.local.json'),
-				JSON.stringify(localConfig, null, 2),
+				JSON.stringify(localConfig, null, 2)
 			);
 
 			const config = service.readGroveRepoConfig(repoPath);
 
 			expect(config.fileCopyPatterns).toEqual(['*.md', '*.txt', '*.json']);
+		});
+
+		it('should read fileCopyPatterns with tuple entries', () => {
+			const groveConfig: GroveRepoConfig = {
+				fileCopyPatterns: ['*.md', ['*.json', 'link']],
+			};
+
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(groveConfig, null, 2));
+
+			const config = service.readGroveRepoConfig(repoPath);
+
+			expect(config.fileCopyPatterns).toEqual(['*.md', ['*.json', 'link']]);
+		});
+
+		it('should deduplicate mixed string and tuple entries by glob pattern', () => {
+			const groveConfig: GroveRepoConfig = {
+				fileCopyPatterns: ['*.md', '*.txt'],
+			};
+
+			const localConfig: GroveRepoConfig = {
+				fileCopyPatterns: [['*.txt', 'link'], '*.json'],
+			};
+
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(groveConfig, null, 2));
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.local.json'),
+				JSON.stringify(localConfig, null, 2)
+			);
+
+			const config = service.readGroveRepoConfig(repoPath);
+
+			// *.txt from root should be overridden by ['*.txt', 'link'] from local
+			expect(config.fileCopyPatterns).toEqual(['*.md', ['*.txt', 'link'], '*.json']);
+		});
+
+		it('should allow local config to override link mode back to copy', () => {
+			const groveConfig: GroveRepoConfig = {
+				fileCopyPatterns: [['*.txt', 'link']],
+			};
+
+			const localConfig: GroveRepoConfig = {
+				fileCopyPatterns: ['*.txt'],
+			};
+
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(groveConfig, null, 2));
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.local.json'),
+				JSON.stringify(localConfig, null, 2)
+			);
+
+			const config = service.readGroveRepoConfig(repoPath);
+
+			// Local '*.txt' (copy mode) overrides root ['*.txt', 'link']
+			expect(config.fileCopyPatterns).toEqual(['*.txt']);
 		});
 
 		it('should handle parse errors gracefully', () => {
@@ -134,9 +182,7 @@ describe('GroveConfigService', () => {
 		});
 
 		it('should return true for template with multiple ${GROVE_NAME}', () => {
-			const isValid = service.validateBranchNameTemplate(
-				'${GROVE_NAME}/${GROVE_NAME}-branch',
-			);
+			const isValid = service.validateBranchNameTemplate('${GROVE_NAME}/${GROVE_NAME}-branch');
 
 			expect(isValid).toBe(true);
 		});
@@ -166,7 +212,7 @@ describe('GroveConfigService', () => {
 		it('should replace multiple occurrences of ${GROVE_NAME}', () => {
 			const result = service.applyBranchNameTemplate(
 				'${GROVE_NAME}/${GROVE_NAME}-branch',
-				'feature-abc12',
+				'feature-abc12'
 			);
 
 			expect(result).toBe('feature-abc12/feature-abc12-branch');
@@ -193,10 +239,7 @@ describe('GroveConfigService', () => {
 				branchNameTemplate: 'custom/${GROVE_NAME}',
 			};
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(groveConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(groveConfig, null, 2));
 
 			const branch = service.getBranchNameForRepo(repoPath, 'my-grove-abc12');
 
@@ -208,10 +251,7 @@ describe('GroveConfigService', () => {
 				branchNameTemplate: 'no-placeholder',
 			};
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(groveConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(groveConfig, null, 2));
 
 			const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -224,6 +264,17 @@ describe('GroveConfigService', () => {
 		});
 	});
 
+	describe('getPatternString', () => {
+		it('should return the string for string entries', () => {
+			expect(getPatternString('*.md')).toBe('*.md');
+		});
+
+		it('should return the first element for tuple entries', () => {
+			expect(getPatternString(['*.json', 'link'])).toBe('*.json');
+			expect(getPatternString(['*.txt', 'copy'])).toBe('*.txt');
+		});
+	});
+
 	describe('readMergedConfig', () => {
 		it('should return root config only when no project path', () => {
 			const groveConfig: GroveRepoConfig = {
@@ -231,10 +282,7 @@ describe('GroveConfigService', () => {
 				fileCopyPatterns: ['*.md'],
 			};
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(groveConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(groveConfig, null, 2));
 
 			const merged = service.readMergedConfig(repoPath);
 
@@ -253,10 +301,7 @@ describe('GroveConfigService', () => {
 			const projectConfigPath = path.join(repoPath, projectPath);
 			vol.mkdirSync(projectConfigPath, { recursive: true });
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(rootConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(rootConfig, null, 2));
 
 			const projectConfig: GroveRepoConfig = {
 				branchNameTemplate: 'project/${GROVE_NAME}',
@@ -265,7 +310,7 @@ describe('GroveConfigService', () => {
 
 			vol.writeFileSync(
 				path.join(projectConfigPath, '.grove.json'),
-				JSON.stringify(projectConfig, null, 2),
+				JSON.stringify(projectConfig, null, 2)
 			);
 
 			const merged = service.readMergedConfig(repoPath, projectPath);
@@ -273,6 +318,32 @@ describe('GroveConfigService', () => {
 			expect(merged.branchNameTemplate).toBe('project/${GROVE_NAME}');
 			expect(merged.rootFileCopyPatterns).toEqual(['*.md']);
 			expect(merged.projectFileCopyPatterns).toEqual(['*.json']);
+		});
+
+		it('should handle tuple pattern entries in merged config', () => {
+			const rootConfig: GroveRepoConfig = {
+				fileCopyPatterns: ['*.md', ['*.env', 'link']],
+			};
+
+			const projectPath = 'packages/app';
+			const projectConfigPath = path.join(repoPath, projectPath);
+			vol.mkdirSync(projectConfigPath, { recursive: true });
+
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(rootConfig, null, 2));
+
+			const projectConfig: GroveRepoConfig = {
+				fileCopyPatterns: [['*.json', 'link']],
+			};
+
+			vol.writeFileSync(
+				path.join(projectConfigPath, '.grove.json'),
+				JSON.stringify(projectConfig, null, 2)
+			);
+
+			const merged = service.readMergedConfig(repoPath, projectPath);
+
+			expect(merged.rootFileCopyPatterns).toEqual(['*.md', ['*.env', 'link']]);
+			expect(merged.projectFileCopyPatterns).toEqual([['*.json', 'link']]);
 		});
 
 		it('should keep root branch template if project does not specify one', () => {
@@ -284,10 +355,7 @@ describe('GroveConfigService', () => {
 			const projectConfigPath = path.join(repoPath, projectPath);
 			vol.mkdirSync(projectConfigPath, { recursive: true });
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(rootConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(rootConfig, null, 2));
 
 			const projectConfig: GroveRepoConfig = {
 				fileCopyPatterns: ['*.json'],
@@ -295,7 +363,7 @@ describe('GroveConfigService', () => {
 
 			vol.writeFileSync(
 				path.join(projectConfigPath, '.grove.json'),
-				JSON.stringify(projectConfig, null, 2),
+				JSON.stringify(projectConfig, null, 2)
 			);
 
 			const merged = service.readMergedConfig(repoPath, projectPath);
@@ -312,10 +380,7 @@ describe('GroveConfigService', () => {
 			const projectConfigPath = path.join(repoPath, projectPath);
 			vol.mkdirSync(projectConfigPath, { recursive: true });
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(rootConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(rootConfig, null, 2));
 
 			const projectConfig: GroveRepoConfig = {
 				ide: '@phpstorm',
@@ -323,7 +388,7 @@ describe('GroveConfigService', () => {
 
 			vol.writeFileSync(
 				path.join(projectConfigPath, '.grove.json'),
-				JSON.stringify(projectConfig, null, 2),
+				JSON.stringify(projectConfig, null, 2)
 			);
 
 			const merged = service.readMergedConfig(repoPath, projectPath);
@@ -349,10 +414,7 @@ describe('GroveConfigService', () => {
 			const projectConfigPath = path.join(repoPath, projectPath);
 			vol.mkdirSync(projectConfigPath, { recursive: true });
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(rootConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(rootConfig, null, 2));
 
 			const projectConfig: GroveRepoConfig = {
 				branchNameTemplate: 'project/${GROVE_NAME}',
@@ -360,7 +422,7 @@ describe('GroveConfigService', () => {
 
 			vol.writeFileSync(
 				path.join(projectConfigPath, '.grove.json'),
-				JSON.stringify(projectConfig, null, 2),
+				JSON.stringify(projectConfig, null, 2)
 			);
 
 			const branch = service.getBranchNameForSelection(repoPath, 'my-grove-abc12', projectPath);
@@ -404,10 +466,7 @@ describe('GroveConfigService', () => {
 				ide: '@vscode',
 			};
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(groveConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(groveConfig, null, 2));
 
 			const result = service.getIDEConfigForSelection(repoPath);
 
@@ -420,10 +479,7 @@ describe('GroveConfigService', () => {
 				ide: customConfig,
 			};
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(groveConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(groveConfig, null, 2));
 
 			const result = service.getIDEConfigForSelection(repoPath);
 
@@ -439,10 +495,7 @@ describe('GroveConfigService', () => {
 			const projectConfigPath = path.join(repoPath, projectPath);
 			vol.mkdirSync(projectConfigPath, { recursive: true });
 
-			vol.writeFileSync(
-				path.join(repoPath, '.grove.json'),
-				JSON.stringify(rootConfig, null, 2),
-			);
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(rootConfig, null, 2));
 
 			const projectConfig: GroveRepoConfig = {
 				ide: '@phpstorm',
@@ -450,7 +503,7 @@ describe('GroveConfigService', () => {
 
 			vol.writeFileSync(
 				path.join(projectConfigPath, '.grove.json'),
-				JSON.stringify(projectConfig, null, 2),
+				JSON.stringify(projectConfig, null, 2)
 			);
 
 			const result = service.getIDEConfigForSelection(repoPath, projectPath);

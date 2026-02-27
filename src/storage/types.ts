@@ -346,6 +346,21 @@ export type GroveIDEConfig =
 	| IDEConfig; // Custom IDE config with command and args
 
 /**
+ * Mode for file copy pattern entries.
+ * - "copy": Copy the file to the worktree (default)
+ * - "link": Create a symbolic link in the worktree pointing to the source file
+ */
+export type FileCopyMode = 'copy' | 'link';
+
+/**
+ * A file copy pattern entry in grove config.
+ * Can be either:
+ * - A string (glob pattern, defaults to copy mode)
+ * - A tuple [glob, mode] where mode is "copy" or "link"
+ */
+export type FileCopyPatternEntry = string | [string, FileCopyMode];
+
+/**
  * Grove repository configuration stored in .grove.json and .grove.local.json
  * within individual repositories
  */
@@ -357,10 +372,13 @@ export interface GroveRepoConfig {
 	 */
 	branchNameTemplate?: string;
 	/**
-	 * File patterns (glob) to copy from repository to worktrees when creating groves
-	 * Example: ['.gitignore', '.env.example', '*.config.js']
+	 * File patterns (glob) to copy or symlink from repository to worktrees when creating groves.
+	 * Each entry can be:
+	 * - A string (glob pattern) - files will be copied (default behavior)
+	 * - A tuple [glob, mode] where mode is "copy" or "link" (symlink)
+	 * Example: ['.gitignore', ['.env.example', 'copy'], ['config/*.json', 'link']]
 	 */
-	fileCopyPatterns?: string[];
+	fileCopyPatterns?: FileCopyPatternEntry[];
 	/**
 	 * Actions to run after creating worktrees (not implemented yet)
 	 */

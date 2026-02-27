@@ -4,6 +4,8 @@ export type {
 	ClaudeSessionTemplate,
 	ClaudeSessionTemplates,
 	ClaudeTerminalType,
+	FileCopyMode,
+	FileCopyPatternEntry,
 	GroveMetadata,
 	GroveReference,
 	GroveRepoConfig,
@@ -36,7 +38,11 @@ export { JsonStore, type JsonStoreOptions } from './JsonStore.js';
 export { SettingsService, type ISettingsService } from './SettingsService.js';
 export { RepositoryService, type IRepositoryService } from './RepositoryService.js';
 export { GrovesService, type IGrovesService } from './GrovesService.js';
-export { GroveConfigService, type IGroveConfigService } from './GroveConfigService.js';
+export {
+	GroveConfigService,
+	getPatternString,
+	type IGroveConfigService,
+} from './GroveConfigService.js';
 export { SessionsService, type ISessionsService } from './SessionsService.js';
 export {
 	RecentSelectionsService,

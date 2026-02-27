@@ -2,6 +2,8 @@ import fs from 'fs';
 import { glob } from 'glob';
 import path from 'path';
 
+import { getPatternString } from '../storage/GroveConfigService.js';
+import type { FileCopyPatternEntry } from '../storage/types.js';
 import type { FileCopyResult, FileMatchResult } from './types.js';
 
 // Re-export types for convenience
@@ -18,11 +20,13 @@ export interface IFileService {
 	matchPatterns(sourceDir: string, patterns: string[]): Promise<FileMatchResult[]>;
 	/** Copy a single file preserving directory structure */
 	copyFile(sourceDir: string, destDir: string, relativeFilePath: string): void;
-	/** Copy files matching glob patterns */
+	/** Create a symbolic link for a file, preserving directory structure */
+	linkFile(sourceDir: string, destDir: string, relativeFilePath: string): void;
+	/** Copy or symlink files matching glob patterns */
 	copyFilesFromPatterns(
 		sourceDir: string,
 		destDir: string,
-		patterns: string[]
+		patterns: FileCopyPatternEntry[]
 	): Promise<FileCopyResult>;
 	/** Check if a path exists */
 	exists(filePath: string): boolean;
@@ -101,22 +105,45 @@ export class FileService implements IFileService {
 	}
 
 	/**
-	 * Copy files matching glob patterns from source directory to destination directory
+	 * Create a symbolic link for a file, preserving directory structure.
+	 * The symlink points to the absolute path of the source file.
+	 * @param sourceDir - Source base directory
+	 * @param destDir - Destination base directory
+	 * @param relativeFilePath - Relative path of the file to link
+	 */
+	linkFile(sourceDir: string, destDir: string, relativeFilePath: string): void {
+		const sourcePath = path.resolve(sourceDir, relativeFilePath);
+		const destPath = path.join(destDir, relativeFilePath);
+
+		// Create destination directory if it doesn't exist
+		const destFileDir = path.dirname(destPath);
+		if (!fs.existsSync(destFileDir)) {
+			fs.mkdirSync(destFileDir, { recursive: true });
+		}
+
+		// Create symbolic link pointing to the source file
+		fs.symlinkSync(sourcePath, destPath);
+	}
+
+	/**
+	 * Copy or symlink files matching glob patterns from source directory to destination directory.
+	 * Each pattern entry can specify a mode: "copy" (default) or "link" (symlink).
 	 * @param sourceDir - Source directory to search for files
-	 * @param destDir - Destination directory to copy files to
-	 * @param patterns - Array of glob patterns to match files
-	 * @returns FileCopyResult with success status, copied files, and errors
+	 * @param destDir - Destination directory to copy/link files to
+	 * @param patterns - Array of pattern entries (string or [string, mode] tuples)
+	 * @returns FileCopyResult with success status, copied files, linked files, and errors
 	 */
 	async copyFilesFromPatterns(
 		sourceDir: string,
 		destDir: string,
-		patterns: string[]
+		patterns: FileCopyPatternEntry[]
 	): Promise<FileCopyResult> {
 		const copiedFiles: string[] = [];
+		const linkedFiles: string[] = [];
 		const errors: string[] = [];
 
 		if (!patterns || patterns.length === 0) {
-			return { success: true, copiedFiles, errors };
+			return { success: true, copiedFiles, linkedFiles, errors };
 		}
 
 		// Ensure destination directory exists
@@ -124,30 +151,40 @@ export class FileService implements IFileService {
 			fs.mkdirSync(destDir, { recursive: true });
 		}
 
-		for (const pattern of patterns) {
+		for (const entry of patterns) {
+			const patternStr = getPatternString(entry);
+			const mode = typeof entry === 'string' ? 'copy' : entry[1];
+
 			try {
 				// Find files matching the pattern
-				const matches = await this.matchPattern(sourceDir, pattern);
+				const matches = await this.matchPattern(sourceDir, patternStr);
 
-				// Copy each matched file
+				// Copy or link each matched file
 				for (const relativeFilePath of matches) {
 					try {
-						this.copyFile(sourceDir, destDir, relativeFilePath);
-						copiedFiles.push(relativeFilePath);
+						if (mode === 'link') {
+							this.linkFile(sourceDir, destDir, relativeFilePath);
+							linkedFiles.push(relativeFilePath);
+						} else {
+							this.copyFile(sourceDir, destDir, relativeFilePath);
+							copiedFiles.push(relativeFilePath);
+						}
 					} catch (error) {
 						const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-						errors.push(`Failed to copy "${relativeFilePath}": ${errorMsg}`);
+						const action = mode === 'link' ? 'link' : 'copy';
+						errors.push(`Failed to ${action} "${relativeFilePath}": ${errorMsg}`);
 					}
 				}
 			} catch (error) {
 				const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-				errors.push(`Pattern "${pattern}": ${errorMsg}`);
+				errors.push(`Pattern "${patternStr}": ${errorMsg}`);
 			}
 		}
 
 		return {
 			success: errors.length === 0,
 			copiedFiles,
+			linkedFiles,
 			errors,
 		};
 	}
