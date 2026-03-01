@@ -12,6 +12,7 @@ import { GroveConfigServiceToken, RepositoryServiceToken } from '../services/tok
 import type {
 	ClaudeSessionTemplates,
 	ClaudeTerminalType,
+	FileCopyPatternEntry,
 	GroveRepoConfig,
 	Repository,
 } from '../storage/types.js';
@@ -99,6 +100,28 @@ const CONFIG_FIELDS: ConfigField[] = [
 		hint: 'Custom terminal templates for Claude sessions',
 	},
 ];
+
+/**
+ * Convert a FileCopyPatternEntry to a display string for the UI editor.
+ * String entries display as-is, tuple entries display with mode suffix.
+ */
+function patternEntryToDisplayString(entry: FileCopyPatternEntry): string {
+	if (typeof entry === 'string') return entry;
+	return entry[1] === 'link' ? `${entry[0]} [link]` : entry[0];
+}
+
+/**
+ * Parse a display string back into a FileCopyPatternEntry.
+ * Strings ending with " [link]" are parsed as link-mode tuples.
+ * Strings ending with " [copy]" are parsed as plain strings (copy is default).
+ */
+function displayStringToPatternEntry(s: string): FileCopyPatternEntry {
+	const linkMatch = s.match(/^(.+)\s+\[link\]$/);
+	if (linkMatch) return [linkMatch[1].trim(), 'link'];
+	const copyMatch = s.match(/^(.+)\s+\[copy\]$/);
+	if (copyMatch) return copyMatch[1].trim();
+	return s;
+}
 
 export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScreenProps) {
 	const { goBack, canGoBack } = useNavigation();
@@ -289,7 +312,9 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 			case 'string':
 				return String(value) || '(empty)';
 			case 'stringArray':
-				return Array.isArray(value) && value.length > 0 ? `[${value.length} items]` : '(empty)';
+				return Array.isArray(value) && value.length > 0
+					? `[${value.length} ${value.length === 1 ? 'item' : 'items'}]`
+					: '(empty)';
 			case 'ide':
 				if (typeof value === 'string' && value.startsWith('@')) {
 					return value;
@@ -859,7 +884,17 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 	// List item editing
 	if (viewMode === 'editListItem' && editingField) {
 		const field = CONFIG_FIELDS.find((f) => f.key === editingField);
-		const items = (config[editingField] as string[] | undefined) || [];
+		const isPatternField = editingField === 'fileCopyPatterns';
+		const rawItems = (config[editingField] as (string | FileCopyPatternEntry)[] | undefined) || [];
+		// Convert items to display strings for the UI
+		const displayItems = isPatternField
+			? (rawItems as FileCopyPatternEntry[]).map(patternEntryToDisplayString)
+			: (rawItems as string[]);
+
+		// Build new config items from display items with a modification
+		const buildNewConfigItems = (newDisplayItems: string[]) => {
+			return isPatternField ? newDisplayItems.map(displayStringToPatternEntry) : newDisplayItems;
+		};
 
 		return (
 			<Box flexDirection="column" padding={1}>
@@ -875,6 +910,12 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					</Box>
 				)}
 
+				{isPatternField && (
+					<Box marginBottom={1}>
+						<Text dimColor>Append [link] for symlinks, e.g. *.json [link]</Text>
+					</Box>
+				)}
+
 				{savedMessage && (
 					<Box marginBottom={1}>
 						<Text color="green">{savedMessage}</Text>
@@ -882,7 +923,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 				)}
 
 				<Box flexDirection="column" marginBottom={1}>
-					{items.map((item, index) => (
+					{displayItems.map((item, index) => (
 						<Box key={index}>
 							{editingListIndex === index ? (
 								<Box>
@@ -892,9 +933,9 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 										onChange={setTempValue}
 										onSubmit={() => {
 											if (tempValue) {
-												const newItems = [...items];
-												newItems[index] = tempValue;
-												const newConfig = { ...config, [editingField]: newItems };
+												const newDisplayItems = [...displayItems];
+												newDisplayItems[index] = tempValue;
+												const newConfig = { ...config, [editingField]: buildNewConfigItems(newDisplayItems) };
 												setConfig(newConfig);
 												saveConfig(newConfig);
 											}
@@ -914,13 +955,13 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 
 					{editingListIndex === -1 && (
 						<Box marginTop={1}>
-							<Text color={selectedIndex === items.length ? 'cyan' : undefined}>
-								{selectedIndex === items.length ? '> ' : '  '}+ Add new item
+							<Text color={selectedIndex === displayItems.length ? 'cyan' : undefined}>
+								{selectedIndex === displayItems.length ? '> ' : '  '}+ Add new item
 							</Text>
 						</Box>
 					)}
 
-					{editingListIndex === items.length && (
+					{editingListIndex === displayItems.length && (
 						<Box marginTop={1}>
 							<Text color="cyan">+ </Text>
 							<TextInput
@@ -928,8 +969,8 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 								onChange={setTempValue}
 								onSubmit={() => {
 									if (tempValue) {
-										const newItems = [...items, tempValue];
-										const newConfig = { ...config, [editingField]: newItems };
+										const newDisplayItems = [...displayItems, tempValue];
+										const newConfig = { ...config, [editingField]: buildNewConfigItems(newDisplayItems) };
 										setConfig(newConfig);
 										saveConfig(newConfig);
 									}
@@ -942,13 +983,13 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 				</Box>
 
 				<ListEditControls
-					items={items}
+					items={displayItems}
 					selectedIndex={selectedIndex}
 					editingListIndex={editingListIndex}
 					onNavigate={(delta) => {
 						if (editingListIndex === -1) {
 							setSelectedIndex((prev) => {
-								const max = items.length;
+								const max = displayItems.length;
 								const next = prev + delta;
 								if (next < 0) return max;
 								if (next > max) return 0;
@@ -958,25 +999,26 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					}}
 					onEdit={() => {
 						if (editingListIndex === -1) {
-							if (selectedIndex < items.length) {
-								setTempValue(items[selectedIndex]);
+							if (selectedIndex < displayItems.length) {
+								setTempValue(displayItems[selectedIndex]);
 								setEditingListIndex(selectedIndex);
 							} else {
 								setTempValue('');
-								setEditingListIndex(items.length);
+								setEditingListIndex(displayItems.length);
 							}
 						}
 					}}
 					onDelete={() => {
-						if (editingListIndex === -1 && selectedIndex < items.length) {
-							const newItems = items.filter((_, i) => i !== selectedIndex);
+						if (editingListIndex === -1 && selectedIndex < displayItems.length) {
+							const newDisplayItems = displayItems.filter((_, i) => i !== selectedIndex);
 							const newConfig = {
 								...config,
-								[editingField]: newItems.length > 0 ? newItems : undefined,
+								[editingField]:
+									newDisplayItems.length > 0 ? buildNewConfigItems(newDisplayItems) : undefined,
 							};
 							setConfig(newConfig);
 							saveConfig(newConfig);
-							if (selectedIndex >= newItems.length && selectedIndex > 0) {
+							if (selectedIndex >= newDisplayItems.length && selectedIndex > 0) {
 								setSelectedIndex(selectedIndex - 1);
 							}
 						}

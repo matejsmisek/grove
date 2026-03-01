@@ -1,4 +1,9 @@
-import type { GroveIDEConfig, GroveMetadata, Repository } from '../storage/types.js';
+import type {
+	FileCopyPatternEntry,
+	GroveIDEConfig,
+	GroveMetadata,
+	Repository,
+} from '../storage/types.js';
 
 /**
  * Result of a git command execution
@@ -44,6 +49,7 @@ export type BranchUpstreamStatus = 'active' | 'gone' | 'none';
 export interface FileCopyResult {
 	success: boolean;
 	copiedFiles: string[];
+	linkedFiles: string[];
 	errors: string[];
 }
 
@@ -109,9 +115,9 @@ export interface MergedGroveConfig {
 	/** Final branch name template (project overrides root) */
 	branchNameTemplate?: string;
 	/** File patterns from root config (to copy from repo root) */
-	rootFileCopyPatterns: string[];
+	rootFileCopyPatterns: FileCopyPatternEntry[];
 	/** File patterns from project config (to copy from project folder) */
-	projectFileCopyPatterns: string[];
+	projectFileCopyPatterns: FileCopyPatternEntry[];
 	/** Init actions from root config */
 	rootInitActions: string[];
 	/** Init actions from project config */

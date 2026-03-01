@@ -2,7 +2,33 @@ import fs from 'fs';
 import path from 'path';
 
 import type { MergedGroveConfig, TemplateValidationResult } from '../services/types.js';
-import type { GroveIDEConfig, GroveRepoConfig, IDEConfig, IDEType } from './types.js';
+import type {
+	FileCopyPatternEntry,
+	GroveIDEConfig,
+	GroveRepoConfig,
+	IDEConfig,
+	IDEType,
+} from './types.js';
+
+/**
+ * Get the glob string from a file copy pattern entry
+ */
+export function getPatternString(entry: FileCopyPatternEntry): string {
+	return typeof entry === 'string' ? entry : entry[0];
+}
+
+/**
+ * Deduplicate pattern entries by glob string, with later entries taking precedence.
+ * This ensures that when merging base and local configs, local entries override base entries
+ * for the same glob pattern (e.g., local can change mode from "copy" to "link").
+ */
+function deduplicatePatternEntries(entries: FileCopyPatternEntry[]): FileCopyPatternEntry[] {
+	const seen = new Map<string, FileCopyPatternEntry>();
+	for (const entry of entries) {
+		seen.set(getPatternString(entry), entry);
+	}
+	return Array.from(seen.values());
+}
 
 /**
  * Valid template variables for different contexts
@@ -111,9 +137,8 @@ export class GroveConfigService implements IGroveConfigService {
 					const basePatterns = config.fileCopyPatterns || [];
 					const localPatterns = parsed.fileCopyPatterns;
 
-					// Combine arrays and remove duplicates
-					const mergedPatterns = [...basePatterns, ...localPatterns];
-					const uniquePatterns = Array.from(new Set(mergedPatterns));
+					// Combine arrays and deduplicate by glob string (local entries take precedence)
+					const uniquePatterns = deduplicatePatternEntries([...basePatterns, ...localPatterns]);
 
 					config = {
 						...config,
@@ -232,11 +257,10 @@ export class GroveConfigService implements IGroveConfigService {
 				if (localConfig.fileCopyPatterns) {
 					const basePatterns = projectConfig.fileCopyPatterns || [];
 					const localPatterns = localConfig.fileCopyPatterns;
-					const mergedPatterns = [...basePatterns, ...localPatterns];
 					projectConfig = {
 						...projectConfig,
 						...localConfig,
-						fileCopyPatterns: Array.from(new Set(mergedPatterns)),
+						fileCopyPatterns: deduplicatePatternEntries([...basePatterns, ...localPatterns]),
 					};
 				} else {
 					projectConfig = { ...projectConfig, ...localConfig };
