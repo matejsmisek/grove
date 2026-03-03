@@ -6,6 +6,7 @@ export type Routes = {
 	groveDetail: { groveId: string; focusWorktreeName?: string };
 	closeGrove: { groveId: string };
 	closeWorktree: { groveId: string; worktreePath: string };
+	closeMergedWorktrees: { groveId: string };
 	addWorktree: { groveId: string };
 	openTerminal: { groveId: string };
 	openIDE: { groveId: string };

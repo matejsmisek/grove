@@ -434,6 +434,14 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					setSelectedActionIndex((prev) => (prev < worktreeActions.length - 1 ? prev + 1 : 0));
 				} else if (key.return && worktreeActions.length > 0) {
 					worktreeActions[selectedActionIndex].action();
+				} else if (input === 'C' && isSingleWorktreeMode) {
+					// Close all merged worktrees (Shift+C)
+					const hasMerged = worktreeDetails.some(
+						(d) => !d.worktree.closed && d.upstreamStatus === 'gone'
+					);
+					if (hasMerged) {
+						navigate('closeMergedWorktrees', { groveId });
+					}
 				} else if (input === 'c' && isSingleWorktreeMode) {
 					// Allow closing grove from single-worktree mode
 					navigate('closeGrove', { groveId });
@@ -456,6 +464,14 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 				) {
 					setShowActions(true);
 					setSelectedActionIndex(0);
+				} else if (input === 'C') {
+					// Close all merged worktrees (Shift+C)
+					const hasMerged = worktreeDetails.some(
+						(d) => !d.worktree.closed && d.upstreamStatus === 'gone'
+					);
+					if (hasMerged) {
+						navigate('closeMergedWorktrees', { groveId });
+					}
 				} else if (input === 'c') {
 					navigate('closeGrove', { groveId });
 				} else if (input === 'a') {
@@ -729,12 +745,14 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 						{isSingleWorktreeMode ? (
 							<Text dimColor>
 								↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>a</Text> Add Worktree •{' '}
-								<Text bold>c</Text> Close Grove • <Text bold>ESC</Text> Back
+								<Text bold>c</Text> Close Grove • <Text bold>Shift+C</Text> Close Merged •{' '}
+								<Text bold>ESC</Text> Back
 							</Text>
 						) : (
 							<Text dimColor>
 								↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>a</Text> Add Worktree •{' '}
-								<Text bold>c</Text> Close Grove • <Text bold>ESC</Text> Back
+								<Text bold>c</Text> Close Grove • <Text bold>Shift+C</Text> Close Merged •{' '}
+								<Text bold>ESC</Text> Back
 							</Text>
 						)}
 					</Box>

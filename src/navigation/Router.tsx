@@ -6,6 +6,7 @@ import { AddWorktreeScreen } from '../screens/AddWorktreeScreen.js';
 import { ChatScreen } from '../screens/ChatScreen.js';
 import { ClaudeTerminalSettingsScreen } from '../screens/ClaudeTerminalSettingsScreen.js';
 import { CloseGroveScreen } from '../screens/CloseGroveScreen.js';
+import { CloseMergedWorktreesScreen } from '../screens/CloseMergedWorktreesScreen.js';
 import { CloseWorktreeScreen } from '../screens/CloseWorktreeScreen.js';
 import { CreateGroveScreen } from '../screens/CreateGroveScreen.js';
 import { GroveConfigEditorScreen } from '../screens/GroveConfigEditorScreen.js';
@@ -56,6 +57,13 @@ export function Router() {
 				<CloseWorktreeScreen
 					groveId={'groveId' in current.params ? current.params.groveId : ''}
 					worktreePath={'worktreePath' in current.params ? (current.params.worktreePath as string) : ''}
+				/>
+			);
+		case 'closeMergedWorktrees':
+			// Type narrowing: we know params is { groveId: string } here
+			return (
+				<CloseMergedWorktreesScreen
+					groveId={'groveId' in current.params ? current.params.groveId : ''}
 				/>
 			);
 		case 'addWorktree':
