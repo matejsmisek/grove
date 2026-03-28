@@ -4,7 +4,7 @@ export default defineConfig({
 	esbuild: {
 		jsx: 'automatic',
 		jsxImportSource: 'react',
-		target: 'es2022',
+		target: 'es2020',
 	},
 	test: {
 		globals: true,
