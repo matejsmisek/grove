@@ -201,7 +201,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 			</ServiceProvider>
 		);
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 
 		const output = lastFrame()!;
 		expect(output).toContain('Close Grove: Test Grove');
@@ -216,7 +216,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 			</ServiceProvider>
 		);
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 
 		const output = lastFrame()!;
 		expect(output).toContain('Press Y to confirm or N to cancel');
@@ -232,7 +232,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 			</ServiceProvider>
 		);
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 
 		const output = lastFrame()!;
 		expect(output).toContain('✓ All branches are merged and clean.');
@@ -252,7 +252,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 			</ServiceProvider>
 		);
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 
 		const output = lastFrame()!;
 		expect(output).toContain('Uncommitted changes: ⚠ Yes');
@@ -271,7 +271,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 			</ServiceProvider>
 		);
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 
 		const output = lastFrame()!;
 		expect(output).toContain('Unpushed commits: ⚠ Yes');
@@ -288,7 +288,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 			</ServiceProvider>
 		);
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 
 		const output = lastFrame()!;
 		expect(output).toContain('Type "delete" to confirm deletion:');
@@ -308,7 +308,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 			</ServiceProvider>
 		);
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 
 		const output = lastFrame()!;
 		expect(output).toContain('Uncommitted changes: ⚠ Yes');
@@ -324,7 +324,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 			</ServiceProvider>
 		);
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 
 		const output = lastFrame()!;
 		expect(output).toContain('Error: Grove not found');
@@ -361,7 +361,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 			</ServiceProvider>
 		);
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 
 		const output = lastFrame()!;
 		expect(output).toContain('test-repo-1');
@@ -379,7 +379,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 			</ServiceProvider>
 		);
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 
 		const output = lastFrame()!;
 		expect(output).toContain('⚠ Warning: This grove has unfinished work.');
@@ -396,7 +396,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 			</ServiceProvider>
 		);
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 
 		const output = lastFrame()!;
 		expect(output).toContain('Branch status: ⚠ Not merged');
@@ -414,7 +414,7 @@ describe('CloseGroveScreen - Visual Workflow', () => {
 			</ServiceProvider>
 		);
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 
 		const output = lastFrame()!;
 		expect(output).toContain('Branch status: ⚠ No upstream');
