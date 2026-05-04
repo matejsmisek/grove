@@ -215,6 +215,13 @@ export interface RepositorySelection {
 	 * When undefined, the entire repository is selected
 	 */
 	projectPath?: string;
+	/**
+	 * If set, the worktree will be created from this existing branch instead of
+	 * creating a new branch. Branch can be local (e.g. "feature/x") or remote
+	 * (e.g. "origin/feature/x"). The worktree will not be reset to main and
+	 * configured initActions / file copy patterns still run.
+	 */
+	existingBranch?: string;
 }
 
 /**

@@ -22,6 +22,8 @@ type CreateStep =
 	| 'name'
 	| 'repositories'
 	| 'projects'
+	| 'branch-projects'
+	| 'branch-input'
 	| 'creating'
 	| 'done'
 	| 'error';
@@ -65,6 +67,13 @@ export function CreateGroveScreen() {
 
 	// Recent selections state
 	const [selectedRecentKeys, setSelectedRecentKeys] = useState<Set<string>>(new Set());
+
+	// Branch mode state (Ctrl+B): create single-worktree grove from existing branch
+	const [branchModeRepo, setBranchModeRepo] = useState<Repository | null>(null);
+	const [branchModeProjectPath, setBranchModeProjectPath] = useState<string | null>(null);
+	const [branchModeProjects, setBranchModeProjects] = useState<string[]>([]);
+	const [branchModeProjectCursor, setBranchModeProjectCursor] = useState(0);
+	const [branchInput, setBranchInput] = useState('');
 
 	// Get recent selections (filtered to registered repos)
 	const recentSelections = useMemo(() => {
@@ -216,6 +225,32 @@ export function CreateGroveScreen() {
 				setCursorIndex((prev) => (prev > 0 ? prev - 1 : listItems.length - 1));
 			} else if (key.downArrow) {
 				setCursorIndex((prev) => (prev < listItems.length - 1 ? prev + 1 : 0));
+			} else if (key.ctrl && (input === 'b' || input === 'B')) {
+				// Ctrl+B: enter branch mode for the highlighted item
+				const item = listItems[cursorIndex];
+				if (item.type === 'recent' && item.recent) {
+					const repo = repositories.find((r) => r.path === item.recent!.repositoryPath);
+					if (!repo) return;
+					setBranchModeRepo(repo);
+					setBranchModeProjectPath(item.recent.projectPath ?? null);
+					setBranchInput('');
+					setStep('branch-input');
+				} else if (item.type === 'repo' && item.repo) {
+					setBranchModeRepo(item.repo);
+					setBranchModeProjectPath(null);
+					setBranchInput('');
+
+					if (item.repo.isMonorepo) {
+						const repoProjects = getMonorepoProjects(item.repo.path);
+						if (repoProjects.length > 0) {
+							setBranchModeProjects(repoProjects);
+							setBranchModeProjectCursor(0);
+							setStep('branch-projects');
+							return;
+						}
+					}
+					setStep('branch-input');
+				}
 			} else if (input === ' ') {
 				// Toggle selection with spacebar
 				const item = listItems[cursorIndex];
@@ -291,6 +326,43 @@ export function CreateGroveScreen() {
 			}
 		},
 		{ isActive: step === 'projects' }
+	);
+
+	// Handle input for branch-mode project selection (single select)
+	useInput(
+		(input, key) => {
+			if (step !== 'branch-projects') return;
+
+			if (key.upArrow) {
+				setBranchModeProjectCursor((prev) => (prev > 0 ? prev - 1 : branchModeProjects.length));
+			} else if (key.downArrow) {
+				setBranchModeProjectCursor((prev) => (prev < branchModeProjects.length ? prev + 1 : 0));
+			} else if (input === ' ' || key.return) {
+				if (branchModeProjectCursor === branchModeProjects.length) {
+					setBranchModeProjectPath(null);
+				} else {
+					setBranchModeProjectPath(branchModeProjects[branchModeProjectCursor]);
+				}
+				setStep('branch-input');
+			} else if (key.escape) {
+				setBranchModeRepo(null);
+				setBranchModeProjectPath(null);
+				setStep('repositories');
+			}
+		},
+		{ isActive: step === 'branch-projects' }
+	);
+
+	// Handle escape from branch-input (TextInput consumes other keys)
+	useInput(
+		(_input, key) => {
+			if (step !== 'branch-input') return;
+			if (key.escape) {
+				setBranchInput('');
+				setStep('repositories');
+			}
+		},
+		{ isActive: step === 'branch-input' }
 	);
 
 	// Handle input for generated name confirmation
@@ -375,6 +447,50 @@ export function CreateGroveScreen() {
 
 		setGroveName(value.trim());
 		proceedToRepositorySelection();
+	};
+
+	const handleBranchSubmit = (value: string) => {
+		const branch = value.trim();
+		if (!branch) {
+			setError('Branch name cannot be empty');
+			setStep('error');
+			return;
+		}
+		if (!branchModeRepo) {
+			setError('No repository selected');
+			setStep('error');
+			return;
+		}
+		if (!groveName.trim()) {
+			setError('Grove name cannot be empty');
+			setStep('error');
+			return;
+		}
+
+		setStep('creating');
+		setLogMessages([]);
+
+		const selection: RepositorySelection = {
+			repository: branchModeRepo,
+			projectPath: branchModeProjectPath || undefined,
+			existingBranch: branch,
+		};
+
+		const handleLog = (message: string) => {
+			setLogMessages((prev) => [...prev, message]);
+		};
+
+		groveService
+			.createGrove(groveName, [selection], handleLog)
+			.then((metadata) => {
+				recentSelectionsService.addRecentSelections([selection]);
+				setStep('done');
+				setTimeout(() => replace('groveDetail', { groveId: metadata.id }), 1500);
+			})
+			.catch((err) => {
+				setError(err instanceof Error ? err.message : 'Failed to create grove');
+				setStep('error');
+			});
 	};
 
 	const createGrove = () => {
@@ -571,6 +687,7 @@ export function CreateGroveScreen() {
 						• Enter to {hasMonorepos ? 'select projects' : 'create grove'}
 						{!hasAnySelection && ' (empty grove - add worktrees later)'}
 					</Text>
+					<Text dimColor>• Ctrl+B to use existing branch (single repo)</Text>
 					<Text dimColor>• Esc to cancel</Text>
 				</Box>
 
@@ -640,6 +757,90 @@ export function CreateGroveScreen() {
 						Selected projects: {selectedProjects.size}
 						{selectedProjects.size === 0 && <Text dimColor> (will use entire repos)</Text>}
 					</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	if (step === 'branch-projects') {
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="green">
+						Create Grove from Branch: {groveName}
+					</Text>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Text>
+						Select a project from <Text color="yellow">{branchModeRepo?.name}</Text>:
+					</Text>
+				</Box>
+
+				<Box flexDirection="column" marginLeft={2}>
+					{branchModeProjects.map((projectPath, index) => {
+						const isCursor = index === branchModeProjectCursor;
+						return (
+							<Box key={projectPath}>
+								<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
+									{isCursor ? '❯ ' : '  '}
+									{projectPath}
+								</Text>
+							</Box>
+						);
+					})}
+					<Box marginTop={1}>
+						<Text
+							color={branchModeProjectCursor === branchModeProjects.length ? 'cyan' : undefined}
+							bold={branchModeProjectCursor === branchModeProjects.length}
+						>
+							{branchModeProjectCursor === branchModeProjects.length ? '❯ ' : '  '}
+							<Text dimColor>(Entire repository)</Text>
+						</Text>
+					</Box>
+				</Box>
+
+				<Box marginTop={1} flexDirection="column">
+					<Text dimColor>• Use ↑/↓ to navigate</Text>
+					<Text dimColor>• Enter or Space to select</Text>
+					<Text dimColor>• Esc to go back</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	if (step === 'branch-input') {
+		const target = branchModeProjectPath
+			? `${branchModeRepo?.name}/${branchModeProjectPath}`
+			: branchModeRepo?.name || '';
+
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="green">
+						Create Grove from Branch: {groveName}
+					</Text>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Text>
+						Enter an existing branch in <Text color="yellow">{target}</Text>:
+					</Text>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Text dimColor>
+						Local branches (e.g. "feature/x") and remote refs (e.g. "origin/feature/x") are supported.
+					</Text>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Text color="cyan">Branch: </Text>
+					<TextInput value={branchInput} onChange={setBranchInput} onSubmit={handleBranchSubmit} />
+				</Box>
+
+				<Box marginTop={1}>
+					<Text dimColor>Press Enter to create, Esc to go back</Text>
 				</Box>
 			</Box>
 		);
