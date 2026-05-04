@@ -10,11 +10,26 @@ import { useNavigation } from '../navigation/useNavigation.js';
 import {
 	GroveServiceToken,
 	GrovesServiceToken,
+	RecentSelectionsServiceToken,
 	RepositoryServiceToken,
 } from '../services/tokens.js';
-import type { Repository, RepositorySelection } from '../storage/index.js';
+import type { RecentSelection, Repository, RepositorySelection } from '../storage/index.js';
 
 type AddWorktreeStep = 'name' | 'repositories' | 'projects' | 'creating' | 'done' | 'error';
+
+/**
+ * Represents an item in the combined list (recent or repository)
+ */
+interface ListItem {
+	type: 'recent' | 'repo';
+	/** For 'recent' type */
+	recent?: RecentSelection;
+	/** For 'repo' type */
+	repo?: Repository;
+	repoIndex?: number;
+	/** Display name for the item */
+	displayName: string;
+}
 
 interface AddWorktreeScreenProps {
 	groveId: string;
@@ -25,6 +40,7 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 	const groveService = useService(GroveServiceToken);
 	const grovesService = useService(GrovesServiceToken);
 	const repositoryService = useService(RepositoryServiceToken);
+	const recentSelectionsService = useService(RecentSelectionsServiceToken);
 
 	const [step, setStep] = useState<AddWorktreeStep>('name');
 	const [worktreeName, setWorktreeName] = useState('');
@@ -37,6 +53,37 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 	// Project selection state for monorepos
 	const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(null);
 	const [projectCursor, setProjectCursor] = useState(0);
+
+	// Get recent selections (filtered to registered repos)
+	const recentSelections = useMemo(() => {
+		const registeredPaths = new Set(repositories.map((r) => r.path));
+		return recentSelectionsService.getRecentSelections(registeredPaths);
+	}, [repositories]);
+
+	// Build combined list of recent items + repositories
+	const listItems = useMemo((): ListItem[] => {
+		const items: ListItem[] = [];
+
+		for (const recent of recentSelections) {
+			items.push({
+				type: 'recent',
+				recent,
+				displayName: recentSelectionsService.getRecentSelectionDisplayName(recent),
+			});
+		}
+
+		for (let i = 0; i < repositories.length; i++) {
+			const repo = repositories[i];
+			items.push({
+				type: 'repo',
+				repo,
+				repoIndex: i,
+				displayName: repo.name,
+			});
+		}
+
+		return items;
+	}, [recentSelections, repositories]);
 
 	// Get grove name for display
 	const groveName = useMemo(() => {
@@ -86,26 +133,41 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 			if (step !== 'repositories') return;
 
 			if (key.upArrow) {
-				setCursorIndex((prev) => (prev > 0 ? prev - 1 : repositories.length - 1));
+				setCursorIndex((prev) => (prev > 0 ? prev - 1 : listItems.length - 1));
 			} else if (key.downArrow) {
-				setCursorIndex((prev) => (prev < repositories.length - 1 ? prev + 1 : 0));
+				setCursorIndex((prev) => (prev < listItems.length - 1 ? prev + 1 : 0));
 			} else if (input === ' ' || key.return) {
-				// Select repository
-				const repo = repositories[cursorIndex];
-				setSelectedRepoIndex(cursorIndex);
+				const item = listItems[cursorIndex];
+				if (!item) return;
 
-				// If monorepo with projects, go to project selection
-				if (repo.isMonorepo) {
-					const repoProjects = getMonorepoProjects(repo.path);
-					if (repoProjects.length > 0) {
-						setProjectCursor(0);
-						setStep('projects');
-						return;
+				if (item.type === 'recent' && item.recent) {
+					// Find the repo for this recent selection
+					const repoIndex = repositories.findIndex((r) => r.path === item.recent!.repositoryPath);
+					if (repoIndex === -1) return;
+
+					setSelectedRepoIndex(repoIndex);
+
+					// Recent selections include their project path (or none for whole repo),
+					// so skip the project selection step entirely.
+					createWorktree(repoIndex, item.recent.projectPath ?? null);
+				} else if (item.type === 'repo' && item.repo && item.repoIndex !== undefined) {
+					const repo = item.repo;
+					const repoIndex = item.repoIndex;
+					setSelectedRepoIndex(repoIndex);
+
+					// If monorepo with projects, go to project selection
+					if (repo.isMonorepo) {
+						const repoProjects = getMonorepoProjects(repo.path);
+						if (repoProjects.length > 0) {
+							setProjectCursor(0);
+							setStep('projects');
+							return;
+						}
 					}
-				}
 
-				// Not a monorepo or no projects, proceed to creation
-				createWorktree(cursorIndex, null);
+					// Not a monorepo or no projects, proceed to creation
+					createWorktree(repoIndex, null);
+				}
 			} else if (key.escape) {
 				// Go back to name entry
 				setStep('name');
@@ -188,6 +250,7 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 		groveService
 			.addWorktreeToGrove(groveId, selection, worktreeName, handleLog)
 			.then(() => {
+				recentSelectionsService.addRecentSelections([selection]);
 				setStep('done');
 				setTimeout(() => replace('groveDetail', { groveId, focusWorktreeName: worktreeName }), 1500);
 			})
@@ -227,6 +290,8 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 	}
 
 	if (step === 'repositories') {
+		const hasRecent = recentSelections.length > 0;
+
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
@@ -240,19 +305,49 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 				</Box>
 
 				<Box flexDirection="column" marginLeft={2}>
-					{repositories.map((repo, index) => {
+					{listItems.map((item, index) => {
 						const isCursor = index === cursorIndex;
-						const monorepoIndicator = repo.isMonorepo ? ' [monorepo]' : '';
+						const showSeparator = hasRecent && item.type === 'repo' && index === recentSelections.length;
 
-						return (
-							<Box key={repo.path}>
-								<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
-									{isCursor ? '❯ ' : '  '}
-									{repo.name}
-									<Text dimColor>{monorepoIndicator}</Text>
-								</Text>
-							</Box>
-						);
+						if (item.type === 'recent' && item.recent) {
+							const key = item.recent.projectPath
+								? `${item.recent.repositoryPath}::${item.recent.projectPath}`
+								: item.recent.repositoryPath;
+							return (
+								<Box key={`recent-${key}`} flexDirection="column">
+									{index === 0 && (
+										<Box marginBottom={0}>
+											<Text dimColor>Recently used:</Text>
+										</Box>
+									)}
+									<Box>
+										<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
+											{isCursor ? '❯ ' : '  '}
+											<Text color="yellow">★</Text> {item.displayName}
+										</Text>
+									</Box>
+								</Box>
+							);
+						} else if (item.type === 'repo' && item.repo) {
+							const monorepoIndicator = item.repo.isMonorepo ? ' [monorepo]' : '';
+							return (
+								<Box key={`repo-${item.repo.path}`} flexDirection="column">
+									{showSeparator && (
+										<Box marginTop={1} marginBottom={0}>
+											<Text dimColor>All repositories:</Text>
+										</Box>
+									)}
+									<Box>
+										<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
+											{isCursor ? '❯ ' : '  '}
+											{item.repo.name}
+											<Text dimColor>{monorepoIndicator}</Text>
+										</Text>
+									</Box>
+								</Box>
+							);
+						}
+						return null;
 					})}
 				</Box>
 
