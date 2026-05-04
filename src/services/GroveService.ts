@@ -75,6 +75,35 @@ export class GroveService implements IGroveService {
 	}
 
 	/**
+	 * Translate a raw `git worktree add` stderr into a user-friendly message,
+	 * specifically for the case where an existing branch is already checked out
+	 * in another worktree.
+	 */
+	private formatWorktreeAddError(stderr: string, branch?: string): string {
+		const trimmed = (stderr || '').trim();
+		if (!trimmed) {
+			return 'Failed to create worktree';
+		}
+
+		// git stderr formats observed:
+		//   fatal: 'branch' is already used by worktree at '/path'
+		//   fatal: 'branch' is already checked out at '/path'
+		const alreadyUsed = trimmed.match(/already (?:used by worktree|checked out)(?: at '([^']+)')?/i);
+		if (alreadyUsed) {
+			const at = alreadyUsed[1] ? ` (at ${alreadyUsed[1]})` : '';
+			const name = branch ? `"${branch}"` : 'this branch';
+			return `Branch ${name} is already checked out in another worktree${at}. Pick a different branch or remove the other worktree first.`;
+		}
+
+		const invalidRef = trimmed.match(/invalid reference: (.+)/i);
+		if (invalidRef) {
+			return `Branch "${invalidRef[1].trim()}" was not found in the repository. Try fetching first or check the branch name.`;
+		}
+
+		return trimmed;
+	}
+
+	/**
 	 * Generate a unique worktree name for a selection
 	 * Handles monorepo projects by appending project name
 	 * Includes grove suffix to make worktree folders globally unique
@@ -411,32 +440,56 @@ Completed at: ${new Date().toISOString()}
 					onLog(`Creating worktree for ${displayName}...`);
 				}
 
-				// Ensure repository is up-to-date before creating worktree
-				const { needsReset, mainBranch } = await this.ensureRepoUpToDate(repo.path, onLog);
-
 				// Read merged repository/project grove configuration
 				const mergedConfig = this.groveConfigService.readMergedConfig(repo.path, selection.projectPath);
-
-				// Generate branch name for this grove using merged config
-				// Use normalized name for consistency with folder naming
-				// For monorepo projects, the branch suffix is added automatically
-				const branchBase = this.groveConfigService.getBranchNameForSelection(
-					repo.path,
-					normalizedName,
-					selection.projectPath
-				);
-				// Lowercase the project path suffix for uniform identifiers
-				const branchSuffix = selection.projectPath ? `-${selection.projectPath.toLowerCase()}` : '';
-				const branchName = branchBase + branchSuffix;
 
 				// Create worktree path (identifier already included in worktreeName)
 				const worktreePath = path.join(grovePath, worktreeName);
 
-				// Add worktree (creates new branch from HEAD)
-				const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, 'HEAD');
+				let branchName: string;
+				let needsReset = false;
+				let mainBranch = '';
 
-				if (!result.success) {
-					throw new Error(result.stderr || 'Failed to create worktree');
+				if (selection.existingBranch) {
+					// Check out an existing branch in this worktree (no new branch, no reset)
+					branchName = selection.existingBranch;
+					if (onLog) {
+						onLog(`Checking out existing branch "${branchName}"...`);
+					}
+
+					const result = await this.gitService.addWorktreeFromExistingBranch(
+						repo.path,
+						worktreePath,
+						branchName
+					);
+
+					if (!result.success) {
+						throw new Error(this.formatWorktreeAddError(result.stderr, branchName));
+					}
+				} else {
+					// Ensure repository is up-to-date before creating worktree
+					const updateResult = await this.ensureRepoUpToDate(repo.path, onLog);
+					needsReset = updateResult.needsReset;
+					mainBranch = updateResult.mainBranch;
+
+					// Generate branch name for this grove using merged config
+					// Use normalized name for consistency with folder naming
+					// For monorepo projects, the branch suffix is added automatically
+					const branchBase = this.groveConfigService.getBranchNameForSelection(
+						repo.path,
+						normalizedName,
+						selection.projectPath
+					);
+					// Lowercase the project path suffix for uniform identifiers
+					const branchSuffix = selection.projectPath ? `-${selection.projectPath.toLowerCase()}` : '';
+					branchName = branchBase + branchSuffix;
+
+					// Add worktree (creates new branch from HEAD)
+					const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, 'HEAD');
+
+					if (!result.success) {
+						throw new Error(this.formatWorktreeAddError(result.stderr, branchName));
+					}
 				}
 
 				// If we need to reset the worktree to the latest main branch, do it now
@@ -653,31 +706,55 @@ Completed at: ${new Date().toISOString()}
 				onLog(`Creating worktree for ${displayName}...`);
 			}
 
-			// Ensure repository is up-to-date before creating worktree
-			const { needsReset, mainBranch } = await this.ensureRepoUpToDate(repo.path, onLog);
-
 			// Read merged repository/project grove configuration
 			const mergedConfig = this.groveConfigService.readMergedConfig(repo.path, selection.projectPath);
-
-			// Generate branch name using the custom worktree name
-			// Use the branchNameTemplate from config but replace with our custom name
-			const branchTemplate = mergedConfig.branchNameTemplate || '${GROVE_NAME}';
-			const branchBase = this.groveConfigService.applyBranchNameTemplate(
-				branchTemplate,
-				normalizedWorktreeName
-			);
-			// Lowercase the project path suffix for uniform identifiers
-			const branchSuffix = selection.projectPath ? `-${selection.projectPath.toLowerCase()}` : '';
-			const branchName = branchBase + branchSuffix;
 
 			// Create worktree path
 			const worktreePath = path.join(grovePath, normalizedWorktreeName);
 
-			// Add worktree (creates new branch from HEAD)
-			const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, 'HEAD');
+			let branchName: string;
+			let needsReset = false;
+			let mainBranch = '';
 
-			if (!result.success) {
-				throw new Error(result.stderr || 'Failed to create worktree');
+			if (selection.existingBranch) {
+				// Check out an existing branch in this worktree (no new branch, no reset)
+				branchName = selection.existingBranch;
+				if (onLog) {
+					onLog(`Checking out existing branch "${branchName}"...`);
+				}
+
+				const result = await this.gitService.addWorktreeFromExistingBranch(
+					repo.path,
+					worktreePath,
+					branchName
+				);
+
+				if (!result.success) {
+					throw new Error(this.formatWorktreeAddError(result.stderr, branchName));
+				}
+			} else {
+				// Ensure repository is up-to-date before creating worktree
+				const updateResult = await this.ensureRepoUpToDate(repo.path, onLog);
+				needsReset = updateResult.needsReset;
+				mainBranch = updateResult.mainBranch;
+
+				// Generate branch name using the custom worktree name
+				// Use the branchNameTemplate from config but replace with our custom name
+				const branchTemplate = mergedConfig.branchNameTemplate || '${GROVE_NAME}';
+				const branchBase = this.groveConfigService.applyBranchNameTemplate(
+					branchTemplate,
+					normalizedWorktreeName
+				);
+				// Lowercase the project path suffix for uniform identifiers
+				const branchSuffix = selection.projectPath ? `-${selection.projectPath.toLowerCase()}` : '';
+				branchName = branchBase + branchSuffix;
+
+				// Add worktree (creates new branch from HEAD)
+				const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, 'HEAD');
+
+				if (!result.success) {
+					throw new Error(this.formatWorktreeAddError(result.stderr, branchName));
+				}
 			}
 
 			// If we need to reset the worktree to the latest main branch, do it now

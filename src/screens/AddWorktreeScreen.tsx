@@ -15,7 +15,15 @@ import {
 } from '../services/tokens.js';
 import type { RecentSelection, Repository, RepositorySelection } from '../storage/index.js';
 
-type AddWorktreeStep = 'name' | 'repositories' | 'projects' | 'creating' | 'done' | 'error';
+type AddWorktreeStep =
+	| 'name'
+	| 'repositories'
+	| 'projects'
+	| 'branch-projects'
+	| 'branch-input'
+	| 'creating'
+	| 'done'
+	| 'error';
 
 /**
  * Represents an item in the combined list (recent or repository)
@@ -53,6 +61,9 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 	// Project selection state for monorepos
 	const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(null);
 	const [projectCursor, setProjectCursor] = useState(0);
+
+	// Branch mode state (Ctrl+B): create worktree from an existing branch
+	const [branchInput, setBranchInput] = useState('');
 
 	// Get recent selections (filtered to registered repos)
 	const recentSelections = useMemo(() => {
@@ -136,6 +147,36 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 				setCursorIndex((prev) => (prev > 0 ? prev - 1 : listItems.length - 1));
 			} else if (key.downArrow) {
 				setCursorIndex((prev) => (prev < listItems.length - 1 ? prev + 1 : 0));
+			} else if (key.ctrl && (input === 'b' || input === 'B')) {
+				// Ctrl+B: enter branch mode for the highlighted item
+				const item = listItems[cursorIndex];
+				if (!item) return;
+
+				if (item.type === 'recent' && item.recent) {
+					const repoIndex = repositories.findIndex(
+						(r) => r.path === item.recent!.repositoryPath
+					);
+					if (repoIndex === -1) return;
+					setSelectedRepoIndex(repoIndex);
+					setSelectedProjectPath(item.recent.projectPath ?? null);
+					setBranchInput('');
+					setStep('branch-input');
+				} else if (item.type === 'repo' && item.repo && item.repoIndex !== undefined) {
+					const repo = item.repo;
+					setSelectedRepoIndex(item.repoIndex);
+					setSelectedProjectPath(null);
+					setBranchInput('');
+
+					if (repo.isMonorepo) {
+						const repoProjects = getMonorepoProjects(repo.path);
+						if (repoProjects.length > 0) {
+							setProjectCursor(0);
+							setStep('branch-projects');
+							return;
+						}
+					}
+					setStep('branch-input');
+				}
 			} else if (input === ' ' || key.return) {
 				const item = listItems[cursorIndex];
 				if (!item) return;
@@ -174,6 +215,42 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 			}
 		},
 		{ isActive: step === 'repositories' }
+	);
+
+	// Handle input for branch-mode project selection (single select)
+	useInput(
+		(input, key) => {
+			if (step !== 'branch-projects') return;
+
+			if (key.upArrow) {
+				setProjectCursor((prev) => (prev > 0 ? prev - 1 : projects.length));
+			} else if (key.downArrow) {
+				setProjectCursor((prev) => (prev < projects.length ? prev + 1 : 0));
+			} else if (input === ' ' || key.return) {
+				if (projectCursor === projects.length) {
+					setSelectedProjectPath(null);
+				} else {
+					setSelectedProjectPath(projects[projectCursor]);
+				}
+				setStep('branch-input');
+			} else if (key.escape) {
+				setSelectedRepoIndex(null);
+				setStep('repositories');
+			}
+		},
+		{ isActive: step === 'branch-projects' }
+	);
+
+	// Handle escape from branch-input (TextInput consumes other keys)
+	useInput(
+		(_input, key) => {
+			if (step !== 'branch-input') return;
+			if (key.escape) {
+				setBranchInput('');
+				setStep('repositories');
+			}
+		},
+		{ isActive: step === 'branch-input' }
 	);
 
 	// Handle input for project selection
@@ -233,13 +310,18 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 		setStep('repositories');
 	};
 
-	const createWorktree = (repoIndex: number, projectPath: string | null) => {
+	const createWorktree = (
+		repoIndex: number,
+		projectPath: string | null,
+		existingBranch?: string
+	) => {
 		setStep('creating');
 		setLogMessages([]);
 
 		const selection: RepositorySelection = {
 			repository: repositories[repoIndex],
 			projectPath: projectPath || undefined,
+			existingBranch,
 		};
 
 		// Callback for live log streaming
@@ -258,6 +340,21 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 				setError(err instanceof Error ? err.message : 'Failed to add worktree');
 				setStep('error');
 			});
+	};
+
+	const handleBranchSubmit = (value: string) => {
+		const branch = value.trim();
+		if (!branch) {
+			setError('Branch name cannot be empty');
+			setStep('error');
+			return;
+		}
+		if (selectedRepoIndex === null) {
+			setError('No repository selected');
+			setStep('error');
+			return;
+		}
+		createWorktree(selectedRepoIndex, selectedProjectPath, branch);
 	};
 
 	if (step === 'name') {
@@ -353,7 +450,8 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 
 				<Box marginTop={1} flexDirection="column">
 					<Text dimColor>• Use ↑/↓ to navigate</Text>
-					<Text dimColor>• Enter or Space to select</Text>
+					<Text dimColor>• Enter or Space to select (creates new branch)</Text>
+					<Text dimColor>• Ctrl+B to use an existing branch</Text>
 					<Text dimColor>• Esc to go back</Text>
 				</Box>
 			</Box>
@@ -404,6 +502,90 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 					<Text dimColor>• Use ↑/↓ to navigate</Text>
 					<Text dimColor>• Enter or Space to select</Text>
 					<Text dimColor>• Esc to go back</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	if (step === 'branch-projects') {
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="green">
+						Add Worktree from Branch: {worktreeName}
+					</Text>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Text>
+						Select a project from <Text color="yellow">{selectedRepo?.name}</Text>:
+					</Text>
+				</Box>
+
+				<Box flexDirection="column" marginLeft={2}>
+					{projects.map((projectPath, index) => {
+						const isCursor = index === projectCursor;
+						return (
+							<Box key={projectPath}>
+								<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
+									{isCursor ? '❯ ' : '  '}
+									{projectPath}
+								</Text>
+							</Box>
+						);
+					})}
+					<Box marginTop={1}>
+						<Text
+							color={projectCursor === projects.length ? 'cyan' : undefined}
+							bold={projectCursor === projects.length}
+						>
+							{projectCursor === projects.length ? '❯ ' : '  '}
+							<Text dimColor>(Entire repository)</Text>
+						</Text>
+					</Box>
+				</Box>
+
+				<Box marginTop={1} flexDirection="column">
+					<Text dimColor>• Use ↑/↓ to navigate</Text>
+					<Text dimColor>• Enter or Space to select</Text>
+					<Text dimColor>• Esc to go back</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	if (step === 'branch-input') {
+		const target = selectedProjectPath
+			? `${selectedRepo?.name}/${selectedProjectPath}`
+			: selectedRepo?.name || '';
+
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="green">
+						Add Worktree from Branch: {worktreeName}
+					</Text>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Text>
+						Enter an existing branch in <Text color="yellow">{target}</Text>:
+					</Text>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Text dimColor>
+						Local branches (e.g. "feature/x") and remote refs (e.g. "origin/feature/x") are supported.
+					</Text>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Text color="cyan">Branch: </Text>
+					<TextInput value={branchInput} onChange={setBranchInput} onSubmit={handleBranchSubmit} />
+				</Box>
+
+				<Box marginTop={1}>
+					<Text dimColor>Press Enter to create, Esc to go back</Text>
 				</Box>
 			</Box>
 		);

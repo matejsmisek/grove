@@ -21,6 +21,11 @@ export interface IGitService {
 		branch?: string,
 		commitish?: string
 	): Promise<GitCommandResult>;
+	addWorktreeFromExistingBranch(
+		repoPath: string,
+		worktreePath: string,
+		branch: string
+	): Promise<GitCommandResult>;
 	listWorktrees(repoPath: string, porcelain?: boolean): Promise<GitCommandResult>;
 	parseWorktreeList(porcelainOutput: string): WorktreeInfo[];
 	removeWorktree(repoPath: string, worktreePath: string, force?: boolean): Promise<GitCommandResult>;
@@ -114,6 +119,25 @@ export class GitService implements IGitService {
 		}
 
 		return this.executeGitCommand(repoPath, args);
+	}
+
+	/**
+	 * Add a worktree that checks out an existing branch (no new branch created)
+	 * The branch can be a local branch (e.g. "feature/x") or a remote tracking
+	 * ref (e.g. "origin/feature/x"). When given a remote ref, git will create a
+	 * local tracking branch automatically.
+	 * @param repoPath - Repository root path
+	 * @param worktreePath - Path where the worktree will be created
+	 * @param branch - Existing branch to check out
+	 */
+	async addWorktreeFromExistingBranch(
+		repoPath: string,
+		worktreePath: string,
+		branch: string
+	): Promise<GitCommandResult> {
+		// Fetch first so remote refs are up to date and can be used as starting points
+		await this.fetch(repoPath);
+		return this.executeGitCommand(repoPath, ['worktree', 'add', worktreePath, branch]);
 	}
 
 	/**
