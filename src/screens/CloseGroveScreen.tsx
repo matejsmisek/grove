@@ -74,11 +74,13 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 
 					// Issue if:
 					// - dirty tree (uncommitted changes)
-					// - unpushed commits
+					// - unpushed commits (also covers no-upstream branches whose
+					//   HEAD is not on any remote)
 					// - pushed but not merged (upstream is 'active')
-					// - no upstream configured (might be local-only)
-					// No issue only if upstream is 'gone' (merged)
-					if (uncommitted || unpushed || upstreamStatus !== 'gone') {
+					// No issue if upstream is 'gone' (merged), or 'none' with nothing
+					// to lose (no changes and HEAD already on a remote) — i.e. an
+					// untouched branch should not produce a warning.
+					if (uncommitted || unpushed || upstreamStatus === 'active') {
 						foundIssues = true;
 					}
 
@@ -158,10 +160,10 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 
 	// Handle Y/N key press for confirmation (when all checks pass)
 	useInput(
-		(input, _key) => {
+		(input, key) => {
 			if (input.toLowerCase() === 'y') {
 				handleConfirm();
-			} else if (input.toLowerCase() === 'n') {
+			} else if (input.toLowerCase() === 'n' || key.escape) {
 				goBack();
 			}
 		},
@@ -256,8 +258,10 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 									<Text color="green">✓ Merged</Text>
 								) : check.upstreamStatus === 'active' ? (
 									<Text color="yellow">⚠ Not merged</Text>
-								) : (
+								) : check.hasUnpushedCommits ? (
 									<Text color="yellow">⚠ No upstream</Text>
+								) : (
+									<Text color="green">✓ No upstream</Text>
 								)}
 							</Text>
 						</Box>

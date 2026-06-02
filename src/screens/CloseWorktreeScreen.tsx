@@ -95,7 +95,12 @@ export function CloseWorktreeScreen({ groveId, worktreePath }: CloseWorktreeScre
 					gitService.getBranchUpstreamStatus(worktree.worktreePath),
 				]);
 
-				const foundIssues = uncommitted || unpushed || upstreamStatus !== 'gone';
+				// Issue if there are uncommitted changes, unpushed commits (this also
+				// covers a no-upstream branch whose HEAD is not on any remote), or the
+				// branch is pushed but not merged ('active'). A branch with no upstream
+				// and nothing to lose ('none' with no changes/unpushed commits) is an
+				// untouched branch and should not produce a warning.
+				const foundIssues = uncommitted || unpushed || upstreamStatus === 'active';
 
 				setCheck({
 					repositoryName: worktree.repositoryName,
@@ -161,10 +166,10 @@ export function CloseWorktreeScreen({ groveId, worktreePath }: CloseWorktreeScre
 
 	// Handle Y/N key press for confirmation (when all checks pass)
 	useInput(
-		(input, _key) => {
+		(input, key) => {
 			if (input.toLowerCase() === 'y') {
 				handleConfirm();
-			} else if (input.toLowerCase() === 'n') {
+			} else if (input.toLowerCase() === 'n' || key.escape) {
 				goBack();
 			}
 		},
@@ -265,8 +270,10 @@ export function CloseWorktreeScreen({ groveId, worktreePath }: CloseWorktreeScre
 									<Text color="green">✓ Merged</Text>
 								) : check.upstreamStatus === 'active' ? (
 									<Text color="yellow">⚠ Not merged</Text>
-								) : (
+								) : check.hasUnpushedCommits ? (
 									<Text color="yellow">⚠ No upstream</Text>
+								) : (
+									<Text color="green">✓ No upstream</Text>
 								)}
 							</Text>
 						</Box>
