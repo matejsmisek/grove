@@ -820,6 +820,12 @@ Completed at: ${new Date().toISOString()}
 		// Remove all worktrees using GitService
 		if (metadata && metadata.worktrees.length > 0) {
 			for (const worktree of metadata.worktrees) {
+				// Skip worktrees that have already been closed - their working
+				// tree no longer exists on disk, so git would error out.
+				if (worktree.closed) {
+					continue;
+				}
+
 				try {
 					const result = await this.gitService.removeWorktree(
 						worktree.repositoryPath,
