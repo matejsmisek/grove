@@ -10,6 +10,7 @@ export { FileService } from './FileService.js';
 export { GitService } from './GitService.js';
 export { GroveService } from './GroveService.js';
 export { SessionTrackingService, type ISessionTrackingService } from './SessionTrackingService.js';
+export { TaskService } from './TaskService.js';
 export { WorkspaceService } from './WorkspaceService.js';
 export { detectTerminal, openTerminalInPath } from './TerminalService.js';
 export type { TerminalResult } from './TerminalService.js';
@@ -34,6 +35,18 @@ export type { IFileService } from './FileService.js';
 export type { IGitService } from './GitService.js';
 export type { IGroveService } from './GroveService.js';
 export type { ILLMService } from './LLMService.js';
+export type {
+	ITaskService,
+	Task,
+	TaskContext,
+	TaskDefinition,
+	TaskFilter,
+	TaskHandle,
+	TaskLogLine,
+	TaskLogStream,
+	TaskServiceOptions,
+	TaskStatus,
+} from './TaskService.js';
 export type { IWorkspaceService } from './WorkspaceService.js';
 
 // Storage service interfaces (co-located with implementations)
@@ -78,6 +91,7 @@ export {
 	SessionsServiceToken,
 	SessionTrackingServiceToken,
 	SettingsServiceToken,
+	TaskServiceToken,
 	WorkspaceServiceToken,
 } from './tokens.js';
 

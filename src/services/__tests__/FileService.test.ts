@@ -190,32 +190,32 @@ describe('FileService', () => {
 			vol.mkdirSync(sourceDir, { recursive: true });
 		});
 
-		it('should copy a file to destination', () => {
+		it('should copy a file to destination', async () => {
 			const testContent = 'test content';
 			createFile(vol, path.join(sourceDir, 'test.txt'), testContent);
 
-			service.copyFile(sourceDir, destDir, 'test.txt');
+			await service.copyFile(sourceDir, destDir, 'test.txt');
 
 			const destPath = path.join(destDir, 'test.txt');
 			expect(vol.existsSync(destPath)).toBe(true);
 			expect(vol.readFileSync(destPath, 'utf-8')).toBe(testContent);
 		});
 
-		it('should preserve directory structure', () => {
+		it('should preserve directory structure', async () => {
 			const testContent = 'nested content';
 			createFile(vol, path.join(sourceDir, 'subdir', 'nested.txt'), testContent);
 
-			service.copyFile(sourceDir, destDir, 'subdir/nested.txt');
+			await service.copyFile(sourceDir, destDir, 'subdir/nested.txt');
 
 			const destPath = path.join(destDir, 'subdir', 'nested.txt');
 			expect(vol.existsSync(destPath)).toBe(true);
 			expect(vol.readFileSync(destPath, 'utf-8')).toBe(testContent);
 		});
 
-		it('should create destination directory if it does not exist', () => {
+		it('should create destination directory if it does not exist', async () => {
 			createFile(vol, path.join(sourceDir, 'test.txt'), 'content');
 
-			service.copyFile(sourceDir, destDir, 'test.txt');
+			await service.copyFile(sourceDir, destDir, 'test.txt');
 
 			expect(vol.existsSync(destDir)).toBe(true);
 			expect(vol.existsSync(path.join(destDir, 'test.txt'))).toBe(true);

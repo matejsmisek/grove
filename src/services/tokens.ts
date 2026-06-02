@@ -17,6 +17,7 @@ import type { IGitService } from './GitService.js';
 import type { IGroveService } from './GroveService.js';
 import type { ILLMService } from './LLMService.js';
 import type { ISessionTrackingService } from './SessionTrackingService.js';
+import type { ITaskService } from './TaskService.js';
 import type { IWorkspaceService } from './WorkspaceService.js';
 
 // Storage service tokens
@@ -38,6 +39,7 @@ export const LLMServiceToken = createToken<ILLMService>('LLMService');
 export const WorkspaceServiceToken = createToken<IWorkspaceService>('WorkspaceService');
 export const SessionTrackingServiceToken =
 	createToken<ISessionTrackingService>('SessionTrackingService');
+export const TaskServiceToken = createToken<ITaskService>('TaskService');
 
 // Plugin system tokens
 export const PluginRegistryToken = createToken<IPluginRegistry>('PluginRegistry');

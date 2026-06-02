@@ -23,6 +23,7 @@ import { GitService } from './GitService.js';
 import { GroveService } from './GroveService.js';
 import { LLMService } from './LLMService.js';
 import { SessionTrackingService } from './SessionTrackingService.js';
+import { TaskService } from './TaskService.js';
 import { WorkspaceService } from './WorkspaceService.js';
 import {
 	ClaudeSessionServiceToken,
@@ -39,6 +40,7 @@ import {
 	SessionTrackingServiceToken,
 	SessionsServiceToken,
 	SettingsServiceToken,
+	TaskServiceToken,
 	WorkspaceServiceToken,
 } from './tokens.js';
 
@@ -57,6 +59,7 @@ import {
  * - GitService: no dependencies
  * - ContextService: no dependencies
  * - FileService: no dependencies
+ * - TaskService: no dependencies
  * - ClaudeSessionService: depends on SettingsService, GroveConfigService
  * - LLMService: depends on SettingsService
  * - GroveService: depends on SettingsService, GrovesService, GroveConfigService, GitService, ContextService, FileService
@@ -111,6 +114,9 @@ export function registerServices(
 	c.registerSingleton(GitServiceToken, () => new GitService());
 	c.registerSingleton(ContextServiceToken, () => new ContextService());
 	c.registerSingleton(FileServiceToken, () => new FileService());
+
+	// TaskService manages background jobs (no dependencies)
+	c.registerSingleton(TaskServiceToken, () => new TaskService());
 
 	// ClaudeSessionService depends on SettingsService and GroveConfigService
 	c.registerSingleton(

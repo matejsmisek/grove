@@ -19,9 +19,9 @@ export interface IFileService {
 	/** Find files matching multiple glob patterns */
 	matchPatterns(sourceDir: string, patterns: string[]): Promise<FileMatchResult[]>;
 	/** Copy a single file preserving directory structure */
-	copyFile(sourceDir: string, destDir: string, relativeFilePath: string): void;
+	copyFile(sourceDir: string, destDir: string, relativeFilePath: string): Promise<void>;
 	/** Create a symbolic link for a file, preserving directory structure */
-	linkFile(sourceDir: string, destDir: string, relativeFilePath: string): void;
+	linkFile(sourceDir: string, destDir: string, relativeFilePath: string): Promise<void>;
 	/** Copy or symlink files matching glob patterns */
 	copyFilesFromPatterns(
 		sourceDir: string,
@@ -90,18 +90,16 @@ export class FileService implements IFileService {
 	 * @param destDir - Destination base directory
 	 * @param relativeFilePath - Relative path of the file to copy
 	 */
-	copyFile(sourceDir: string, destDir: string, relativeFilePath: string): void {
+	async copyFile(sourceDir: string, destDir: string, relativeFilePath: string): Promise<void> {
 		const sourcePath = path.join(sourceDir, relativeFilePath);
 		const destPath = path.join(destDir, relativeFilePath);
 
-		// Create destination directory if it doesn't exist
+		// Create destination directory if it doesn't exist (mkdir recursive is idempotent)
 		const destFileDir = path.dirname(destPath);
-		if (!fs.existsSync(destFileDir)) {
-			fs.mkdirSync(destFileDir, { recursive: true });
-		}
+		await fs.promises.mkdir(destFileDir, { recursive: true });
 
 		// Copy the file
-		fs.copyFileSync(sourcePath, destPath);
+		await fs.promises.copyFile(sourcePath, destPath);
 	}
 
 	/**
@@ -111,18 +109,16 @@ export class FileService implements IFileService {
 	 * @param destDir - Destination base directory
 	 * @param relativeFilePath - Relative path of the file to link
 	 */
-	linkFile(sourceDir: string, destDir: string, relativeFilePath: string): void {
+	async linkFile(sourceDir: string, destDir: string, relativeFilePath: string): Promise<void> {
 		const sourcePath = path.resolve(sourceDir, relativeFilePath);
 		const destPath = path.join(destDir, relativeFilePath);
 
-		// Create destination directory if it doesn't exist
+		// Create destination directory if it doesn't exist (mkdir recursive is idempotent)
 		const destFileDir = path.dirname(destPath);
-		if (!fs.existsSync(destFileDir)) {
-			fs.mkdirSync(destFileDir, { recursive: true });
-		}
+		await fs.promises.mkdir(destFileDir, { recursive: true });
 
 		// Create symbolic link pointing to the source file
-		fs.symlinkSync(sourcePath, destPath);
+		await fs.promises.symlink(sourcePath, destPath);
 	}
 
 	/**
@@ -146,10 +142,8 @@ export class FileService implements IFileService {
 			return { success: true, copiedFiles, linkedFiles, errors };
 		}
 
-		// Ensure destination directory exists
-		if (!fs.existsSync(destDir)) {
-			fs.mkdirSync(destDir, { recursive: true });
-		}
+		// Ensure destination directory exists (mkdir recursive is idempotent)
+		await fs.promises.mkdir(destDir, { recursive: true });
 
 		for (const entry of patterns) {
 			const patternStr = getPatternString(entry);
@@ -163,10 +157,10 @@ export class FileService implements IFileService {
 				for (const relativeFilePath of matches) {
 					try {
 						if (mode === 'link') {
-							this.linkFile(sourceDir, destDir, relativeFilePath);
+							await this.linkFile(sourceDir, destDir, relativeFilePath);
 							linkedFiles.push(relativeFilePath);
 						} else {
-							this.copyFile(sourceDir, destDir, relativeFilePath);
+							await this.copyFile(sourceDir, destDir, relativeFilePath);
 							copiedFiles.push(relativeFilePath);
 						}
 					} catch (error) {

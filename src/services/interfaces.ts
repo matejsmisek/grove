@@ -26,6 +26,7 @@ export type { IFileService } from './FileService.js';
 export type { IGroveService } from './GroveService.js';
 export type { IClaudeSessionService } from './ClaudeSessionService.js';
 export type { ILLMService } from './LLMService.js';
+export type { ITaskService } from './TaskService.js';
 export type { IWorkspaceService } from './WorkspaceService.js';
 
 // Shared data/result types
