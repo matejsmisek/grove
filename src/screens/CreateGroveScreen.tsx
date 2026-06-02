@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
@@ -66,6 +66,38 @@ export function CreateGroveScreen() {
 	// Recent selections state
 	const [selectedRecentKeys, setSelectedRecentKeys] = useState<Set<string>>(new Set());
 
+	// Monorepo project folders, loaded asynchronously on mount to avoid blocking
+	// the render thread with synchronous directory reads.
+	const [projectsByRepo, setProjectsByRepo] = useState<Map<string, string[]>>(new Map());
+	const [projectsLoading, setProjectsLoading] = useState(false);
+
+	useEffect(() => {
+		const monorepos = repositories.filter((repo) => repo.isMonorepo);
+		if (monorepos.length === 0) {
+			return;
+		}
+
+		let cancelled = false;
+		setProjectsLoading(true);
+
+		Promise.all(
+			monorepos.map(async (repo) => [repo.path, await getMonorepoProjects(repo.path)] as const)
+		)
+			.then((entries) => {
+				if (cancelled) return;
+				setProjectsByRepo(new Map(entries));
+				setProjectsLoading(false);
+			})
+			.catch(() => {
+				if (cancelled) return;
+				setProjectsLoading(false);
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [repositories]);
+
 	// Get recent selections (filtered to registered repos)
 	const recentSelections = useMemo(() => {
 		const registeredPaths = new Set(repositories.map((r) => r.path));
@@ -124,17 +156,18 @@ export function CreateGroveScreen() {
 		[selectedRepos]
 	);
 
-	// Build flat list of all projects from selected monorepos for navigation
+	// Build flat list of all projects from selected monorepos for navigation.
+	// Reads from the pre-loaded projectsByRepo map (no synchronous IO on render).
 	const allProjects = useMemo(() => {
 		const projects: { repo: Repository; projectPath: string }[] = [];
 		for (const repo of selectedMonorepos) {
-			const repoProjects = getMonorepoProjects(repo.path);
+			const repoProjects = projectsByRepo.get(repo.path) ?? [];
 			for (const projectPath of repoProjects) {
 				projects.push({ repo, projectPath });
 			}
 		}
 		return projects;
-	}, [selectedMonorepos]);
+	}, [selectedMonorepos, projectsByRepo]);
 
 	// Generate unique key for project selection
 	const getProjectKey = (repoPath: string, projectPath: string): string => {
@@ -178,7 +211,7 @@ export function CreateGroveScreen() {
 
 		// Add monorepo project selections
 		for (const repo of selectedMonorepos) {
-			const repoProjects = getMonorepoProjects(repo.path);
+			const repoProjects = projectsByRepo.get(repo.path) ?? [];
 			const selectedProjectPaths = repoProjects.filter((projectPath) =>
 				selectedProjects.has(getProjectKey(repo.path, projectPath))
 			);
@@ -244,6 +277,12 @@ export function CreateGroveScreen() {
 			} else if (key.return) {
 				// Proceed to next step
 				// Allow empty grove creation (no repositories selected) - worktrees can be added later
+
+				// Wait for monorepo project folders to finish loading before deciding
+				// whether to show the project selection step.
+				if (hasMonorepos && projectsLoading) {
+					return;
+				}
 
 				// If any monorepos are selected (not via recent), go to project selection step
 				if (hasMonorepos && allProjects.length > 0) {
@@ -573,6 +612,12 @@ export function CreateGroveScreen() {
 					</Text>
 					<Text dimColor>• Esc to cancel</Text>
 				</Box>
+
+				{hasMonorepos && projectsLoading && (
+					<Box marginTop={1}>
+						<Text dimColor>Loading monorepo projects…</Text>
+					</Box>
+				)}
 
 				<Box marginTop={1}>
 					<Text color="yellow">

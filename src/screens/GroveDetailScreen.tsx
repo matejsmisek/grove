@@ -262,12 +262,12 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		}
 	};
 
-	const handleOpenInTerminal = () => {
+	const handleOpenInTerminal = async () => {
 		const settings = settingsService.readSettings();
 
 		// Resolve terminal config, respecting Claude terminal preference
 		const terminalConfig = settings.selectedClaudeTerminal
-			? (detectTerminal(settings.selectedClaudeTerminal) ?? settings.terminal)
+			? ((await detectTerminal(settings.selectedClaudeTerminal)) ?? settings.terminal)
 			: settings.terminal;
 
 		if (!terminalConfig) {

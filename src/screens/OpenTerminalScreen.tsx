@@ -37,57 +37,69 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
 
 	useEffect(() => {
-		// Read terminal config, respecting Claude terminal preference
-		const settings = settingsService.readSettings();
-		const resolvedConfig = settings.selectedClaudeTerminal
-			? (detectTerminal(settings.selectedClaudeTerminal) ?? settings.terminal)
-			: settings.terminal;
+		let cancelled = false;
 
-		if (!resolvedConfig) {
-			setError('No terminal configured. Please restart Grove to detect available terminals.');
-			setLoading(false);
-			return;
-		}
-		setTerminalConfig(resolvedConfig);
+		const loadTerminal = async () => {
+			// Read terminal config, respecting Claude terminal preference
+			const settings = settingsService.readSettings();
+			const resolvedConfig = settings.selectedClaudeTerminal
+				? ((await detectTerminal(settings.selectedClaudeTerminal)) ?? settings.terminal)
+				: settings.terminal;
 
-		const groveRef = grovesService.getGroveById(groveId);
-		if (!groveRef) {
-			setError('Grove not found');
-			setLoading(false);
-			return;
-		}
+			if (cancelled) return;
 
-		setGroveName(groveRef.name);
-
-		const metadata = grovesService.readGroveMetadata(groveRef.path);
-		if (!metadata) {
-			setError('Grove metadata not found');
-			setLoading(false);
-			return;
-		}
-
-		if (metadata.worktrees.length === 0) {
-			setError('No worktrees found in this grove');
-			setLoading(false);
-			return;
-		}
-
-		// If only one worktree, open terminal directly
-		if (metadata.worktrees.length === 1) {
-			const terminalPath = getTerminalPath(metadata.worktrees[0]);
-			const result = openTerminalInPath(terminalPath, resolvedConfig);
-			if (result.success) {
-				goBack();
-			} else {
-				setError(result.message);
+			if (!resolvedConfig) {
+				setError('No terminal configured. Please restart Grove to detect available terminals.');
 				setLoading(false);
+				return;
 			}
-			return;
-		}
+			setTerminalConfig(resolvedConfig);
 
-		// Multiple worktrees - show selection
-		setWorktrees(metadata.worktrees);
-		setLoading(false);
+			const groveRef = grovesService.getGroveById(groveId);
+			if (!groveRef) {
+				setError('Grove not found');
+				setLoading(false);
+				return;
+			}
+
+			setGroveName(groveRef.name);
+
+			const metadata = grovesService.readGroveMetadata(groveRef.path);
+			if (!metadata) {
+				setError('Grove metadata not found');
+				setLoading(false);
+				return;
+			}
+
+			if (metadata.worktrees.length === 0) {
+				setError('No worktrees found in this grove');
+				setLoading(false);
+				return;
+			}
+
+			// If only one worktree, open terminal directly
+			if (metadata.worktrees.length === 1) {
+				const terminalPath = getTerminalPath(metadata.worktrees[0]);
+				const result = openTerminalInPath(terminalPath, resolvedConfig);
+				if (result.success) {
+					goBack();
+				} else {
+					setError(result.message);
+					setLoading(false);
+				}
+				return;
+			}
+
+			// Multiple worktrees - show selection
+			setWorktrees(metadata.worktrees);
+			setLoading(false);
+		};
+
+		void loadTerminal();
+
+		return () => {
+			cancelled = true;
+		};
 	}, [groveId, goBack]);
 
 	const handleSelect = (worktree: Worktree) => {

@@ -51,7 +51,7 @@ workspaceServiceFromDI.setCurrentContext(workspaceContext);
 // Detect terminal on first startup if not already configured
 const settings = settingsService.readSettings();
 if (!settings.terminal) {
-	const terminalConfig = detectTerminal(settings.selectedClaudeTerminal);
+	const terminalConfig = await detectTerminal(settings.selectedClaudeTerminal);
 	if (terminalConfig) {
 		settingsService.updateSettings({ terminal: terminalConfig });
 	}
@@ -229,7 +229,7 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 	}
 } else if (args.includes('--register')) {
 	// Handle --register flag
-	const result = registerRepository();
+	const result = await registerRepository();
 
 	if (result.success) {
 		console.log('✓', result.message);

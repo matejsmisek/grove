@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
@@ -54,6 +54,38 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 	const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(null);
 	const [projectCursor, setProjectCursor] = useState(0);
 
+	// Monorepo project folders, loaded asynchronously on mount to avoid blocking
+	// the render thread with synchronous directory reads.
+	const [projectsByRepo, setProjectsByRepo] = useState<Map<string, string[]>>(new Map());
+	const [projectsLoading, setProjectsLoading] = useState(false);
+
+	useEffect(() => {
+		const monorepos = repositories.filter((repo) => repo.isMonorepo);
+		if (monorepos.length === 0) {
+			return;
+		}
+
+		let cancelled = false;
+		setProjectsLoading(true);
+
+		Promise.all(
+			monorepos.map(async (repo) => [repo.path, await getMonorepoProjects(repo.path)] as const)
+		)
+			.then((entries) => {
+				if (cancelled) return;
+				setProjectsByRepo(new Map(entries));
+				setProjectsLoading(false);
+			})
+			.catch(() => {
+				if (cancelled) return;
+				setProjectsLoading(false);
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [repositories]);
+
 	// Get recent selections (filtered to registered repos)
 	const recentSelections = useMemo(() => {
 		const registeredPaths = new Set(repositories.map((r) => r.path));
@@ -94,13 +126,13 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 	// Get selected repository
 	const selectedRepo = selectedRepoIndex !== null ? repositories[selectedRepoIndex] : null;
 
-	// Get projects for selected monorepo
+	// Get projects for selected monorepo (from the pre-loaded map; no render-time IO)
 	const projects = useMemo(() => {
 		if (!selectedRepo || !selectedRepo.isMonorepo) {
 			return [];
 		}
-		return getMonorepoProjects(selectedRepo.path);
-	}, [selectedRepo]);
+		return projectsByRepo.get(selectedRepo.path) ?? [];
+	}, [selectedRepo, projectsByRepo]);
 
 	// Build RepositorySelection from user selections
 	const buildSelection = (): RepositorySelection | null => {
@@ -153,16 +185,22 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 				} else if (item.type === 'repo' && item.repo && item.repoIndex !== undefined) {
 					const repo = item.repo;
 					const repoIndex = item.repoIndex;
-					setSelectedRepoIndex(repoIndex);
 
 					// If monorepo with projects, go to project selection
 					if (repo.isMonorepo) {
-						const repoProjects = getMonorepoProjects(repo.path);
+						// Wait for project folders to finish loading before deciding.
+						if (projectsLoading) {
+							return;
+						}
+						setSelectedRepoIndex(repoIndex);
+						const repoProjects = projectsByRepo.get(repo.path) ?? [];
 						if (repoProjects.length > 0) {
 							setProjectCursor(0);
 							setStep('projects');
 							return;
 						}
+					} else {
+						setSelectedRepoIndex(repoIndex);
 					}
 
 					// Not a monorepo or no projects, proceed to creation
@@ -356,6 +394,12 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 					<Text dimColor>• Enter or Space to select</Text>
 					<Text dimColor>• Esc to go back</Text>
 				</Box>
+
+				{projectsLoading && (
+					<Box marginTop={1}>
+						<Text dimColor>Loading monorepo projects…</Text>
+					</Box>
+				)}
 			</Box>
 		);
 	}

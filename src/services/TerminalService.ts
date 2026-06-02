@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import os from 'os';
 
 import type { TerminalConfig } from '../storage/types.js';
@@ -54,16 +54,15 @@ const WINDOWS_TERMINAL: TerminalDefinition = {
 };
 
 /**
- * Check if a command exists in the system PATH
+ * Check if a command exists in the system PATH (async, non-blocking)
  */
-function commandExists(command: string): boolean {
-	try {
-		const checkCmd = os.platform() === 'win32' ? `where ${command}` : `which ${command}`;
-		execSync(checkCmd, { stdio: 'ignore' });
-		return true;
-	} catch {
-		return false;
-	}
+function commandExists(command: string): Promise<boolean> {
+	return new Promise((resolve) => {
+		const checkCmd = os.platform() === 'win32' ? 'where' : 'which';
+		const proc = spawn(checkCmd, [command], { stdio: 'ignore' });
+		proc.on('close', (code) => resolve(code === 0));
+		proc.on('error', () => resolve(false));
+	});
 }
 
 /**
@@ -71,7 +70,7 @@ function commandExists(command: string): boolean {
  * If preferredCommand is provided, that terminal will be tried first before
  * falling back to the default detection order.
  */
-export function detectTerminal(preferredCommand?: string): TerminalConfig | null {
+export async function detectTerminal(preferredCommand?: string): Promise<TerminalConfig | null> {
 	const platform = os.platform();
 
 	switch (platform) {
@@ -94,7 +93,7 @@ export function detectTerminal(preferredCommand?: string): TerminalConfig | null
 
 			// Try each terminal in order of preference
 			for (const terminal of terminals) {
-				if (commandExists(terminal.command)) {
+				if (await commandExists(terminal.command)) {
 					return {
 						command: terminal.command,
 						args: terminal.args,

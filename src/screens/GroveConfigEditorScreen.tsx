@@ -160,7 +160,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 	const [editingListIndex, setEditingListIndex] = useState(-1);
 
 	// Scan for config files
-	const scanConfigFiles = () => {
+	const scanConfigFiles = async () => {
 		if (!repository) return;
 
 		const files: ConfigFileEntry[] = [];
@@ -187,7 +187,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 
 		// For monorepos, check project folders
 		if (repository.isMonorepo) {
-			const projects = getMonorepoProjects(repository.path);
+			const projects = await getMonorepoProjects(repository.path);
 			for (const projectPath of projects) {
 				if (groveConfigService.groveConfigExists(repository.path, projectPath)) {
 					files.push({
@@ -213,7 +213,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 
 	// Initial scan
 	useEffect(() => {
-		scanConfigFiles();
+		void scanConfigFiles();
 	}, [repository]);
 
 	// Load config for editing
@@ -260,7 +260,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 		}
 
 		// Refresh the file list
-		scanConfigFiles();
+		void scanConfigFiles();
 
 		// Open the new file for editing
 		const displayPath = projectPath
@@ -282,14 +282,14 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 	};
 
 	// Start create new config flow
-	const startCreateConfig = () => {
+	const startCreateConfig = async () => {
 		if (!repository) return;
 
 		// Build list of available folders
 		const folders: Array<{ path?: string; label: string }> = [{ path: undefined, label: '(root)' }];
 
 		if (repository.isMonorepo) {
-			const projects = getMonorepoProjects(repository.path);
+			const projects = await getMonorepoProjects(repository.path);
 			for (const projectPath of projects) {
 				folders.push({ path: projectPath, label: projectPath });
 			}
@@ -380,7 +380,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 				} else if (key.return && configFiles.length > 0) {
 					loadConfig(configFiles[selectedIndex]);
 				} else if (input === 'c' || input === 'C') {
-					startCreateConfig();
+					void startCreateConfig();
 				}
 			} else if (viewMode === 'createSelectType') {
 				if (key.escape) {
@@ -415,7 +415,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					setViewMode('fileList');
 					setEditingFile(null);
 					setSelectedIndex(0);
-					scanConfigFiles(); // Refresh in case new file was created
+					void scanConfigFiles(); // Refresh in case new file was created
 				} else if (key.upArrow) {
 					setEditingFieldIndex((prev) => (prev > 0 ? prev - 1 : CONFIG_FIELDS.length - 1));
 				} else if (key.downArrow) {

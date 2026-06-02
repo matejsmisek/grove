@@ -7,10 +7,10 @@ import type { RegisterResult } from './types.js';
  * Register the current directory as a repository
  * Uses the DI container to get the workspace-aware RepositoryService
  */
-export function registerRepository(cwd?: string): RegisterResult {
+export async function registerRepository(cwd?: string): Promise<RegisterResult> {
 	try {
 		// Verify this is a valid git repository (not a worktree)
-		const repoPath = verifyValidRepository(cwd);
+		const repoPath = await verifyValidRepository(cwd);
 
 		// Get workspace-aware repository service from DI container
 		const container = getContainer();
