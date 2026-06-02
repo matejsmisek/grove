@@ -114,6 +114,8 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		workspaceContext?.type === 'workspace' ? workspaceContext.config?.name : null;
 	const [showInitLog, setShowInitLog] = useState(false);
 	const [initLogContent, setInitLogContent] = useState<string>('');
+	// Whether closed worktrees are shown. Defaults to hidden and is not persisted.
+	const [showClosed, setShowClosed] = useState(false);
 
 	// Load grove details on mount
 	useEffect(() => {
@@ -408,6 +410,13 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	// Determine if we're in single-worktree shortcut mode
 	const isSingleWorktreeMode = worktreeDetails.length === 1;
 
+	// Closed worktrees are hidden by default; track which ones are visible
+	const closedCount = worktreeDetails.filter((d) => d.worktree.closed).length;
+	const hasClosed = closedCount > 0;
+	const visibleDetails = showClosed
+		? worktreeDetails
+		: worktreeDetails.filter((d) => !d.worktree.closed);
+
 	// Handle keyboard navigation
 	useInput(
 		(input, key) => {
@@ -448,6 +457,9 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 				} else if (input === 'a' && isSingleWorktreeMode) {
 					// Allow adding worktree from single-worktree mode
 					navigate('addWorktree', { groveId });
+				} else if (input === 'd' && isSingleWorktreeMode) {
+					// Toggle visibility of closed worktrees
+					setShowClosed((prev) => !prev);
 				}
 			} else {
 				// Main screen navigation (multiple worktrees)
@@ -476,6 +488,9 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					navigate('closeGrove', { groveId });
 				} else if (input === 'a') {
 					navigate('addWorktree', { groveId });
+				} else if (input === 'd') {
+					// Toggle visibility of closed worktrees
+					setShowClosed((prev) => !prev);
 				}
 			}
 		},
@@ -620,19 +635,30 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					{/* Worktrees/Panels Section */}
 					<Box marginBottom={1}>
 						<Text bold underline>
-							Worktrees ({worktreeDetails.length})
+							Worktrees ({visibleDetails.length})
 						</Text>
+						{hasClosed && !showClosed && <Text dimColor> ({closedCount} closed hidden)</Text>}
 					</Box>
 
-					{worktreeDetails.length === 0 ? (
+					{visibleDetails.length === 0 ? (
 						<Box marginLeft={2}>
-							<Text dimColor>No worktrees in this grove</Text>
+							<Text dimColor>
+								{worktreeDetails.length === 0
+									? 'No worktrees in this grove'
+									: 'No open worktrees — press d to show closed'}
+							</Text>
 						</Box>
 					) : (
 						<Box flexDirection="column">
 							{worktreeDetails.map((detail, index) => {
 								const isSelected = index === selectedIndex;
 								const isClosed = detail.worktree.closed === true;
+
+								// Hide closed worktrees unless the user has toggled them on
+								if (isClosed && !showClosed) {
+									return null;
+								}
+
 								const hasChanges = !isClosed && detail.fileStats.total > 0;
 								const sessionCounts = getSessionCounts(detail.worktree.worktreePath);
 
@@ -742,19 +768,16 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 
 					{/* Help text */}
 					<Box marginTop={1} flexDirection="column">
-						{isSingleWorktreeMode ? (
-							<Text dimColor>
-								↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>a</Text> Add Worktree •{' '}
-								<Text bold>c</Text> Close Grove • <Text bold>Shift+C</Text> Close Merged •{' '}
-								<Text bold>ESC</Text> Back
-							</Text>
-						) : (
-							<Text dimColor>
-								↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>a</Text> Add Worktree •{' '}
-								<Text bold>c</Text> Close Grove • <Text bold>Shift+C</Text> Close Merged •{' '}
-								<Text bold>ESC</Text> Back
-							</Text>
-						)}
+						<Text dimColor>
+							↑↓ Navigate • <Text bold>Enter</Text> Select • <Text bold>a</Text> Add Worktree •{' '}
+							<Text bold>c</Text> Close Grove • <Text bold>Shift+C</Text> Close Merged •{' '}
+							{hasClosed && (
+								<>
+									<Text bold>d</Text> {showClosed ? 'Hide' : 'Show'} Closed •{' '}
+								</>
+							)}
+							<Text bold>ESC</Text> Back
+						</Text>
 					</Box>
 				</>
 			)}
