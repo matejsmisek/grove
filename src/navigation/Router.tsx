@@ -2,6 +2,7 @@ import React from 'react';
 
 import { Box, Text } from 'ink';
 
+import { ActivityScreen } from '../screens/ActivityScreen.js';
 import { AddWorktreeScreen } from '../screens/AddWorktreeScreen.js';
 import { ChatScreen } from '../screens/ChatScreen.js';
 import { ClaudeTerminalSettingsScreen } from '../screens/ClaudeTerminalSettingsScreen.js';
@@ -36,6 +37,8 @@ export function Router() {
 			return <HomeScreen />;
 		case 'chat':
 			return <ChatScreen />;
+		case 'activity':
+			return <ActivityScreen />;
 		case 'createGrove':
 			return <CreateGroveScreen />;
 		case 'groveDetail':

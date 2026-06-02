@@ -2,6 +2,7 @@
 export type Routes = {
 	home: Record<string, never>;
 	chat: Record<string, never>;
+	activity: Record<string, never>;
 	createGrove: Record<string, never>;
 	groveDetail: { groveId: string; focusWorktreeName?: string };
 	closeGrove: { groveId: string };

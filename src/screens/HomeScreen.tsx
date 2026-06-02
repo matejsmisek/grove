@@ -82,6 +82,7 @@ export function HomeScreen() {
 
 	// Menu options
 	const menuOptions: MenuOption[] = [
+		{ label: 'Background Tasks', action: () => navigate('activity', {}) },
 		{ label: 'Settings', action: () => navigate('settings', {}) },
 		{ label: 'Quit', action: () => exit() },
 	];

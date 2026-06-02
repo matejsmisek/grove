@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
@@ -6,14 +6,21 @@ import TextInput from 'ink-text-input';
 
 import { useService } from '../di/index.js';
 import { getMonorepoProjects } from '../git/index.js';
+import { useTask } from '../hooks/useTasks.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
 	GroveServiceToken,
 	GrovesServiceToken,
 	RecentSelectionsServiceToken,
 	RepositoryServiceToken,
+	TaskServiceToken,
 } from '../services/tokens.js';
-import type { RecentSelection, Repository, RepositorySelection } from '../storage/index.js';
+import type {
+	GroveMetadata,
+	RecentSelection,
+	Repository,
+	RepositorySelection,
+} from '../storage/index.js';
 
 type AddWorktreeStep = 'name' | 'repositories' | 'projects' | 'creating' | 'done' | 'error';
 
@@ -41,6 +48,7 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 	const grovesService = useService(GrovesServiceToken);
 	const repositoryService = useService(RepositoryServiceToken);
 	const recentSelectionsService = useService(RecentSelectionsServiceToken);
+	const taskService = useService(TaskServiceToken);
 
 	const [step, setStep] = useState<AddWorktreeStep>('name');
 	const [worktreeName, setWorktreeName] = useState('');
@@ -48,7 +56,11 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 	const [selectedRepoIndex, setSelectedRepoIndex] = useState<number | null>(null);
 	const [cursorIndex, setCursorIndex] = useState(0);
 	const [error, setError] = useState<string>('');
-	const [logMessages, setLogMessages] = useState<string[]>([]);
+
+	// Id of the background task running the worktree creation, observed via useTask.
+	const [taskId, setTaskId] = useState<string | null>(null);
+	const navHandledRef = useRef(false);
+	const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Project selection state for monorepos
 	const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(null);
@@ -243,14 +255,15 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 		{ isActive: step === 'projects' }
 	);
 
-	// Handle escape key for other steps
+	// Handle escape key for other steps. During 'creating', Esc leaves the task
+	// running in the background (reachable from Background Tasks).
 	useInput(
 		(_input, key) => {
 			if (key.escape) {
 				goBack();
 			}
 		},
-		{ isActive: step === 'error' || step === 'done' }
+		{ isActive: step === 'error' || step === 'done' || step === 'creating' }
 	);
 
 	const handleNameSubmit = (value: string) => {
@@ -272,31 +285,63 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 	};
 
 	const createWorktree = (repoIndex: number, projectPath: string | null) => {
-		setStep('creating');
-		setLogMessages([]);
-
 		const selection: RepositorySelection = {
 			repository: repositories[repoIndex],
 			projectPath: projectPath || undefined,
 		};
+		navHandledRef.current = false;
 
-		// Callback for live log streaming
-		const handleLog = (message: string) => {
-			setLogMessages((prev) => [...prev, message]);
-		};
-
-		groveService
-			.addWorktreeToGrove(groveId, selection, worktreeName, handleLog)
-			.then(() => {
+		// Run as a background task so it survives navigating away from this screen.
+		const { id } = taskService.run<GroveMetadata>({
+			type: 'addWorktree',
+			title: `Add worktree "${worktreeName}"`,
+			meta: { groveId, worktreeName },
+			execute: async (ctx) => {
+				const metadata = await groveService.addWorktreeToGrove(
+					groveId,
+					selection,
+					worktreeName,
+					ctx.log
+				);
 				recentSelectionsService.addRecentSelections([selection]);
-				setStep('done');
-				setTimeout(() => replace('groveDetail', { groveId, focusWorktreeName: worktreeName }), 1500);
-			})
-			.catch((err) => {
-				setError(err instanceof Error ? err.message : 'Failed to add worktree');
-				setStep('error');
-			});
+				return metadata;
+			},
+		});
+
+		setTaskId(id);
+		setStep('creating');
 	};
+
+	// Observe the task while mounted: navigate to the grove on success, surface
+	// the error on failure. If the user leaves, it keeps running in the background.
+	const creationTask = useTask(taskId);
+	useEffect(() => {
+		if (!creationTask || navHandledRef.current) {
+			return;
+		}
+
+		if (creationTask.status === 'succeeded') {
+			navHandledRef.current = true;
+			setStep('done');
+			navTimerRef.current = setTimeout(
+				() => replace('groveDetail', { groveId, focusWorktreeName: worktreeName }),
+				1500
+			);
+		} else if (creationTask.status === 'failed') {
+			navHandledRef.current = true;
+			setError(creationTask.error?.message ?? 'Failed to add worktree');
+			setStep('error');
+		}
+	}, [creationTask, replace, groveId, worktreeName]);
+
+	// Clear a pending navigation timer if the screen unmounts first.
+	useEffect(() => {
+		return () => {
+			if (navTimerRef.current) {
+				clearTimeout(navTimerRef.current);
+			}
+		};
+	}, []);
 
 	if (step === 'name') {
 		return (
@@ -471,15 +516,19 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 				</Box>
 
 				{/* Live log output */}
-				{logMessages.length > 0 && (
+				{(creationTask?.log.length ?? 0) > 0 && (
 					<Box flexDirection="column" borderStyle="single" borderColor="gray" padding={1} marginTop={1}>
-						{logMessages.slice(-15).map((msg, index) => (
+						{(creationTask?.log ?? []).slice(-15).map((line, index) => (
 							<Text key={index} dimColor>
-								{msg}
+								{line.text}
 							</Text>
 						))}
 					</Box>
 				)}
+
+				<Box marginTop={1}>
+					<Text dimColor>Press Esc to keep this running in the background</Text>
+				</Box>
 			</Box>
 		);
 	}

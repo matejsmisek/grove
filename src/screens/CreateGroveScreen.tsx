@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
@@ -6,14 +6,21 @@ import TextInput from 'ink-text-input';
 
 import { useService } from '../di/index.js';
 import { getMonorepoProjects } from '../git/index.js';
+import { useTask } from '../hooks/useTasks.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
 	GroveServiceToken,
 	LLMServiceToken,
 	RecentSelectionsServiceToken,
 	RepositoryServiceToken,
+	TaskServiceToken,
 } from '../services/tokens.js';
-import type { RecentSelection, Repository, RepositorySelection } from '../storage/index.js';
+import type {
+	GroveMetadata,
+	RecentSelection,
+	Repository,
+	RepositorySelection,
+} from '../storage/index.js';
 
 type CreateStep =
 	| 'description'
@@ -46,6 +53,7 @@ export function CreateGroveScreen() {
 	const llmService = useService(LLMServiceToken);
 	const repositoryService = useService(RepositoryServiceToken);
 	const recentSelectionsService = useService(RecentSelectionsServiceToken);
+	const taskService = useService(TaskServiceToken);
 
 	// Start at 'description' if LLM is configured, otherwise start at 'name' (offline mode)
 	const [step, setStep] = useState<CreateStep>(() =>
@@ -57,7 +65,11 @@ export function CreateGroveScreen() {
 	const [selectedRepoIndices, setSelectedRepoIndices] = useState<Set<number>>(new Set());
 	const [cursorIndex, setCursorIndex] = useState(0);
 	const [error, setError] = useState<string>('');
-	const [logMessages, setLogMessages] = useState<string[]>([]);
+
+	// Id of the background task running the grove creation, observed via useTask.
+	const [taskId, setTaskId] = useState<string | null>(null);
+	const navHandledRef = useRef(false);
+	const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Project selection state for monorepos
 	const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
@@ -361,7 +373,14 @@ export function CreateGroveScreen() {
 				goBack();
 			}
 		},
-		{ isActive: step === 'description' || step === 'name' || step === 'error' || step === 'done' }
+		{
+			isActive:
+				step === 'description' ||
+				step === 'name' ||
+				step === 'error' ||
+				step === 'done' ||
+				step === 'creating',
+		}
 	);
 
 	const handleDescriptionSubmit = (value: string) => {
@@ -417,29 +436,59 @@ export function CreateGroveScreen() {
 	};
 
 	const createGrove = () => {
-		setStep('creating');
-		setLogMessages([]); // Clear previous logs
-
 		const selections = buildSelections();
+		navHandledRef.current = false;
 
-		// Callback for live log streaming
-		const handleLog = (message: string) => {
-			setLogMessages((prev) => [...prev, message]);
-		};
-
-		groveService
-			.createGrove(groveName, selections, handleLog)
-			.then((metadata) => {
-				// Save selections to recent history
+		// Run the creation as a background task so it survives navigating away
+		// from this screen. The task owns the work; this screen only observes it.
+		const { id } = taskService.run<GroveMetadata>({
+			type: 'createGrove',
+			title: `Create grove "${groveName}"`,
+			meta: { groveName },
+			execute: async (ctx) => {
+				const metadata = await groveService.createGrove(groveName, selections, ctx.log);
+				// Save selections to recent history on success, regardless of whether
+				// this screen is still mounted.
 				recentSelectionsService.addRecentSelections(selections);
-				setStep('done');
-				setTimeout(() => replace('groveDetail', { groveId: metadata.id }), 1500);
-			})
-			.catch((err) => {
-				setError(err instanceof Error ? err.message : 'Failed to create grove');
-				setStep('error');
-			});
+				return metadata;
+			},
+		});
+
+		setTaskId(id);
+		setStep('creating');
 	};
+
+	// Observe the creation task while this screen is mounted: navigate to the
+	// new grove on success, surface the error on failure. If the user has left
+	// the screen, the task keeps running and is reachable from Background Tasks.
+	const creationTask = useTask(taskId);
+	useEffect(() => {
+		if (!creationTask || navHandledRef.current) {
+			return;
+		}
+
+		if (creationTask.status === 'succeeded') {
+			navHandledRef.current = true;
+			setStep('done');
+			const metadata = creationTask.result as GroveMetadata | undefined;
+			if (metadata) {
+				navTimerRef.current = setTimeout(() => replace('groveDetail', { groveId: metadata.id }), 1500);
+			}
+		} else if (creationTask.status === 'failed') {
+			navHandledRef.current = true;
+			setError(creationTask.error?.message ?? 'Failed to create grove');
+			setStep('error');
+		}
+	}, [creationTask, replace]);
+
+	// Clear a pending navigation timer if the screen unmounts first.
+	useEffect(() => {
+		return () => {
+			if (navTimerRef.current) {
+				clearTimeout(navTimerRef.current);
+			}
+		};
+	}, []);
 
 	if (step === 'description') {
 		return (
@@ -692,6 +741,7 @@ export function CreateGroveScreen() {
 
 	if (step === 'creating') {
 		const selections = buildSelections();
+		const logLines = creationTask?.log ?? [];
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
@@ -704,15 +754,19 @@ export function CreateGroveScreen() {
 				</Box>
 
 				{/* Live log output */}
-				{logMessages.length > 0 && (
+				{logLines.length > 0 && (
 					<Box flexDirection="column" borderStyle="single" borderColor="gray" padding={1} marginTop={1}>
-						{logMessages.slice(-15).map((msg, index) => (
+						{logLines.slice(-15).map((line, index) => (
 							<Text key={index} dimColor>
-								{msg}
+								{line.text}
 							</Text>
 						))}
 					</Box>
 				)}
+
+				<Box marginTop={1}>
+					<Text dimColor>Press Esc to keep this running in the background</Text>
+				</Box>
 			</Box>
 		);
 	}

@@ -103,6 +103,12 @@ export interface ITaskService {
 	get(id: string): Task | undefined;
 	/** List task snapshots, optionally filtered, newest first */
 	list(filter?: TaskFilter): Task[];
+	/**
+	 * Monotonically increasing version, bumped on any change. Use as the
+	 * `getSnapshot` for `useSyncExternalStore` when observing the task list,
+	 * since `list()` returns a fresh array on every call.
+	 */
+	getVersion(): number;
 	/** Request cancellation of a running task (cooperative via AbortSignal) */
 	cancel(id: string): void;
 	/** Remove a finished task from the registry (no-op if still running) */
@@ -136,6 +142,7 @@ export class TaskService implements ITaskService {
 	private readonly globalListeners = new Set<() => void>();
 	private readonly flushIntervalMs: number;
 	private counter = 0;
+	private version = 0;
 
 	constructor(options: TaskServiceOptions = {}) {
 		this.flushIntervalMs = options.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
@@ -230,6 +237,10 @@ export class TaskService implements ITaskService {
 		// same millisecond, where createdAt would tie).
 		matched.sort((a, b) => b.seq - a.seq);
 		return matched.map((m) => m.snap);
+	}
+
+	getVersion(): number {
+		return this.version;
 	}
 
 	cancel(id: string): void {
@@ -337,6 +348,7 @@ export class TaskService implements ITaskService {
 	}
 
 	private notifyGlobal(): void {
+		this.version++;
 		for (const listener of this.globalListeners) {
 			listener();
 		}

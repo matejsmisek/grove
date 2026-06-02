@@ -211,6 +211,23 @@ describe('TaskService', () => {
 		});
 	});
 
+	describe('getVersion', () => {
+		it('should increase when tasks change', async () => {
+			const before = service.getVersion();
+
+			const handle = service.run({
+				type: 'noop',
+				title: 'Noop',
+				execute: async () => undefined,
+			});
+			expect(service.getVersion()).toBeGreaterThan(before);
+
+			const afterRun = service.getVersion();
+			await handle.promise;
+			expect(service.getVersion()).toBeGreaterThan(afterRun);
+		});
+	});
+
 	describe('subscriptions', () => {
 		it('should notify task subscribers on change', async () => {
 			const handle = service.run({
