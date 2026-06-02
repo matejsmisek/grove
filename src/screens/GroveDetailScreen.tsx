@@ -620,7 +620,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					{/* Worktrees/Panels Section */}
 					<Box marginBottom={1}>
 						<Text bold underline>
-							Panels ({worktreeDetails.length})
+							Worktrees ({worktreeDetails.length})
 						</Text>
 					</Box>
 
