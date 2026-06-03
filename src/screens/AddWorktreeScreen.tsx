@@ -62,6 +62,7 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 	const [selectedRepoIndex, setSelectedRepoIndex] = useState<number | null>(null);
 	const [cursorIndex, setCursorIndex] = useState(0);
 	const [error, setError] = useState<string>('');
+	const [nameError, setNameError] = useState<string>('');
 
 	// Id of the background task running the worktree creation, observed via useTask.
 	const [taskId, setTaskId] = useState<string | null>(null);
@@ -295,11 +296,11 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 
 	const handleNameSubmit = (value: string) => {
 		if (!value.trim()) {
-			setError('Worktree name cannot be empty');
-			setStep('error');
+			setNameError('Worktree name cannot be empty');
 			return;
 		}
 
+		setNameError('');
 		setWorktreeName(value.trim());
 
 		if (repositories.length === 0) {
@@ -428,8 +429,21 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 
 				<Box marginBottom={1}>
 					<Text color="cyan">Name: </Text>
-					<TextInput value={worktreeName} onChange={setWorktreeName} onSubmit={handleNameSubmit} />
+					<TextInput
+						value={worktreeName}
+						onChange={(value) => {
+							setWorktreeName(value);
+							if (nameError) setNameError('');
+						}}
+						onSubmit={handleNameSubmit}
+					/>
 				</Box>
+
+				{nameError && (
+					<Box marginBottom={1}>
+						<Text color="red">{nameError}</Text>
+					</Box>
+				)}
 
 				<Box marginTop={1}>
 					<Text dimColor>Press Enter to continue, Esc to cancel</Text>

@@ -65,6 +65,7 @@ export function CreateGroveScreen() {
 	const [selectedRepoIndices, setSelectedRepoIndices] = useState<Set<number>>(new Set());
 	const [cursorIndex, setCursorIndex] = useState(0);
 	const [error, setError] = useState<string>('');
+	const [nameError, setNameError] = useState<string>('');
 
 	// Id of the background task running the grove creation, observed via useTask.
 	const [taskId, setTaskId] = useState<string | null>(null);
@@ -426,11 +427,11 @@ export function CreateGroveScreen() {
 
 	const handleNameSubmit = (value: string) => {
 		if (!value.trim()) {
-			setError('Grove name cannot be empty');
-			setStep('error');
+			setNameError('Grove name cannot be empty');
 			return;
 		}
 
+		setNameError('');
 		setGroveName(value.trim());
 		proceedToRepositorySelection();
 	};
@@ -578,8 +579,21 @@ export function CreateGroveScreen() {
 
 				<Box marginBottom={1}>
 					<Text color="cyan">Name: </Text>
-					<TextInput value={groveName} onChange={setGroveName} onSubmit={handleNameSubmit} />
+					<TextInput
+						value={groveName}
+						onChange={(value) => {
+							setGroveName(value);
+							if (nameError) setNameError('');
+						}}
+						onSubmit={handleNameSubmit}
+					/>
 				</Box>
+
+				{nameError && (
+					<Box marginBottom={1}>
+						<Text color="red">{nameError}</Text>
+					</Box>
+				)}
 
 				<Box marginTop={1}>
 					<Text dimColor>Press Enter to continue, Esc to cancel</Text>
