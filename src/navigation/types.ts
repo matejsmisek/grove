@@ -1,7 +1,7 @@
 // Navigation route definitions with type-safe params
 export type Routes = {
-	home: Record<string, never>;
-	globalHome: Record<string, never>;
+	home: { selectedGroveId?: string };
+	globalHome: { selectedLocationPath?: string };
 	setupWizard: Record<string, never>;
 	chat: Record<string, never>;
 	activity: Record<string, never>;

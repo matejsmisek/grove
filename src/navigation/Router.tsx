@@ -36,9 +36,21 @@ export function Router() {
 
 	switch (current.screen) {
 		case 'home':
-			return <HomeScreen />;
+			return (
+				<HomeScreen
+					selectedGroveId={
+						'selectedGroveId' in current.params ? current.params.selectedGroveId : undefined
+					}
+				/>
+			);
 		case 'globalHome':
-			return <WorkspaceSwitcherScreen />;
+			return (
+				<WorkspaceSwitcherScreen
+					selectedLocationPath={
+						'selectedLocationPath' in current.params ? current.params.selectedLocationPath : undefined
+					}
+				/>
+			);
 		case 'setupWizard':
 			return <SetupWizardScreen />;
 		case 'chat':

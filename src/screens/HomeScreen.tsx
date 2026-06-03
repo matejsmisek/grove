@@ -14,20 +14,34 @@ import {
 	WorkspaceServiceToken,
 } from '../services/tokens.js';
 
-export function HomeScreen() {
-	const { navigate, goBack, canGoBack } = useNavigation();
+interface HomeScreenProps {
+	/** Grove to pre-select on mount (e.g. when returning from its detail screen). */
+	selectedGroveId?: string;
+}
+
+export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
+	const { navigate, replace, goBack, canGoBack } = useNavigation();
 	const { exit } = useApp();
-	const [selectedGroveIndex, setSelectedGroveIndex] = useState(0);
+
+	// Get workspace-aware groves service
+	const grovesService = useService(GrovesServiceToken);
+	const groves = grovesService.getAllGroves();
+
+	// Pre-select the requested grove (index is offset by 1 for the create button);
+	// fall back to the create button when it's missing or none was requested.
+	const [selectedGroveIndex, setSelectedGroveIndex] = useState(() => {
+		if (!selectedGroveId) {
+			return 0;
+		}
+		const index = groves.findIndex((grove) => grove.id === selectedGroveId);
+		return index >= 0 ? index + 1 : 0;
+	});
 	const [showMenu, setShowMenu] = useState(false);
 	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
 	// DISABLED: Session fetching temporarily disabled
 	const [_isUpdatingSessions, _setIsUpdatingSessions] = useState(false);
 	const [sessionRefreshTick, _setSessionRefreshTick] = useState(0);
 	const [columnCount, setColumnCount] = useState(4); // Default to 4, will be updated by GroveGrid
-
-	// Get workspace-aware groves service
-	const grovesService = useService(GrovesServiceToken);
-	const groves = grovesService.getAllGroves();
 
 	// Get session tracking service
 	const sessionTrackingService = useService(SessionTrackingServiceToken);
@@ -124,8 +138,12 @@ export function HomeScreen() {
 					// First item is the "Create Grove" button
 					navigate('createGrove', {});
 				} else {
-					// Navigate to grove detail screen (offset by 1 for create button)
-					navigate('groveDetail', { groveId: groves[selectedGroveIndex - 1].id });
+					// Navigate to grove detail screen (offset by 1 for create button).
+					// Stamp the selection into our own params first so returning via
+					// goBack() re-selects this grove instead of the first tile.
+					const groveId = groves[selectedGroveIndex - 1].id;
+					replace('home', { selectedGroveId: groveId });
+					navigate('groveDetail', { groveId });
 				}
 			} else if (input === 'm') {
 				setShowMenu(true);

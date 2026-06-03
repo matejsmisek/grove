@@ -33,17 +33,17 @@ interface SwitcherLocation {
  * Selecting a tile switches the active context to that location and opens its
  * normal home screen (where creation is available).
  */
-export function WorkspaceSwitcherScreen() {
-	const { navigate } = useNavigation();
+interface WorkspaceSwitcherScreenProps {
+	/** Location to pre-select on mount (e.g. when returning from its home screen). */
+	selectedLocationPath?: string;
+}
+
+export function WorkspaceSwitcherScreen({ selectedLocationPath }: WorkspaceSwitcherScreenProps) {
+	const { navigate, replace } = useNavigation();
 	const { exit } = useApp();
 	const workspaceService = useService(WorkspaceServiceToken);
 	const settingsService = useService(SettingsServiceToken);
 	const sessionsService = useService(SessionsServiceToken);
-
-	const [selectedIndex, setSelectedIndex] = useState(0);
-	const [columnCount, setColumnCount] = useState(4);
-	const [showMenu, setShowMenu] = useState(false);
-	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
 
 	// Build the list of switchable locations once. A location is skipped when it
 	// has no grove data (missing folder or zero groves) — this silently handles
@@ -68,6 +68,19 @@ export function WorkspaceSwitcherScreen() {
 		return result;
 	});
 
+	// Pre-select the requested location; fall back to the first tile when it's
+	// missing or none was requested.
+	const [selectedIndex, setSelectedIndex] = useState(() => {
+		if (!selectedLocationPath) {
+			return 0;
+		}
+		const index = locations.findIndex((location) => location.path === selectedLocationPath);
+		return index >= 0 ? index : 0;
+	});
+	const [columnCount, setColumnCount] = useState(4);
+	const [showMenu, setShowMenu] = useState(false);
+	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
+
 	const applyContext = (context: WorkspaceContext) => {
 		workspaceService.setCurrentContext(context);
 		settingsService.setContext(context);
@@ -89,6 +102,9 @@ export function WorkspaceSwitcherScreen() {
 				? workspaceService.buildRepoContext(location.path)
 				: workspaceService.resolveContext(location.path);
 		applyContext(context);
+		// Stamp the selection into our own params first so returning via goBack()
+		// re-selects this location instead of the first tile.
+		replace('globalHome', { selectedLocationPath: location.path });
 		navigate('home', {});
 	};
 
