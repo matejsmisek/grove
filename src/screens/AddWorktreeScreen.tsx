@@ -40,9 +40,15 @@ interface ListItem {
 
 interface AddWorktreeScreenProps {
 	groveId: string;
+	/**
+	 * When set, the screen runs in "fork" mode: the repository is locked to the same repository
+	 * as the worktree at this path, and the new worktree branches off that worktree's branch.
+	 * Within a monorepo the user may still pick a different project.
+	 */
+	forkFromWorktreePath?: string;
 }
 
-export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
+export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktreeScreenProps) {
 	const { replace, goBack } = useNavigation();
 	const groveService = useService(GroveServiceToken);
 	const grovesService = useService(GrovesServiceToken);
@@ -134,6 +140,22 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 		const groveRef = grovesService.getGroveById(groveId);
 		return groveRef?.name || 'Unknown Grove';
 	}, [groveId, grovesService]);
+
+	const isFork = forkFromWorktreePath !== undefined;
+
+	// In fork mode, resolve the source worktree (the one being forked from). The new worktree is
+	// locked to the same repository and branches off the source worktree's branch.
+	const forkSource = useMemo(() => {
+		if (!isFork) return null;
+		const groveRef = grovesService.getGroveById(groveId);
+		if (!groveRef) return null;
+		const metadata = grovesService.readGroveMetadata(groveRef.path);
+		if (!metadata) return null;
+		const worktree = metadata.worktrees.find((w) => w.worktreePath === forkFromWorktreePath);
+		if (!worktree) return null;
+		const repoIndex = repositories.findIndex((r) => r.path === worktree.repositoryPath);
+		return { worktree, repoIndex };
+	}, [isFork, forkFromWorktreePath, groveId, grovesService, repositories]);
 
 	// Get selected repository
 	const selectedRepo = selectedRepoIndex !== null ? repositories[selectedRepoIndex] : null;
@@ -247,9 +269,14 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 					createWorktree(selectedRepoIndex!, projectPath);
 				}
 			} else if (key.escape) {
-				// Go back to repository selection
-				setSelectedRepoIndex(null);
-				setStep('repositories');
+				if (isFork) {
+					// Fork mode skips repository selection; go back to name entry (repo stays locked).
+					setStep('name');
+				} else {
+					// Go back to repository selection
+					setSelectedRepoIndex(null);
+					setStep('repositories');
+				}
 			}
 		},
 		{ isActive: step === 'projects' }
@@ -281,6 +308,31 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 			return;
 		}
 
+		// Fork mode: the repository is locked to the source worktree's repository, so skip the
+		// repository selection step entirely.
+		if (isFork) {
+			if (!forkSource || forkSource.repoIndex === -1) {
+				setError('Could not resolve the repository for the worktree being forked.');
+				setStep('error');
+				return;
+			}
+
+			const repoIndex = forkSource.repoIndex;
+			const repo = repositories[repoIndex];
+			setSelectedRepoIndex(repoIndex);
+
+			// For a monorepo, let the user pick which project to fork into (same monorepo only).
+			if (repo.isMonorepo && (projectsByRepo.get(repo.path) ?? []).length > 0) {
+				setProjectCursor(0);
+				setStep('projects');
+				return;
+			}
+
+			// Non-monorepo (or no projects detected): branch straight off the source worktree.
+			createWorktree(repoIndex, null);
+			return;
+		}
+
 		setStep('repositories');
 	};
 
@@ -291,17 +343,21 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 		};
 		navHandledRef.current = false;
 
+		// In fork mode, branch off the source worktree (its branch) and record the parentage.
+		const forkParentPath = isFork ? forkFromWorktreePath : undefined;
+
 		// Run as a background task so it survives navigating away from this screen.
 		const { id } = taskService.run<GroveMetadata>({
 			type: 'addWorktree',
-			title: `Add worktree "${worktreeName}"`,
+			title: isFork ? `Fork worktree "${worktreeName}"` : `Add worktree "${worktreeName}"`,
 			meta: { groveId, worktreeName },
 			execute: async (ctx) => {
 				const metadata = await groveService.addWorktreeToGrove(
 					groveId,
 					selection,
 					worktreeName,
-					ctx.log
+					ctx.log,
+					forkParentPath
 				);
 				recentSelectionsService.addRecentSelections([selection]);
 				return metadata;
@@ -348,9 +404,19 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
 					<Text bold color="green">
-						Add Worktree to: {groveName}
+						{isFork ? 'Fork Worktree in: ' : 'Add Worktree to: '}
+						{groveName}
 					</Text>
 				</Box>
+
+				{isFork && forkSource && (
+					<Box marginBottom={1}>
+						<Text dimColor>
+							Forking from <Text color="yellow">{forkSource.worktree.branch}</Text> (
+							{forkSource.worktree.repositoryName})
+						</Text>
+					</Box>
+				)}
 
 				<Box marginBottom={1}>
 					<Text>Enter a name for the new worktree:</Text>
@@ -454,7 +520,8 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
 					<Text bold color="green">
-						Add Worktree: {worktreeName}
+						{isFork ? 'Fork Worktree: ' : 'Add Worktree: '}
+						{worktreeName}
 					</Text>
 				</Box>
 
@@ -508,11 +575,16 @@ export function AddWorktreeScreen({ groveId }: AddWorktreeScreenProps) {
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
 					<Text bold color="green">
-						Adding Worktree: {worktreeName}
+						{isFork ? 'Forking Worktree: ' : 'Adding Worktree: '}
+						{worktreeName}
 					</Text>
 				</Box>
 				<Box marginBottom={1}>
-					<Text dimColor>Creating worktree from {displayName}...</Text>
+					<Text dimColor>
+						{isFork
+							? `Forking ${displayName} off ${forkSource?.worktree.branch ?? ''}...`
+							: `Creating worktree from ${displayName}...`}
+					</Text>
 				</Box>
 
 				{/* Live log output */}

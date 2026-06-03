@@ -72,6 +72,16 @@ export function Router() {
 		case 'addWorktree':
 			// Type narrowing: we know params is { groveId: string } here
 			return <AddWorktreeScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
+		case 'forkWorktree':
+			// Type narrowing: we know params is { groveId: string; worktreePath: string } here
+			return (
+				<AddWorktreeScreen
+					groveId={'groveId' in current.params ? current.params.groveId : ''}
+					forkFromWorktreePath={
+						'worktreePath' in current.params ? (current.params.worktreePath as string) : ''
+					}
+				/>
+			);
 		case 'openTerminal':
 			// Type narrowing: we know params is { groveId: string } here
 			return (

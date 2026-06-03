@@ -74,6 +74,9 @@ if (args.includes('--help') || args.includes('-h')) {
 		'  create <name> --empty                         Create an empty grove without worktrees'
 	);
 	console.log('  add-worktree <grove-id> <name> <repository>   Add a worktree to an existing grove');
+	console.log(
+		'  add-worktree <grove-id> <name> --fork <wt-id> [repo]  Fork a worktree (same repo, branch off its branch)'
+	);
 	console.log('  claude [grove-id]                             Open Claude CLI for a grove');
 	console.log('  list [--json]                                 List all groves and their worktrees');
 	console.log(
@@ -166,21 +169,64 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 		}
 	})();
 } else if (args[0] === 'add-worktree') {
-	// Handle add-worktree command: grove add-worktree <grove-id> <name> <repository>
-	// Adds a worktree to an existing grove
+	// Handle add-worktree command:
+	//   grove add-worktree <grove-id> <name> <repository>
+	//   grove add-worktree <grove-id> <name> --fork <worktree-id>
+	// Adds a worktree to an existing grove. With --fork, the new worktree uses the same
+	// repository/project as the named worktree and branches off its branch.
 	(async () => {
 		const addArgs = args.slice(1);
-		if (addArgs.length < 3) {
-			console.error('✗ Usage: grove add-worktree <grove-id> <name> <repository>');
-			console.error('  repository format: reponame or reponame.projectfolder');
-			process.exit(1);
+
+		// Extract the optional --fork <worktree-id> flag.
+		const forkIndex = addArgs.indexOf('--fork');
+		let forkFromWorktreeId: string | undefined;
+		let positional = addArgs;
+		if (forkIndex !== -1) {
+			forkFromWorktreeId = addArgs[forkIndex + 1];
+			if (!forkFromWorktreeId) {
+				console.error('✗ --fork requires a worktree id');
+				process.exit(1);
+			}
+			positional = addArgs.filter((_, i) => i !== forkIndex && i !== forkIndex + 1);
 		}
 
-		const groveId = addArgs[0];
-		const repository = addArgs[addArgs.length - 1];
-		const worktreeName = addArgs.slice(1, -1).join(' ');
+		const groveId = positional[0];
 
-		const result = await addWorktree(groveId, worktreeName, repository);
+		let result;
+		if (forkFromWorktreeId) {
+			// Fork mode: repository is optional. When at least a name and a repository are present
+			// (>= 2 tokens after the grove id), the last token is treated as the repository; it must
+			// resolve to the source worktree's repository (a different project is allowed for
+			// monorepos). With only a name, the source worktree's repository/project are reused.
+			const rest = positional.slice(1);
+			let worktreeName: string;
+			let repository: string | undefined;
+			if (rest.length >= 2) {
+				repository = rest[rest.length - 1];
+				worktreeName = rest.slice(0, -1).join(' ');
+			} else {
+				worktreeName = rest.join(' ');
+			}
+
+			if (!groveId || !worktreeName) {
+				console.error(
+					'✗ Usage: grove add-worktree <grove-id> <name> --fork <worktree-id> [repository]'
+				);
+				process.exit(1);
+			}
+			result = await addWorktree(groveId, worktreeName, repository, forkFromWorktreeId);
+		} else {
+			if (positional.length < 3) {
+				console.error('✗ Usage: grove add-worktree <grove-id> <name> <repository>');
+				console.error('  grove add-worktree <grove-id> <name> --fork <worktree-id>');
+				console.error('  repository format: reponame or reponame.projectfolder');
+				process.exit(1);
+			}
+
+			const repository = positional[positional.length - 1];
+			const worktreeName = positional.slice(1, -1).join(' ');
+			result = await addWorktree(groveId, worktreeName, repository);
+		}
 
 		if (result.success) {
 			console.log('✓', result.message);

@@ -241,6 +241,11 @@ export interface Worktree {
 	 */
 	initActionsStatus?: InitActionsStatus;
 	/**
+	 * Path of the worktree this one was forked from (branched off of), when created via "Fork".
+	 * Used to display fork relationships as a tree in the grove detail view.
+	 */
+	forkedFromPath?: string;
+	/**
 	 * Whether this worktree has been closed (removed from disk but kept in metadata)
 	 */
 	closed?: boolean;

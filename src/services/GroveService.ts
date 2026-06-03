@@ -42,7 +42,8 @@ export interface IGroveService {
 		groveId: string,
 		selection: RepositorySelection,
 		worktreeName: string,
-		onLog?: (message: string) => void
+		onLog?: (message: string) => void,
+		forkFromWorktreePath?: string
 	): Promise<GroveMetadata>;
 	/** Close a grove - removes worktrees and deletes folder */
 	closeGrove(groveId: string): Promise<CloseGroveResult>;
@@ -600,13 +601,17 @@ Completed at: ${new Date().toISOString()}
 	 * @param selection - Repository selection (with optional project path for monorepos)
 	 * @param worktreeName - Custom name for the worktree (will be used for folder and branch)
 	 * @param onLog - Optional callback for progress logging
+	 * @param forkFromWorktreePath - When set, branch the new worktree off the branch of the
+	 *   worktree at this path (instead of the repository's main branch). Used by the "Fork" flow.
+	 *   Skips the reset-to-main behaviour and records the parent for tree display.
 	 * @returns Updated grove metadata
 	 */
 	async addWorktreeToGrove(
 		groveId: string,
 		selection: RepositorySelection,
 		worktreeName: string,
-		onLog?: (message: string) => void
+		onLog?: (message: string) => void,
+		forkFromWorktreePath?: string
 	): Promise<GroveMetadata> {
 		// Get grove reference
 		const groveRef = this.grovesService.getGroveById(groveId);
@@ -622,6 +627,17 @@ Completed at: ${new Date().toISOString()}
 
 		const grovePath = groveRef.path;
 		const repo = selection.repository;
+
+		// Resolve the fork parent (if any). We branch off the parent worktree's current branch and
+		// record the parentage so the grove detail view can render the fork as a child.
+		let forkFromBranch: string | undefined;
+		if (forkFromWorktreePath) {
+			const parent = metadata.worktrees.find((w) => w.worktreePath === forkFromWorktreePath);
+			if (!parent) {
+				throw new Error('Worktree to fork from was not found in this grove');
+			}
+			forkFromBranch = parent.branch;
+		}
 
 		// Get grove identifier from metadata, or generate for backward compatibility with existing groves
 		let groveIdentifier = metadata.identifier;
@@ -653,8 +669,18 @@ Completed at: ${new Date().toISOString()}
 				onLog(`Creating worktree for ${displayName}...`);
 			}
 
-			// Ensure repository is up-to-date before creating worktree
-			const { needsReset, mainBranch } = await this.ensureRepoUpToDate(repo.path, onLog);
+			// Ensure repository is up-to-date before creating worktree.
+			// When forking, the new worktree branches off an existing worktree's branch, so we
+			// skip both the main-branch update and the reset-to-main behaviour.
+			let needsReset = false;
+			let mainBranch = '';
+			if (forkFromBranch) {
+				if (onLog) {
+					onLog(`Forking from branch ${forkFromBranch}...`);
+				}
+			} else {
+				({ needsReset, mainBranch } = await this.ensureRepoUpToDate(repo.path, onLog));
+			}
 
 			// Read merged repository/project grove configuration
 			const mergedConfig = this.groveConfigService.readMergedConfig(repo.path, selection.projectPath);
@@ -673,8 +699,10 @@ Completed at: ${new Date().toISOString()}
 			// Create worktree path
 			const worktreePath = path.join(grovePath, normalizedWorktreeName);
 
-			// Add worktree (creates new branch from HEAD)
-			const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, 'HEAD');
+			// Add worktree. When forking, branch off the source worktree's branch; otherwise
+			// branch off HEAD (and reset to main below if needed).
+			const baseRef = forkFromBranch ?? 'HEAD';
+			const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, baseRef);
 
 			if (!result.success) {
 				throw new Error(result.stderr || 'Failed to create worktree');
@@ -780,6 +808,7 @@ Completed at: ${new Date().toISOString()}
 				branch: branchName,
 				projectPath: selection.projectPath,
 				initActionsStatus,
+				forkedFromPath: forkFromWorktreePath,
 			};
 
 			// Add worktree to metadata

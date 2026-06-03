@@ -33,6 +33,135 @@ interface WorktreeDetails {
 	fileStats: FileChangeStats;
 	hasUnpushedCommits: boolean;
 	upstreamStatus: BranchUpstreamStatus;
+	/** Nesting depth in the fork tree (0 = root, >0 = forked from another worktree) */
+	depth: number;
+	/**
+	 * For each ancestor level (one entry per level above the immediate parent), whether a vertical
+	 * guide line should be drawn — i.e. that ancestor still has siblings appearing below this row.
+	 * Length is `depth - 1`.
+	 */
+	ancestorGuides: boolean[];
+	/** Whether this worktree is the last child of its parent (controls └─ vs ├─). */
+	isLastChild: boolean;
+}
+
+/**
+ * Order worktrees so forks appear directly beneath the worktree they were forked from, and compute
+ * the tree-guide metadata for each (nesting depth, which ancestor lines continue, and whether the
+ * node is the last child). Roots and siblings keep their original relative order. Forks whose
+ * parent is missing from the grove are treated as roots.
+ */
+function orderWorktreesAsTree(details: WorktreeDetails[]): WorktreeDetails[] {
+	const byPath = new Map<string, WorktreeDetails>();
+	for (const d of details) {
+		byPath.set(d.worktree.worktreePath, d);
+	}
+
+	const childrenOf = new Map<string, WorktreeDetails[]>();
+	const roots: WorktreeDetails[] = [];
+	for (const d of details) {
+		const parentPath = d.worktree.forkedFromPath;
+		if (parentPath && byPath.has(parentPath)) {
+			const siblings = childrenOf.get(parentPath) ?? [];
+			siblings.push(d);
+			childrenOf.set(parentPath, siblings);
+		} else {
+			roots.push(d);
+		}
+	}
+
+	const ordered: WorktreeDetails[] = [];
+	const visit = (
+		detail: WorktreeDetails,
+		depth: number,
+		ancestorGuides: boolean[],
+		isLastChild: boolean
+	) => {
+		ordered.push({ ...detail, depth, ancestorGuides, isLastChild });
+
+		const children = childrenOf.get(detail.worktree.worktreePath) ?? [];
+		// A child's ancestor guides are this node's guides plus, for non-root parents, whether this
+		// node continues (has a sibling below). Roots are not connected by a left-hand guide line.
+		const childGuides = depth === 0 ? [] : [...ancestorGuides, !isLastChild];
+		children.forEach((child, index) => {
+			visit(child, depth + 1, childGuides, index === children.length - 1);
+		});
+	};
+	roots.forEach((root, index) => {
+		visit(root, 0, [], index === roots.length - 1);
+	});
+
+	return ordered;
+}
+
+/** A single guide column: a full-height vertical line when `draw`, otherwise blank padding. */
+function VerticalGuide({ draw }: { draw: boolean }) {
+	if (!draw) {
+		return <Box flexShrink={0} width={1} marginRight={1} />;
+	}
+	return (
+		<Box
+			flexShrink={0}
+			marginRight={1}
+			borderStyle="single"
+			borderColor="gray"
+			borderTop={false}
+			borderBottom={false}
+			borderRight={false}
+			borderLeft={true}
+		/>
+	);
+}
+
+/**
+ * The elbow connector for a fork: a vertical line dropping from the parent above that turns right
+ * (└─ for a last child, ├─ otherwise) into the worktree box, like a branch in a file explorer. For
+ * a non-last child the line continues below the elbow to reach the next sibling.
+ */
+function ElbowGuide({ isLast }: { isLast: boolean }) {
+	return (
+		<Box flexShrink={0} flexDirection="column" width={2}>
+			{/* Vertical line dropping from the parent down to the elbow (biased long to reach up) */}
+			<Box
+				flexGrow={2}
+				borderStyle="single"
+				borderColor="gray"
+				borderTop={false}
+				borderBottom={false}
+				borderRight={false}
+				borderLeft={true}
+			/>
+			<Text color="gray">{isLast ? '└─' : '├─'}</Text>
+			{isLast ? (
+				<Box flexGrow={1} />
+			) : (
+				<Box
+					flexGrow={1}
+					borderStyle="single"
+					borderColor="gray"
+					borderTop={false}
+					borderBottom={false}
+					borderRight={false}
+					borderLeft={true}
+				/>
+			)}
+		</Box>
+	);
+}
+
+/**
+ * Renders the left-hand tree guides for a forked worktree: a vertical line for each ancestor level
+ * that still has siblings below, then the elbow connector linking it to its parent.
+ */
+function TreeGutter({ guides, isLast }: { guides: boolean[]; isLast: boolean }) {
+	return (
+		<>
+			{guides.map((draw, i) => (
+				<VerticalGuide key={i} draw={draw} />
+			))}
+			<ElbowGuide isLast={isLast} />
+		</>
+	);
 }
 
 interface GroveDetailScreenProps {
@@ -152,6 +281,9 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 							fileStats: { modified: 0, added: 0, deleted: 0, untracked: 0, total: 0 },
 							hasUnpushedCommits: false,
 							upstreamStatus: 'none' as const,
+							depth: 0,
+							ancestorGuides: [],
+							isLastChild: true,
 						};
 					}
 
@@ -168,10 +300,14 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 						fileStats,
 						hasUnpushedCommits: hasUnpushed,
 						upstreamStatus,
+						depth: 0,
+						ancestorGuides: [],
+						isLastChild: true,
 					};
 				});
 
-				const details = await Promise.all(detailsPromises);
+				// Order worktrees as a fork tree (parents followed by their forks) and assign depth.
+				const details = orderWorktreesAsTree(await Promise.all(detailsPromises));
 				setWorktreeDetails(details);
 
 				// If focusWorktreeName is provided, select that worktree and show actions
@@ -337,6 +473,12 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		}
 	};
 
+	const handleFork = () => {
+		const selected = worktreeDetails[selectedIndex].worktree;
+		setShowActions(false);
+		navigate('forkWorktree', { groveId, worktreePath: selected.worktreePath });
+	};
+
 	const handleCloseWorktree = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
 		setShowActions(false);
@@ -377,6 +519,10 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 				{
 					label: 'Open in IDE',
 					action: handleOpenInIDE,
+				},
+				{
+					label: 'Fork',
+					action: handleFork,
 				},
 				// Conditionally add "View Init Log" if initActions were executed
 				...(selectedWorktree?.initActionsStatus
@@ -662,82 +808,100 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 								const hasChanges = !isClosed && detail.fileStats.total > 0;
 								const sessionCounts = getSessionCounts(detail.worktree.worktreePath);
 
+								// Keep forks visually attached to their parent: no gap before a row that is a
+								// descendant (depth > 0). A gap is added before the next top-level worktree.
+								let nextVisibleDepth: number | null = null;
+								for (let k = index + 1; k < worktreeDetails.length; k++) {
+									const next = worktreeDetails[k];
+									if (next.worktree.closed && !showClosed) {
+										continue;
+									}
+									nextVisibleDepth = next.depth;
+									break;
+								}
+								const marginBottom = nextVisibleDepth !== null && nextVisibleDepth > 0 ? 0 : 1;
+
 								return (
-									<Box
-										key={detail.worktree.worktreePath}
-										flexDirection="column"
-										borderStyle={isSelected ? 'round' : 'single'}
-										borderColor={isClosed ? 'gray' : isSelected ? 'cyan' : 'gray'}
-										paddingX={1}
-										marginBottom={1}
-									>
-										{/* Worktree Name with Session Indicator */}
-										<Box>
-											<Text bold color={isClosed ? 'gray' : isSelected ? 'cyan' : undefined}>
-												{detail.worktree.name ||
-													(detail.worktree.projectPath
-														? `${detail.worktree.repositoryName}/${detail.worktree.projectPath}`
-														: detail.worktree.repositoryName)}
-											</Text>
-											{isClosed && <Text dimColor> (Closed)</Text>}
-											{!isClosed &&
-												(sessionCounts.activeCount > 0 ||
-													sessionCounts.idleCount > 0 ||
-													sessionCounts.attentionCount > 0 ||
-													sessionCounts.closedCount > 0) && (
-													<Box marginLeft={1}>
-														<SessionIndicator
-															activeCount={sessionCounts.activeCount}
-															idleCount={sessionCounts.idleCount}
-															attentionCount={sessionCounts.attentionCount}
-															closedCount={sessionCounts.closedCount}
-														/>
-													</Box>
-												)}
-										</Box>
-
-										{isClosed ? (
-											<Box>
-												<Text dimColor>Branch: {detail.branch}</Text>
-											</Box>
-										) : (
-											<>
-												{/* Branch */}
-												<Box marginTop={0}>
-													<Text dimColor>Branch: </Text>
-													<Text color="yellow">{detail.branch}</Text>
-													{detail.upstreamStatus === 'gone' && <Text color="green"> (Merged)</Text>}
-												</Box>
-
-												{/* File Changes */}
-												<Box>
-													<Text dimColor>Files: </Text>
-													<Text color={hasChanges ? 'yellow' : 'green'}>
-														{hasChanges ? `${detail.fileStats.total} changed` : 'Clean'}
-													</Text>
-													{hasChanges && <Text dimColor> ({formatFileStats(detail.fileStats)})</Text>}
-												</Box>
-
-												{/* Unpushed Commits */}
-												{detail.hasUnpushedCommits && (
-													<Box>
-														<Text color="yellow">⚠ Unpushed commits</Text>
-													</Box>
-												)}
-
-												{/* InitActions Status */}
-												{detail.worktree.initActionsStatus && (
-													<Box>
-														<Text dimColor>Init Actions: </Text>
-														<Text color={detail.worktree.initActionsStatus.success ? 'green' : 'red'}>
-															{detail.worktree.initActionsStatus.success ? '✓' : '✗'}{' '}
-															{detail.worktree.initActionsStatus.successfulActions}/
-															{detail.worktree.initActionsStatus.totalActions} succeeded
-														</Text>
-													</Box>
-												)}
-											</>
+									<Box key={detail.worktree.worktreePath} flexDirection="row" marginBottom={marginBottom}>
+										{/* Fork tree guides linking forked worktrees to their parent */}
+										{detail.depth > 0 && (
+											<TreeGutter guides={detail.ancestorGuides} isLast={detail.isLastChild} />
 										)}
+										<Box
+											flexGrow={1}
+											flexDirection="column"
+											borderStyle={isSelected ? 'round' : 'single'}
+											borderColor={isClosed ? 'gray' : isSelected ? 'cyan' : 'gray'}
+											paddingX={1}
+										>
+											{/* Worktree Name with Session Indicator */}
+											<Box>
+												<Text bold color={isClosed ? 'gray' : isSelected ? 'cyan' : undefined}>
+													{detail.worktree.name ||
+														(detail.worktree.projectPath
+															? `${detail.worktree.repositoryName}/${detail.worktree.projectPath}`
+															: detail.worktree.repositoryName)}
+												</Text>
+												{isClosed && <Text dimColor> (Closed)</Text>}
+												{!isClosed &&
+													(sessionCounts.activeCount > 0 ||
+														sessionCounts.idleCount > 0 ||
+														sessionCounts.attentionCount > 0 ||
+														sessionCounts.closedCount > 0) && (
+														<Box marginLeft={1}>
+															<SessionIndicator
+																activeCount={sessionCounts.activeCount}
+																idleCount={sessionCounts.idleCount}
+																attentionCount={sessionCounts.attentionCount}
+																closedCount={sessionCounts.closedCount}
+															/>
+														</Box>
+													)}
+											</Box>
+
+											{isClosed ? (
+												<Box>
+													<Text dimColor>Branch: {detail.branch}</Text>
+												</Box>
+											) : (
+												<>
+													{/* Branch */}
+													<Box marginTop={0}>
+														<Text dimColor>Branch: </Text>
+														<Text color="yellow">{detail.branch}</Text>
+														{detail.upstreamStatus === 'gone' && <Text color="green"> (Merged)</Text>}
+													</Box>
+
+													{/* File Changes */}
+													<Box>
+														<Text dimColor>Files: </Text>
+														<Text color={hasChanges ? 'yellow' : 'green'}>
+															{hasChanges ? `${detail.fileStats.total} changed` : 'Clean'}
+														</Text>
+														{hasChanges && <Text dimColor> ({formatFileStats(detail.fileStats)})</Text>}
+													</Box>
+
+													{/* Unpushed Commits */}
+													{detail.hasUnpushedCommits && (
+														<Box>
+															<Text color="yellow">⚠ Unpushed commits</Text>
+														</Box>
+													)}
+
+													{/* InitActions Status */}
+													{detail.worktree.initActionsStatus && (
+														<Box>
+															<Text dimColor>Init Actions: </Text>
+															<Text color={detail.worktree.initActionsStatus.success ? 'green' : 'red'}>
+																{detail.worktree.initActionsStatus.success ? '✓' : '✗'}{' '}
+																{detail.worktree.initActionsStatus.successfulActions}/
+																{detail.worktree.initActionsStatus.totalActions} succeeded
+															</Text>
+														</Box>
+													)}
+												</>
+											)}
+										</Box>
 									</Box>
 								);
 							})}
