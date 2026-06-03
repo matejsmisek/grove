@@ -19,9 +19,10 @@ export interface IRepositoryService {
 	isRepositoryRegistered(repoPath: string): boolean;
 	/**
 	 * Add a new repository to the registry
+	 * @param options - Optional initial properties (e.g. auto-detected isMonorepo)
 	 * @throws Error if repository already registered
 	 */
-	addRepository(repoPath: string): Repository;
+	addRepository(repoPath: string, options?: { isMonorepo?: boolean }): Repository;
 	/**
 	 * Remove a repository from the registry
 	 * @returns true if repository was removed, false if not found
@@ -90,7 +91,7 @@ export class RepositoryService implements IRepositoryService {
 	 * Add a new repository to the registry
 	 * @throws Error if repository already registered
 	 */
-	addRepository(repoPath: string): Repository {
+	addRepository(repoPath: string, options?: { isMonorepo?: boolean }): Repository {
 		const data = this.readRepositories();
 
 		// Check if already registered
@@ -103,6 +104,7 @@ export class RepositoryService implements IRepositoryService {
 			path: repoPath,
 			name: path.basename(repoPath),
 			registeredAt: new Date().toISOString(),
+			...(options?.isMonorepo ? { isMonorepo: true } : {}),
 		};
 
 		// Add to repositories list

@@ -7,6 +7,7 @@ import type { MenuOption } from '../components/home/MenuModal.js';
 import { MenuModal } from '../components/home/MenuModal.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
+import { getContextDisplayName } from '../services/WorkspaceService.js';
 import {
 	GrovesServiceToken,
 	SessionTrackingServiceToken,
@@ -77,8 +78,7 @@ export function HomeScreen() {
 	// Get workspace context to display workspace name
 	const workspaceService = useService(WorkspaceServiceToken);
 	const workspaceContext = workspaceService.getCurrentContext();
-	const workspaceName =
-		workspaceContext?.type === 'workspace' ? workspaceContext.config?.name : null;
+	const workspaceName = getContextDisplayName(workspaceContext);
 
 	// Menu options
 	const menuOptions: MenuOption[] = [

@@ -465,9 +465,13 @@ export interface WorkspacesData {
  */
 export interface WorkspaceContext {
 	/**
-	 * Type of context: 'workspace' or 'global'
+	 * Type of context:
+	 * - 'workspace': inside a directory with .grove.workspace.json
+	 * - 'repo': outside a workspace but inside a git repository (implicit
+	 *   per-repo workspace; data stored in <repo>/.grove)
+	 * - 'global': not in a workspace or git repo (data in ~/.grove)
 	 */
-	type: 'workspace' | 'global';
+	type: 'workspace' | 'global' | 'repo';
 	/**
 	 * Workspace configuration (only when type is 'workspace')
 	 */
@@ -476,6 +480,14 @@ export interface WorkspaceContext {
 	 * Absolute path to workspace root (only when type is 'workspace')
 	 */
 	workspacePath?: string;
+	/**
+	 * Absolute path to the git repository root (only when type is 'repo')
+	 */
+	repoPath?: string;
+	/**
+	 * Repository name derived from the repo folder (only when type is 'repo')
+	 */
+	repoName?: string;
 	/**
 	 * Absolute path to .grove folder (workspace/.grove or ~/.grove)
 	 */

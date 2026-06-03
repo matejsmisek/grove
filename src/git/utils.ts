@@ -83,6 +83,81 @@ export async function getGitRoot(cwd?: string): Promise<string | null> {
 }
 
 /**
+ * Synchronously find the main git repository root by walking up the directory
+ * tree from startDir looking for a `.git` entry.
+ *
+ * - If `.git` is a directory, the directory containing it is the main repo root.
+ * - If `.git` is a file (a linked worktree), it points at
+ *   `<main>/.git/worktrees/<name>`; we strip that suffix to resolve back to the
+ *   MAIN repository root. This ensures invocations from inside a grove worktree
+ *   resolve to the same repo (and the same <repo>/.grove) rather than nesting.
+ *
+ * Returns the absolute repo root, or undefined when no git repo is found.
+ */
+export function findMainRepoRootSync(startDir: string): string | undefined {
+	let currentDir = path.resolve(startDir);
+	const root = path.parse(currentDir).root;
+
+	// Walk up including the filesystem root.
+	for (;;) {
+		const gitPath = path.join(currentDir, '.git');
+		try {
+			const stats = fs.statSync(gitPath);
+			if (stats.isDirectory()) {
+				// Main repository: the directory containing .git is the root.
+				return currentDir;
+			}
+			if (stats.isFile()) {
+				// Linked worktree: resolve back to the main repository root.
+				return resolveMainRootFromWorktreeGitFile(gitPath) ?? currentDir;
+			}
+		} catch {
+			// .git does not exist here; keep walking up.
+		}
+
+		if (currentDir === root) {
+			break;
+		}
+		currentDir = path.dirname(currentDir);
+	}
+
+	return undefined;
+}
+
+/**
+ * Parse a worktree `.git` file (`gitdir: <main>/.git/worktrees/<name>`) and
+ * return the main repository root, or undefined if it cannot be determined.
+ */
+function resolveMainRootFromWorktreeGitFile(gitFilePath: string): string | undefined {
+	try {
+		const content = fs.readFileSync(gitFilePath, 'utf-8').trim();
+		const match = content.match(/^gitdir:\s*(.+)$/m);
+		if (!match) {
+			return undefined;
+		}
+
+		let gitDir = match[1].trim();
+		if (!path.isAbsolute(gitDir)) {
+			gitDir = path.resolve(path.dirname(gitFilePath), gitDir);
+		}
+
+		// gitDir looks like <main>/.git/worktrees/<name>
+		const worktreesIndex = gitDir.lastIndexOf(`${path.sep}worktrees${path.sep}`);
+		if (worktreesIndex === -1) {
+			return undefined;
+		}
+		const mainGitDir = gitDir.slice(0, worktreesIndex);
+		// mainGitDir ends with /.git; the main repo root is its parent.
+		if (path.basename(mainGitDir) !== '.git') {
+			return undefined;
+		}
+		return path.dirname(mainGitDir);
+	} catch {
+		return undefined;
+	}
+}
+
+/**
  * Verify that the current directory is a valid git repository (not a worktree)
  * Returns the repository root path if valid, or throws an error
  */

@@ -265,7 +265,7 @@ describe('WorkspaceService', () => {
 			expect(result.grovesFolder).toBe('/absolute/groves');
 		});
 
-		it('should return global context when not in a workspace', () => {
+		it('should return global context when not in a workspace or git repo', () => {
 			const dir = '/no-workspace';
 			vol.mkdirSync(dir, { recursive: true });
 
@@ -275,6 +275,63 @@ describe('WorkspaceService', () => {
 			expect(result.groveFolder).toBe('/home/testuser/.grove');
 			expect(result.config).toBeUndefined();
 			expect(result.workspacePath).toBeUndefined();
+		});
+
+		it('should return repo context when inside a git repo but not a workspace', () => {
+			const repoPath = '/repos/my-repo';
+			vol.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
+
+			const result = service.resolveContext(repoPath);
+
+			expect(result.type).toBe('repo');
+			expect(result.repoPath).toBe(repoPath);
+			expect(result.repoName).toBe('my-repo');
+			expect(result.groveFolder).toBe(path.join(repoPath, '.grove'));
+			expect(result.grovesFolder).toBe(path.join(repoPath, '.grove', 'groves'));
+			expect(result.config).toBeUndefined();
+		});
+
+		it('should resolve repo context from a nested subdirectory', () => {
+			const repoPath = '/repos/my-repo';
+			const subDir = path.join(repoPath, 'src', 'deep');
+			vol.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
+			vol.mkdirSync(subDir, { recursive: true });
+
+			const result = service.resolveContext(subDir);
+
+			expect(result.type).toBe('repo');
+			expect(result.repoPath).toBe(repoPath);
+		});
+
+		it('should prefer a workspace over an enclosing git repo', () => {
+			const repoPath = '/repos/my-repo';
+			vol.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.workspace.json'),
+				JSON.stringify({ name: 'WS', version: '1.0.0', grovesFolder: './groves' })
+			);
+
+			const result = service.resolveContext(repoPath);
+
+			expect(result.type).toBe('workspace');
+		});
+
+		it('should resolve a linked worktree back to the main repo root', () => {
+			const repoPath = '/repos/my-repo';
+			const worktreePath = '/repos/my-repo/.grove/groves/grove-a/wt';
+			vol.mkdirSync(path.join(repoPath, '.git', 'worktrees', 'wt'), { recursive: true });
+			vol.mkdirSync(worktreePath, { recursive: true });
+			// A linked worktree has a .git file pointing at the main repo's gitdir.
+			vol.writeFileSync(
+				path.join(worktreePath, '.git'),
+				`gitdir: ${path.join(repoPath, '.git', 'worktrees', 'wt')}\n`
+			);
+
+			const result = service.resolveContext(worktreePath);
+
+			expect(result.type).toBe('repo');
+			expect(result.repoPath).toBe(repoPath);
+			expect(result.groveFolder).toBe(path.join(repoPath, '.grove'));
 		});
 	});
 

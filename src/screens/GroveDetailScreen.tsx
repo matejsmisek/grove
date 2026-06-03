@@ -8,6 +8,7 @@ import path from 'path';
 import { SessionIndicator } from '../components/SessionIndicator.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
+import { getContextDisplayName } from '../services/WorkspaceService.js';
 import {
 	detectTerminal,
 	getIDEDisplayName,
@@ -366,8 +367,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 
 	// Get workspace context to display workspace name
 	const workspaceContext = workspaceService.getCurrentContext();
-	const workspaceName =
-		workspaceContext?.type === 'workspace' ? workspaceContext.config?.name : null;
+	const workspaceName = getContextDisplayName(workspaceContext);
 	const [showInitLog, setShowInitLog] = useState(false);
 	const [initLogContent, setInitLogContent] = useState<string>('');
 	// Whether closed worktrees are shown. Defaults to hidden and is not persisted.

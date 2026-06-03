@@ -1,5 +1,5 @@
 import { getContainer } from '../di/index.js';
-import { verifyValidRepository } from '../git/index.js';
+import { detectMonorepo, verifyValidRepository } from '../git/index.js';
 import { RepositoryServiceToken } from '../services/tokens.js';
 import type { RegisterResult } from './types.js';
 
@@ -24,12 +24,17 @@ export async function registerRepository(cwd?: string): Promise<RegisterResult> 
 			};
 		}
 
+		// Auto-detect monorepo layout from the folder structure
+		const isMonorepo = await detectMonorepo(repoPath);
+
 		// Add the repository
-		const repository = repositoryService.addRepository(repoPath);
+		const repository = repositoryService.addRepository(repoPath, { isMonorepo });
 
 		return {
 			success: true,
-			message: `Successfully registered repository: ${repository.name}`,
+			message: `Successfully registered repository: ${repository.name}${
+				isMonorepo ? ' (monorepo)' : ''
+			}`,
 			path: repository.path,
 		};
 	} catch (error) {

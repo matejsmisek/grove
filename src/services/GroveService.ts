@@ -85,9 +85,11 @@ export class GroveService implements IGroveService {
 		existingNames: Set<string>,
 		groveSuffix: string
 	): string {
-		// Lowercase the base name for uniform identifiers across grove, folders, worktrees, and branches
+		// Lowercase the base name for uniform identifiers across grove, folders, worktrees, and branches.
+		// Project paths may be nested (e.g. "packages/core"); flatten separators so the
+		// resulting worktree folder and branch name stay valid.
 		const baseName = selection.projectPath
-			? `${selection.repository.name}-${selection.projectPath}`.toLowerCase()
+			? `${selection.repository.name}-${selection.projectPath.replace(/[\\/]+/g, '-')}`.toLowerCase()
 			: selection.repository.name.toLowerCase();
 
 		// Include grove suffix to make the worktree folder globally unique
@@ -426,8 +428,11 @@ Completed at: ${new Date().toISOString()}
 					normalizedName,
 					selection.projectPath
 				);
-				// Lowercase the project path suffix for uniform identifiers
-				const branchSuffix = selection.projectPath ? `-${selection.projectPath.toLowerCase()}` : '';
+				// Lowercase and flatten the project path suffix (nested paths like
+				// "packages/core" must not introduce slashes into the branch name)
+				const branchSuffix = selection.projectPath
+					? `-${selection.projectPath.replace(/[\\/]+/g, '-').toLowerCase()}`
+					: '';
 				const branchName = branchBase + branchSuffix;
 
 				// Create worktree path (identifier already included in worktreeName)
@@ -692,8 +697,11 @@ Completed at: ${new Date().toISOString()}
 				branchTemplate,
 				normalizedWorktreeName
 			);
-			// Lowercase the project path suffix for uniform identifiers
-			const branchSuffix = selection.projectPath ? `-${selection.projectPath.toLowerCase()}` : '';
+			// Lowercase and flatten the project path suffix (nested paths like
+			// "packages/core" must not introduce slashes into the branch name)
+			const branchSuffix = selection.projectPath
+				? `-${selection.projectPath.replace(/[\\/]+/g, '-').toLowerCase()}`
+				: '';
 			const branchName = branchBase + branchSuffix;
 
 			// Create worktree path

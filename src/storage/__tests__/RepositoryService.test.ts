@@ -1,6 +1,6 @@
+import { Volume } from 'memfs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Volume } from 'memfs';
 
 import { createMockFs, setupMockHomeDir } from '../../__tests__/helpers.js';
 import { RepositoryService } from '../RepositoryService.js';
@@ -12,15 +12,18 @@ let mockHomeDir: string;
 
 vi.mock('fs', () => {
 	return {
-		default: new Proxy({}, {
-			get(_target, prop) {
-				return vol?.[prop as keyof Volume];
-			},
-		}),
+		default: new Proxy(
+			{},
+			{
+				get(_target, prop) {
+					return vol?.[prop as keyof Volume];
+				},
+			}
+		),
 		...Object.fromEntries(
 			Object.getOwnPropertyNames(Volume.prototype)
-				.filter(key => key !== 'constructor')
-				.map(key => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
+				.filter((key) => key !== 'constructor')
+				.map((key) => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
 		),
 	};
 });
@@ -173,9 +176,7 @@ describe('RepositoryService', () => {
 		it('should throw error if repository already registered', () => {
 			service.addRepository('/test/repo1');
 
-			expect(() => service.addRepository('/test/repo1')).toThrow(
-				'Repository already registered',
-			);
+			expect(() => service.addRepository('/test/repo1')).toThrow('Repository already registered');
 		});
 
 		it('should extract repository name from path', () => {
@@ -191,6 +192,21 @@ describe('RepositoryService', () => {
 			const date = new Date(repo.registeredAt);
 			expect(date).toBeInstanceOf(Date);
 			expect(date.getTime()).not.toBeNaN();
+		});
+
+		it('should mark the repository as a monorepo when the option is set', () => {
+			const repo = service.addRepository('/test/mono', { isMonorepo: true });
+
+			expect(repo.isMonorepo).toBe(true);
+			expect(service.getAllRepositories()[0].isMonorepo).toBe(true);
+		});
+
+		it('should not set isMonorepo when the option is false or omitted', () => {
+			const plain = service.addRepository('/test/plain', { isMonorepo: false });
+			const bare = service.addRepository('/test/bare');
+
+			expect(plain.isMonorepo).toBeUndefined();
+			expect(bare.isMonorepo).toBeUndefined();
 		});
 	});
 

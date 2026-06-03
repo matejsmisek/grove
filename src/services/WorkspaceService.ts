@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import { findMainRepoRootSync } from '../git/utils.js';
 import type {
 	WorkspaceConfig,
 	WorkspaceContext,
@@ -44,6 +45,24 @@ export interface IWorkspaceService {
 	setCurrentContext(context: WorkspaceContext): void;
 	/** Get the current workspace context */
 	getCurrentContext(): WorkspaceContext | undefined;
+}
+
+/**
+ * Get a short display name for the current context, shown in the status bar and
+ * screen headers. Returns the workspace name, the repo name for repo-scoped
+ * mode, or null for global mode (where no name is shown).
+ */
+export function getContextDisplayName(context: WorkspaceContext | undefined): string | null {
+	if (!context) {
+		return null;
+	}
+	if (context.type === 'workspace') {
+		return context.config?.name ?? null;
+	}
+	if (context.type === 'repo') {
+		return context.repoName ?? null;
+	}
+	return null;
 }
 
 /**
@@ -194,16 +213,31 @@ export class WorkspaceService implements IWorkspaceService {
 				groveFolder,
 				grovesFolder,
 			};
-		} else {
-			// Global context
-			const groveFolder = getGlobalGroveFolder();
+		}
 
+		// Outside a workspace: if we are inside a git repository, operate in
+		// repo-scoped mode - an implicit per-repo workspace whose data lives in
+		// <repo>/.grove (no .grove.workspace.json marker, no registration).
+		const repoRoot = findMainRepoRootSync(cwd);
+		if (repoRoot) {
+			const groveFolder = path.join(repoRoot, WORKSPACE_GROVE_FOLDER);
 			return {
-				type: 'global',
+				type: 'repo',
+				repoPath: repoRoot,
+				repoName: path.basename(repoRoot),
 				groveFolder,
-				// grovesFolder will be read from settings later
+				grovesFolder: path.join(groveFolder, 'groves'),
 			};
 		}
+
+		// Global context
+		const groveFolder = getGlobalGroveFolder();
+
+		return {
+			type: 'global',
+			groveFolder,
+			// grovesFolder will be read from settings later
+		};
 	}
 
 	/**

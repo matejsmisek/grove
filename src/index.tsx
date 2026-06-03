@@ -18,7 +18,9 @@ import {
 import { App } from './components/App.js';
 import { FatalConfigError } from './components/FatalConfigError.js';
 import { getContainer } from './di/index.js';
+import { detectMonorepo } from './git/index.js';
 import {
+	RepositoryServiceToken,
 	SessionsServiceToken,
 	WorkspaceService,
 	WorkspaceServiceToken,
@@ -30,6 +32,7 @@ import {
 	GROVE_GLOBAL_DIR_ENV,
 	GlobalGroveDirError,
 	ensureGlobalGroveFolder,
+	ensureGroveGitExcluded,
 } from './utils/index.js';
 
 // Resolve and create the global Grove directory (honoring GROVE_GLOBAL_DIR)
@@ -65,8 +68,10 @@ const settingsService = new SettingsService(workspaceContext);
 
 // Detect a first run (no settings.json yet) before storage is initialized,
 // since initializeStorage() creates a default settings file. Used to launch
-// the interactive setup wizard.
-const isFirstRun = !settingsService.hasSettingsFile();
+// the interactive setup wizard. The setup wizard only configures the global
+// working folder, so it is only relevant in global mode - workspace and
+// repo-scoped modes derive their groves folder from the context.
+const isFirstRun = workspaceContext.type === 'global' && !settingsService.hasSettingsFile();
 
 // Initialize storage before rendering the app
 // If in a workspace, this will initialize the workspace's .grove folder
@@ -82,6 +87,18 @@ initializeServices(undefined, workspaceContext);
 const container = getContainer();
 const workspaceServiceFromDI = container.resolve(WorkspaceServiceToken);
 workspaceServiceFromDI.setCurrentContext(workspaceContext);
+
+// In repo-scoped mode the current git repository is operated on implicitly:
+// keep Grove's data dir out of version control and auto-provide the repo so
+// the user never has to register it.
+if (workspaceContext.type === 'repo' && workspaceContext.repoPath) {
+	ensureGroveGitExcluded(workspaceContext.repoPath);
+	const repositoryService = container.resolve(RepositoryServiceToken);
+	if (!repositoryService.isRepositoryRegistered(workspaceContext.repoPath)) {
+		const isMonorepo = await detectMonorepo(workspaceContext.repoPath);
+		repositoryService.addRepository(workspaceContext.repoPath, { isMonorepo });
+	}
+}
 
 // Detect terminal on startup if not already configured.
 // On a first run the setup wizard handles terminal selection, so skip it here.

@@ -1,7 +1,7 @@
 import { Volume } from 'memfs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getMonorepoProjects } from '../utils.js';
+import { findMainRepoRootSync, getMonorepoProjects } from '../utils.js';
 
 // Mock filesystem (mirrors the pattern used in service tests)
 let vol: Volume;
@@ -59,5 +59,42 @@ describe('getMonorepoProjects', () => {
 		const projects = await getMonorepoProjects('/does/not/exist');
 
 		expect(projects).toEqual([]);
+	});
+});
+
+describe('findMainRepoRootSync', () => {
+	beforeEach(() => {
+		vol = new Volume();
+	});
+
+	afterEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it('returns the repo root when .git is a directory', () => {
+		vol.mkdirSync('/repos/app/.git', { recursive: true });
+
+		expect(findMainRepoRootSync('/repos/app')).toBe('/repos/app');
+	});
+
+	it('finds the repo root from a nested subdirectory', () => {
+		vol.mkdirSync('/repos/app/.git', { recursive: true });
+		vol.mkdirSync('/repos/app/src/deep', { recursive: true });
+
+		expect(findMainRepoRootSync('/repos/app/src/deep')).toBe('/repos/app');
+	});
+
+	it('resolves a linked worktree (.git file) back to the main repo root', () => {
+		vol.mkdirSync('/repos/app/.git/worktrees/wt', { recursive: true });
+		vol.mkdirSync('/repos/app/.grove/groves/g/wt', { recursive: true });
+		vol.writeFileSync('/repos/app/.grove/groves/g/wt/.git', 'gitdir: /repos/app/.git/worktrees/wt\n');
+
+		expect(findMainRepoRootSync('/repos/app/.grove/groves/g/wt')).toBe('/repos/app');
+	});
+
+	it('returns undefined when there is no git repo', () => {
+		vol.mkdirSync('/plain/dir', { recursive: true });
+
+		expect(findMainRepoRootSync('/plain/dir')).toBeUndefined();
 	});
 });

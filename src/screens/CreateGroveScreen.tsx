@@ -5,7 +5,7 @@ import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 
 import { useService } from '../di/index.js';
-import { getMonorepoProjects } from '../git/index.js';
+import { getRepoProjects } from '../git/index.js';
 import { useTask } from '../hooks/useTasks.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
@@ -67,8 +67,14 @@ export function CreateGroveScreen() {
 	const [error, setError] = useState<string>('');
 	const [nameError, setNameError] = useState<string>('');
 
+	// When there is exactly one repository to work with (a single registered repo,
+	// or repo-scoped mode), we skip the multi-select repository step entirely.
+	const singleRepoMode = repositories.length === 1;
+
 	// Id of the background task running the grove creation, observed via useTask.
 	const [taskId, setTaskId] = useState<string | null>(null);
+	// Selections handed to the creation task, kept for the "creating" summary.
+	const [pendingSelections, setPendingSelections] = useState<RepositorySelection[]>([]);
 	const navHandledRef = useRef(false);
 	const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -93,9 +99,7 @@ export function CreateGroveScreen() {
 		let cancelled = false;
 		setProjectsLoading(true);
 
-		Promise.all(
-			monorepos.map(async (repo) => [repo.path, await getMonorepoProjects(repo.path)] as const)
-		)
+		Promise.all(monorepos.map(async (repo) => [repo.path, await getRepoProjects(repo.path)] as const))
 			.then((entries) => {
 				if (cancelled) return;
 				setProjectsByRepo(new Map(entries));
@@ -317,20 +321,43 @@ export function CreateGroveScreen() {
 		(input, key) => {
 			if (step !== 'projects') return;
 
+			const projectCount = allProjects.length;
+
 			if (key.upArrow) {
-				setProjectCursor((prev) => (prev > 0 ? prev - 1 : allProjects.length - 1));
+				setProjectCursor((prev) => (prev > 0 ? prev - 1 : Math.max(projectCount - 1, 0)));
 			} else if (key.downArrow) {
-				setProjectCursor((prev) => (prev < allProjects.length - 1 ? prev + 1 : 0));
+				setProjectCursor((prev) => (prev < projectCount - 1 ? prev + 1 : 0));
+			} else if (singleRepoMode) {
+				// Single-repo monorepo: radio-style selection. Enter uses the highlighted
+				// project, 'e' creates an empty grove (no worktree yet).
+				if (input === 'e') {
+					createGrove([]);
+				} else if (key.return) {
+					if (projectsLoading) {
+						return;
+					}
+					const repo = repositories[0];
+					const project = allProjects[projectCursor];
+					if (project) {
+						createGrove([{ repository: repo, projectPath: project.projectPath }]);
+					} else {
+						// No projects detected: fall back to a worktree for the whole repo.
+						createGrove([{ repository: repo }]);
+					}
+				} else if (key.escape) {
+					// Go back to name entry (there is no repository step in single-repo mode).
+					setStep('name');
+				}
 			} else if (input === ' ') {
-				// Toggle project selection with spacebar
+				// Multi-repo: toggle project selection with spacebar
 				const project = allProjects[projectCursor];
-				const key = getProjectKey(project.repo.path, project.projectPath);
+				const projectKey = getProjectKey(project.repo.path, project.projectPath);
 				setSelectedProjects((prev) => {
 					const newSet = new Set(prev);
-					if (newSet.has(key)) {
-						newSet.delete(key);
+					if (newSet.has(projectKey)) {
+						newSet.delete(projectKey);
 					} else {
-						newSet.add(key);
+						newSet.add(projectKey);
 					}
 					return newSet;
 				});
@@ -422,6 +449,21 @@ export function CreateGroveScreen() {
 			return;
 		}
 
+		// Single repository: auto-select it. A monorepo still needs a project
+		// chosen, so go straight to the (single-select) project step; otherwise
+		// create the grove for the whole repo immediately.
+		if (singleRepoMode) {
+			const repo = repositories[0];
+			if (repo.isMonorepo) {
+				setSelectedRepoIndices(new Set([0]));
+				setProjectCursor(0);
+				setStep('projects');
+			} else {
+				createGrove([{ repository: repo }]);
+			}
+			return;
+		}
+
 		setStep('repositories');
 	};
 
@@ -436,8 +478,9 @@ export function CreateGroveScreen() {
 		proceedToRepositorySelection();
 	};
 
-	const createGrove = () => {
-		const selections = buildSelections();
+	const createGrove = (explicitSelections?: RepositorySelection[]) => {
+		const selections = explicitSelections ?? buildSelections();
+		setPendingSelections(selections);
 		navHandledRef.current = false;
 
 		// Run the creation as a background task so it survives navigating away
@@ -695,6 +738,8 @@ export function CreateGroveScreen() {
 		// Group projects by repository for display
 		let currentRepo = '';
 
+		const title = singleRepoMode ? repositories[0]?.name : 'monorepos';
+
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
@@ -704,57 +749,87 @@ export function CreateGroveScreen() {
 				</Box>
 
 				<Box marginBottom={1}>
-					<Text>Select projects from monorepos (Space to toggle, Enter to create):</Text>
+					<Text>
+						{singleRepoMode
+							? `Select a project from ${title} (Enter to use it):`
+							: 'Select projects from monorepos (Space to toggle, Enter to create):'}
+					</Text>
 				</Box>
 
-				<Box flexDirection="column" marginLeft={2}>
-					{allProjects.map((project, index) => {
-						const key = getProjectKey(project.repo.path, project.projectPath);
-						const isSelected = selectedProjects.has(key);
-						const isCursor = index === projectCursor;
+				{projectsLoading && allProjects.length === 0 ? (
+					<Box marginLeft={2}>
+						<Text dimColor>Loading projects…</Text>
+					</Box>
+				) : allProjects.length === 0 ? (
+					<Box marginLeft={2}>
+						<Text dimColor>No projects detected — a worktree for the whole repo will be created.</Text>
+					</Box>
+				) : (
+					<Box flexDirection="column" marginLeft={2}>
+						{allProjects.map((project, index) => {
+							const key = getProjectKey(project.repo.path, project.projectPath);
+							const isSelected = selectedProjects.has(key);
+							const isCursor = index === projectCursor;
 
-						// Show repository header when it changes
-						const showHeader = project.repo.path !== currentRepo;
-						currentRepo = project.repo.path;
+							// Show repository header when it changes (multi-repo only)
+							const showHeader = !singleRepoMode && project.repo.path !== currentRepo;
+							currentRepo = project.repo.path;
 
-						return (
-							<Box key={key} flexDirection="column">
-								{showHeader && (
-									<Box marginTop={index > 0 ? 1 : 0}>
-										<Text color="yellow" bold>
-											{project.repo.name}:
+							return (
+								<Box key={key} flexDirection="column">
+									{showHeader && (
+										<Box marginTop={index > 0 ? 1 : 0}>
+											<Text color="yellow" bold>
+												{project.repo.name}:
+											</Text>
+										</Box>
+									)}
+									<Box marginLeft={singleRepoMode ? 0 : 2}>
+										<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
+											{isCursor ? '❯ ' : '  '}
+											{singleRepoMode ? '' : `[${isSelected ? '✓' : ' '}] `}
+											{project.projectPath}
 										</Text>
 									</Box>
-								)}
-								<Box marginLeft={2}>
-									<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
-										{isCursor ? '❯ ' : '  '}[{isSelected ? '✓' : ' '}] {project.projectPath}
-									</Text>
 								</Box>
-							</Box>
-						);
-					})}
-				</Box>
+							);
+						})}
+					</Box>
+				)}
 
 				<Box marginTop={1} flexDirection="column">
 					<Text dimColor>• Use ↑/↓ to navigate</Text>
-					<Text dimColor>• Space to toggle selection</Text>
-					<Text dimColor>• Enter to create grove</Text>
-					<Text dimColor>• Esc to go back</Text>
+					{singleRepoMode ? (
+						<>
+							<Text dimColor>• Enter to create grove for the highlighted project</Text>
+							<Text dimColor>
+								• Press <Text color="cyan">e</Text> to create an empty grove (add worktrees later)
+							</Text>
+							<Text dimColor>• Esc to go back</Text>
+						</>
+					) : (
+						<>
+							<Text dimColor>• Space to toggle selection</Text>
+							<Text dimColor>• Enter to create grove</Text>
+							<Text dimColor>• Esc to go back</Text>
+						</>
+					)}
 				</Box>
 
-				<Box marginTop={1}>
-					<Text color="yellow">
-						Selected projects: {selectedProjects.size}
-						{selectedProjects.size === 0 && <Text dimColor> (will use entire repos)</Text>}
-					</Text>
-				</Box>
+				{!singleRepoMode && (
+					<Box marginTop={1}>
+						<Text color="yellow">
+							Selected projects: {selectedProjects.size}
+							{selectedProjects.size === 0 && <Text dimColor> (will use entire repos)</Text>}
+						</Text>
+					</Box>
+				)}
 			</Box>
 		);
 	}
 
 	if (step === 'creating') {
-		const selections = buildSelections();
+		const selections = pendingSelections;
 		const logLines = creationTask?.log ?? [];
 		return (
 			<Box flexDirection="column" padding={1}>

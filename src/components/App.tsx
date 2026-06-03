@@ -5,14 +5,14 @@ import { Box } from 'ink';
 import { ServiceProvider, useService } from '../di/index.js';
 import { NavigationProvider } from '../navigation/NavigationContext.js';
 import { Router } from '../navigation/Router.js';
+import { getContextDisplayName } from '../services/WorkspaceService.js';
 import { WorkspaceServiceToken } from '../services/tokens.js';
 import { StatusBar } from './StatusBar.js';
 
 function AppContent() {
 	const workspaceService = useService(WorkspaceServiceToken);
 	const workspaceContext = workspaceService.getCurrentContext();
-	const workspaceName =
-		workspaceContext?.type === 'workspace' ? workspaceContext.config?.name : null;
+	const workspaceName = getContextDisplayName(workspaceContext);
 
 	return (
 		<Box flexDirection="column" height="100%">
