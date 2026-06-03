@@ -229,7 +229,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 					Safety Checks:
 				</Text>
 				{checks.map((check) => (
-					<Box key={check.displayName} flexDirection="column" marginLeft={2} marginTop={1}>
+					<Box key={check.worktreePath} flexDirection="column" marginLeft={2} marginTop={1}>
 						<Text bold>{check.displayName}</Text>
 						<Box marginLeft={2}>
 							<Text>
