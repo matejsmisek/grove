@@ -1,6 +1,6 @@
+import { Volume } from 'memfs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Volume } from 'memfs';
 
 import { createMockFs, setupMockHomeDir } from '../../__tests__/helpers.js';
 import { SettingsService } from '../SettingsService.js';
@@ -12,15 +12,18 @@ let mockHomeDir: string;
 
 vi.mock('fs', () => {
 	return {
-		default: new Proxy({}, {
-			get(_target, prop) {
-				return vol?.[prop as keyof Volume];
-			},
-		}),
+		default: new Proxy(
+			{},
+			{
+				get(_target, prop) {
+					return vol?.[prop as keyof Volume];
+				},
+			}
+		),
 		...Object.fromEntries(
 			Object.getOwnPropertyNames(Volume.prototype)
-				.filter(key => key !== 'constructor')
-				.map(key => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
+				.filter((key) => key !== 'constructor')
+				.map((key) => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
 		),
 	};
 });
@@ -70,6 +73,17 @@ describe('SettingsService', () => {
 			const defaults = service.getDefaultSettings();
 
 			expect(defaults.workingFolder).toBe(path.join(mockHomeDir, 'grove-worktrees'));
+		});
+	});
+
+	describe('hasSettingsFile', () => {
+		it('should return false when settings.json does not exist', () => {
+			expect(service.hasSettingsFile()).toBe(false);
+		});
+
+		it('should return true after settings.json is created', () => {
+			service.initializeStorage();
+			expect(service.hasSettingsFile()).toBe(true);
 		});
 	});
 
@@ -140,7 +154,7 @@ describe('SettingsService', () => {
 			// Write partial settings
 			vol.writeFileSync(
 				path.join(mockGroveFolder, 'settings.json'),
-				JSON.stringify({ workingFolder: '/custom/path' }),
+				JSON.stringify({ workingFolder: '/custom/path' })
 			);
 
 			const settings = service.readSettings();

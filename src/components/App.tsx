@@ -22,10 +22,15 @@ function AppContent() {
 	);
 }
 
-export function App() {
+interface AppProps {
+	/** When true, launch into the first-run setup wizard instead of the home screen */
+	firstRun?: boolean;
+}
+
+export function App({ firstRun = false }: AppProps) {
 	return (
 		<ServiceProvider>
-			<NavigationProvider initialScreen="home">
+			<NavigationProvider initialScreen={firstRun ? 'setupWizard' : 'home'}>
 				<AppContent />
 			</NavigationProvider>
 		</ServiceProvider>

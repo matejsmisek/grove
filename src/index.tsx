@@ -63,6 +63,11 @@ const workspaceContext = workspaceService.resolveContext(process.cwd());
 // Create workspace-aware settings service
 const settingsService = new SettingsService(workspaceContext);
 
+// Detect a first run (no settings.json yet) before storage is initialized,
+// since initializeStorage() creates a default settings file. Used to launch
+// the interactive setup wizard.
+const isFirstRun = !settingsService.hasSettingsFile();
+
 // Initialize storage before rendering the app
 // If in a workspace, this will initialize the workspace's .grove folder
 // If global, this will initialize ~/.grove
@@ -78,9 +83,10 @@ const container = getContainer();
 const workspaceServiceFromDI = container.resolve(WorkspaceServiceToken);
 workspaceServiceFromDI.setCurrentContext(workspaceContext);
 
-// Detect terminal on first startup if not already configured
+// Detect terminal on startup if not already configured.
+// On a first run the setup wizard handles terminal selection, so skip it here.
 const settings = settingsService.readSettings();
-if (!settings.terminal) {
+if (!isFirstRun && !settings.terminal) {
 	const terminalConfig = await detectTerminal(settings.selectedClaudeTerminal);
 	if (terminalConfig) {
 		settingsService.updateSettings({ terminal: terminalConfig });
@@ -372,8 +378,8 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 } else {
 	// Clear terminal to give app full height
 	console.clear();
-	// Start the interactive UI
-	render(<App />);
+	// Start the interactive UI (launches the setup wizard on first run)
+	render(<App firstRun={isFirstRun} />);
 }
 
 /**

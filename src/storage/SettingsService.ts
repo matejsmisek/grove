@@ -15,6 +15,8 @@ export interface ISettingsService {
 	getStorageConfig(): StorageConfig;
 	/** Get default settings values */
 	getDefaultSettings(): Settings;
+	/** Whether a settings.json file already exists on disk (used to detect first run) */
+	hasSettingsFile(): boolean;
 	/** Initialize the .grove folder structure if it doesn't exist */
 	initializeStorage(): void;
 	/** Read settings from settings.json */
@@ -87,6 +89,14 @@ export class SettingsService implements ISettingsService {
 		return {
 			workingFolder: path.join(homeDir, 'grove-worktrees'),
 		};
+	}
+
+	/**
+	 * Whether a settings.json file already exists on disk.
+	 * Used to detect a first run (no settings yet) before storage is initialized.
+	 */
+	hasSettingsFile(): boolean {
+		return fs.existsSync(this.getStorageConfig().settingsPath);
 	}
 
 	/**

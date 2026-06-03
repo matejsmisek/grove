@@ -115,6 +115,33 @@ export async function detectTerminal(preferredCommand?: string): Promise<Termina
 }
 
 /**
+ * Detect every terminal available on the system, in preference order.
+ * Used by the setup wizard to let the user pick from installed terminals.
+ * The first entry is the auto-detected default.
+ */
+export async function detectAvailableTerminals(): Promise<TerminalConfig[]> {
+	const platform = os.platform();
+
+	switch (platform) {
+		case 'darwin':
+			return [{ command: MACOS_TERMINAL.command, args: MACOS_TERMINAL.args }];
+		case 'win32':
+			return [{ command: WINDOWS_TERMINAL.command, args: WINDOWS_TERMINAL.args }];
+		case 'linux': {
+			const available: TerminalConfig[] = [];
+			for (const terminal of LINUX_TERMINALS) {
+				if (await commandExists(terminal.command)) {
+					available.push({ command: terminal.command, args: terminal.args });
+				}
+			}
+			return available;
+		}
+		default:
+			return [];
+	}
+}
+
+/**
  * Open a terminal window in the specified directory using saved config
  */
 export function openTerminalInPath(
