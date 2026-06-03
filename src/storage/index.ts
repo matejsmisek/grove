@@ -37,7 +37,7 @@ export { JsonStore, type JsonStoreOptions } from './JsonStore.js';
 // Service class exports (for DI) and co-located interfaces
 export { SettingsService, type ISettingsService } from './SettingsService.js';
 export { RepositoryService, type IRepositoryService } from './RepositoryService.js';
-export { GrovesService, type IGrovesService } from './GrovesService.js';
+export { GrovesService, readGrovesIndexAt, type IGrovesService } from './GrovesService.js';
 export {
 	GroveConfigService,
 	getPatternString,

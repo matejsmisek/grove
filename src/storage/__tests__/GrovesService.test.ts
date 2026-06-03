@@ -1,9 +1,9 @@
+import { Volume } from 'memfs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Volume } from 'memfs';
 
 import { createMockFs, setupMockHomeDir } from '../../__tests__/helpers.js';
-import { GrovesService } from '../GrovesService.js';
+import { GrovesService, readGrovesIndexAt } from '../GrovesService.js';
 import { SettingsService } from '../SettingsService.js';
 import type { GroveMetadata, GroveReference } from '../types.js';
 
@@ -13,15 +13,18 @@ let mockHomeDir: string;
 
 vi.mock('fs', () => {
 	return {
-		default: new Proxy({}, {
-			get(_target, prop) {
-				return vol?.[prop as keyof Volume];
-			},
-		}),
+		default: new Proxy(
+			{},
+			{
+				get(_target, prop) {
+					return vol?.[prop as keyof Volume];
+				},
+			}
+		),
 		...Object.fromEntries(
 			Object.getOwnPropertyNames(Volume.prototype)
-				.filter(key => key !== 'constructor')
-				.map(key => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
+				.filter((key) => key !== 'constructor')
+				.map((key) => [key, (...args: unknown[]) => vol?.[key as keyof Volume]?.(...args)])
 		),
 	};
 });
@@ -228,10 +231,7 @@ describe('GrovesService', () => {
 				worktrees: [],
 			};
 
-			vol.writeFileSync(
-				path.join(grovePath, 'grove.json'),
-				JSON.stringify(testMetadata, null, '\t'),
-			);
+			vol.writeFileSync(path.join(grovePath, 'grove.json'), JSON.stringify(testMetadata, null, '\t'));
 
 			const metadata = service.readGroveMetadata(grovePath);
 
@@ -345,7 +345,7 @@ describe('GrovesService', () => {
 				grovePath,
 				'repo1',
 				'/path/to/repo1',
-				'feature-branch',
+				'feature-branch'
 			);
 
 			expect(worktree.repositoryName).toBe('repo1');
@@ -358,9 +358,9 @@ describe('GrovesService', () => {
 		it('should throw error if metadata not found', () => {
 			const grovePath = '/nonexistent-grove';
 
-			expect(() =>
-				service.addWorktreeToGrove(grovePath, 'repo1', '/path/to/repo1', 'main'),
-			).toThrow('Grove metadata not found');
+			expect(() => service.addWorktreeToGrove(grovePath, 'repo1', '/path/to/repo1', 'main')).toThrow(
+				'Grove metadata not found'
+			);
 		});
 
 		it('should generate correct worktree path', () => {
@@ -377,12 +377,7 @@ describe('GrovesService', () => {
 
 			service.writeGroveMetadata(grovePath, metadata);
 
-			const worktree = service.addWorktreeToGrove(
-				grovePath,
-				'my-repo',
-				'/path/to/my-repo',
-				'main',
-			);
+			const worktree = service.addWorktreeToGrove(grovePath, 'my-repo', '/path/to/my-repo', 'main');
 
 			expect(worktree.worktreePath).toBe(path.join(grovePath, 'my-repo.worktree'));
 		});
@@ -435,6 +430,41 @@ describe('GrovesService', () => {
 			const deleted = service.deleteGrove('nonexistent', true);
 
 			expect(deleted).toBe(false);
+		});
+	});
+
+	describe('readGrovesIndexAt', () => {
+		it('reads grove references from an arbitrary .grove folder', () => {
+			const groveFolder = '/somewhere/.grove';
+			vol.mkdirSync(groveFolder, { recursive: true });
+			vol.writeFileSync(
+				path.join(groveFolder, 'groves.json'),
+				JSON.stringify({
+					groves: [
+						{ id: 'g1', name: 'one', path: '/g1', createdAt: 'x', updatedAt: 'x' },
+						{ id: 'g2', name: 'two', path: '/g2', createdAt: 'x', updatedAt: 'x' },
+					],
+				})
+			);
+
+			expect(readGrovesIndexAt(groveFolder)).toHaveLength(2);
+		});
+
+		it('returns an empty list when the folder or file is missing', () => {
+			expect(readGrovesIndexAt('/no/such/.grove')).toEqual([]);
+		});
+
+		it('returns an empty list on invalid JSON (silent guard)', () => {
+			const groveFolder = '/broken/.grove';
+			vol.mkdirSync(groveFolder, { recursive: true });
+			vol.writeFileSync(path.join(groveFolder, 'groves.json'), 'not json {');
+
+			expect(readGrovesIndexAt(groveFolder)).toEqual([]);
+		});
+
+		it('does not create the file when missing', () => {
+			readGrovesIndexAt('/readonly/.grove');
+			expect(vol.existsSync('/readonly/.grove/groves.json')).toBe(false);
 		});
 	});
 });

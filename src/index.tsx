@@ -100,6 +100,15 @@ if (workspaceContext.type === 'repo' && workspaceContext.repoPath) {
 	}
 }
 
+// Register the launched location (workspace or repo) in the central index,
+// keyed by a stable id stored in the location's own marker. This ensures it is
+// discoverable from the global switcher, generates+migrates an id when missing,
+// and dedupes the central record when the same location is launched from a new
+// path (a move).
+if (workspaceContext.type === 'workspace' || workspaceContext.type === 'repo') {
+	workspaceServiceFromDI.registerLocation(workspaceContext);
+}
+
 // Detect terminal on startup if not already configured.
 // On a first run the setup wizard handles terminal selection, so skip it here.
 const settings = settingsService.readSettings();
@@ -395,8 +404,14 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 } else {
 	// Clear terminal to give app full height
 	console.clear();
-	// Start the interactive UI (launches the setup wizard on first run)
-	render(<App firstRun={isFirstRun} />);
+	// Choose the initial screen:
+	// - global (no workspace, no git repo): the workspace/repo switcher
+	// - first run in a context that needs setup: the setup wizard
+	// - otherwise: the normal home screen for the current context
+	const initialScreen =
+		workspaceContext.type === 'global' ? 'globalHome' : isFirstRun ? 'setupWizard' : 'home';
+	// Start the interactive UI
+	render(<App initialScreen={initialScreen} />);
 }
 
 /**

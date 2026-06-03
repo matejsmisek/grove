@@ -1,5 +1,9 @@
 import { getContainer } from '../di/index.js';
-import { GroveServiceToken, RepositoryServiceToken } from '../services/tokens.js';
+import {
+	GroveServiceToken,
+	RepositoryServiceToken,
+	WorkspaceServiceToken,
+} from '../services/tokens.js';
 import type { RepositorySelection } from '../storage/types.js';
 
 /**
@@ -41,6 +45,17 @@ export async function createGrove(name: string, repoArg?: string): Promise<Creat
 		const container = getContainer();
 		const repositoryService = container.resolve(RepositoryServiceToken);
 		const groveService = container.resolve(GroveServiceToken);
+		const workspaceService = container.resolve(WorkspaceServiceToken);
+
+		// Groves can only be created inside a workspace or a git repository.
+		// In global mode (no workspace, no repo) Grove is a read-only switcher.
+		if (workspaceService.getCurrentContext()?.type === 'global') {
+			return {
+				success: false,
+				message:
+					'Cannot create a grove here. Run grove inside a git repository or a workspace (or run "grove workspace init").',
+			};
+		}
 
 		let selections: RepositorySelection[] = [];
 

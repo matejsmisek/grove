@@ -416,6 +416,13 @@ export interface GroveRepoConfig {
  */
 export interface WorkspaceConfig {
 	/**
+	 * Stable unique identifier for this workspace. Persisted here (and in the
+	 * central index) so a workspace moved/cloned to a new path is recognized by
+	 * id instead of producing a duplicate record. Optional for backward
+	 * compatibility; generated on first launch after this was introduced.
+	 */
+	id?: string;
+	/**
 	 * Workspace name (for display and tracking)
 	 */
 	name: string;
@@ -431,30 +438,43 @@ export interface WorkspaceConfig {
 }
 
 /**
- * Reference to a workspace stored in global ~/.grove/workspaces.json
- * Used to track all available workspaces on the system
+ * Reference to a tracked grove location stored in global ~/.grove/workspaces.json.
+ * Covers both full workspaces (with a .grove.workspace.json marker) and
+ * repo-scoped repositories (data in <repo>/.grove, no marker), distinguished by
+ * the `type` field so all tracking lives in one place.
  */
 export interface WorkspaceReference {
 	/**
-	 * Workspace name
+	 * Stable unique identifier shared with the location's own marker (workspace
+	 * config / repo id file). Used to dedupe when a location moves to a new path.
+	 * Optional for backward compatibility with pre-existing records.
+	 */
+	id?: string;
+	/**
+	 * Display name (workspace name, or repo folder name)
 	 */
 	name: string;
 	/**
-	 * Absolute path to workspace root (where .grove.workspace.json is located)
+	 * Absolute path to the location root (workspace root or repository root)
 	 */
 	path: string;
 	/**
-	 * Timestamp when the workspace was last used/accessed
+	 * Whether this is a full workspace or a repo-scoped repository.
+	 * Optional for backward compatibility; treated as 'workspace' when absent.
+	 */
+	type?: 'workspace' | 'repo';
+	/**
+	 * Timestamp when the location was last used/accessed
 	 */
 	lastUsedAt: string;
 }
 
 /**
- * Global workspace tracking stored in ~/.grove/workspaces.json
+ * Global location tracking stored in ~/.grove/workspaces.json
  */
 export interface WorkspacesData {
 	/**
-	 * List of workspace references
+	 * List of tracked location references (workspaces and repos)
 	 */
 	workspaces: WorkspaceReference[];
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
@@ -13,6 +14,7 @@ import { getGlobalGroveFolder } from '../utils/globalGroveDir.js';
 const WORKSPACE_CONFIG_FILENAME = '.grove.workspace.json';
 const WORKSPACE_GROVE_FOLDER = '.grove';
 const GLOBAL_WORKSPACES_FILENAME = 'workspaces.json';
+const REPO_ID_FILENAME = 'id.json';
 
 /**
  * Workspace service interface
@@ -39,6 +41,21 @@ export interface IWorkspaceService {
 	updateLastUsed(workspacePath: string): void;
 	/** Remove workspace from global tracking */
 	removeFromGlobalTracking(workspacePath: string): void;
+	/**
+	 * Ensure the launched location (workspace or repo) has a stable id persisted
+	 * in its own marker, generating (and migrating) one if absent. Returns the id.
+	 */
+	ensureLocationId(context: WorkspaceContext): string | undefined;
+	/**
+	 * Register the launched location in the central index keyed by its id,
+	 * deduping any stale record that shares the same id or path (handles moves
+	 * and legacy records without an id).
+	 */
+	registerLocation(context: WorkspaceContext): void;
+	/** Build the global (no workspace, no repo) context */
+	getGlobalContext(): WorkspaceContext;
+	/** Build a repo-scoped context for a known repository root (no git detection) */
+	buildRepoContext(repoPath: string): WorkspaceContext;
 	/** Check if a directory is a workspace root */
 	isWorkspaceRoot(dirPath: string): boolean;
 	/** Set the current workspace context */
@@ -125,8 +142,9 @@ export class WorkspaceService implements IWorkspaceService {
 	 * Creates .grove.workspace.json and .grove/ folder structure
 	 */
 	initWorkspace(workspacePath: string, name: string, grovesFolder: string): void {
-		// Create workspace configuration
+		// Create workspace configuration with a stable id for cross-path tracking
 		const config: WorkspaceConfig = {
+			id: randomUUID(),
 			name,
 			version: '1.0.0',
 			grovesFolder,
@@ -180,8 +198,10 @@ export class WorkspaceService implements IWorkspaceService {
 
 		// Add workspace to global tracking
 		this.addToGlobalTracking({
+			id: config.id,
 			name,
 			path: workspacePath,
+			type: 'workspace',
 			lastUsedAt: new Date().toISOString(),
 		});
 	}
@@ -323,6 +343,116 @@ export class WorkspaceService implements IWorkspaceService {
 		const data = this.readGlobalWorkspaces();
 		data.workspaces = data.workspaces.filter((w) => w.path !== workspacePath);
 		this.writeGlobalWorkspaces(data);
+	}
+
+	/**
+	 * Ensure the launched location has a stable id persisted in its own marker.
+	 * - Workspace: stored as `id` in .grove.workspace.json (travels with clones).
+	 * - Repo: stored in <repo>/.grove/id.json (travels when the dir is moved).
+	 * Generates a new id when absent (also migrating legacy locations that
+	 * predate ids). Returns undefined for non-workspace/non-repo contexts.
+	 */
+	ensureLocationId(context: WorkspaceContext): string | undefined {
+		if (context.type === 'workspace' && context.workspacePath) {
+			const config = this.readWorkspaceConfig(context.workspacePath);
+			if (config.id) {
+				return config.id;
+			}
+			const id = randomUUID();
+			this.writeWorkspaceConfig(context.workspacePath, { ...config, id });
+			if (context.config) {
+				context.config.id = id;
+			}
+			return id;
+		}
+
+		if (context.type === 'repo' && context.repoPath) {
+			const idPath = path.join(context.groveFolder, REPO_ID_FILENAME);
+			if (fs.existsSync(idPath)) {
+				try {
+					const parsed = JSON.parse(fs.readFileSync(idPath, 'utf-8')) as { id?: string };
+					if (parsed.id) {
+						return parsed.id;
+					}
+				} catch {
+					// Corrupt id file: fall through and regenerate.
+				}
+			}
+			const id = randomUUID();
+			if (!fs.existsSync(context.groveFolder)) {
+				fs.mkdirSync(context.groveFolder, { recursive: true });
+			}
+			fs.writeFileSync(idPath, JSON.stringify({ id }, null, '\t'), 'utf-8');
+			return id;
+		}
+
+		return undefined;
+	}
+
+	/**
+	 * Register the launched location in the central index keyed by its id.
+	 * Removes any existing record that shares the same id (a move from another
+	 * path) or the same path (a legacy/stale entry), then writes the current
+	 * record — guaranteeing a single entry per location.
+	 */
+	registerLocation(context: WorkspaceContext): void {
+		if (context.type !== 'workspace' && context.type !== 'repo') {
+			return;
+		}
+
+		const locationPath = context.type === 'workspace' ? context.workspacePath : context.repoPath;
+		if (!locationPath) {
+			return;
+		}
+
+		const id = this.ensureLocationId(context);
+		const name =
+			context.type === 'workspace'
+				? (context.config?.name ?? path.basename(locationPath))
+				: (context.repoName ?? path.basename(locationPath));
+
+		const ref: WorkspaceReference = {
+			id,
+			name,
+			path: locationPath,
+			type: context.type,
+			lastUsedAt: new Date().toISOString(),
+		};
+
+		const data = this.readGlobalWorkspaces();
+		data.workspaces = data.workspaces.filter(
+			(w) => w.path !== locationPath && (id === undefined || w.id !== id)
+		);
+		data.workspaces.push(ref);
+		this.writeGlobalWorkspaces(data);
+	}
+
+	/**
+	 * Build the global context (not in a workspace or git repo). Used to reset
+	 * the active context when returning to the global switcher.
+	 */
+	getGlobalContext(): WorkspaceContext {
+		return {
+			type: 'global',
+			groveFolder: getGlobalGroveFolder(),
+		};
+	}
+
+	/**
+	 * Build a repo-scoped context for a known repository root without performing
+	 * git detection. Used when switching into a repo from the global switcher,
+	 * where we already know the path is a tracked repo (avoids depending on the
+	 * repo's .git layout being re-discoverable).
+	 */
+	buildRepoContext(repoPath: string): WorkspaceContext {
+		const groveFolder = path.join(repoPath, WORKSPACE_GROVE_FOLDER);
+		return {
+			type: 'repo',
+			repoPath,
+			repoName: path.basename(repoPath),
+			groveFolder,
+			grovesFolder: path.join(groveFolder, 'groves'),
+		};
 	}
 
 	/**

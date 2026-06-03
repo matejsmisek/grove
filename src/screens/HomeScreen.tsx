@@ -15,7 +15,7 @@ import {
 } from '../services/tokens.js';
 
 export function HomeScreen() {
-	const { navigate } = useNavigation();
+	const { navigate, goBack, canGoBack } = useNavigation();
 	const { exit } = useApp();
 	const [selectedGroveIndex, setSelectedGroveIndex] = useState(0);
 	const [showMenu, setShowMenu] = useState(false);
@@ -130,6 +130,9 @@ export function HomeScreen() {
 			} else if (input === 'm') {
 				setShowMenu(true);
 				setSelectedMenuIndex(0);
+			} else if (key.escape && canGoBack) {
+				// When opened from the global switcher, Esc returns to it.
+				goBack();
 			}
 		}
 	});
@@ -191,6 +194,12 @@ export function HomeScreen() {
 					<Box marginTop={1} flexDirection="column">
 						<Text dimColor>
 							↑↓←→ Navigate • Enter Select • <Text bold>m</Text> Menu
+							{canGoBack && (
+								<>
+									{' '}
+									• <Text bold>Esc</Text> Workspaces
+								</>
+							)}
 						</Text>
 					</Box>
 				</>

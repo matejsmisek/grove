@@ -6,6 +6,25 @@ import type { ISettingsService } from './SettingsService.js';
 import type { GroveMetadata, GroveReference, GrovesIndex, Worktree } from './types.js';
 
 /**
+ * Read the grove references from a specific .grove folder's groves.json, without
+ * going through the current context. Best-effort and read-only: returns an empty
+ * list if the folder/file is missing or unreadable (never creates files). Used
+ * by the global switcher to count groves across workspaces and repos.
+ */
+export function readGrovesIndexAt(groveFolder: string): GroveReference[] {
+	try {
+		const indexPath = path.join(groveFolder, 'groves.json');
+		if (!fs.existsSync(indexPath)) {
+			return [];
+		}
+		const data = JSON.parse(fs.readFileSync(indexPath, 'utf-8')) as GrovesIndex;
+		return data.groves ?? [];
+	} catch {
+		return [];
+	}
+}
+
+/**
  * Groves service interface
  * Manages grove index and metadata stored in ~/.grove/groves.json
  * and individual grove.json files

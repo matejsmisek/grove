@@ -13,6 +13,8 @@ import type { Settings, StorageConfig, WorkspaceContext } from './types.js';
 export interface ISettingsService {
 	/** Get the storage configuration paths */
 	getStorageConfig(): StorageConfig;
+	/** Switch the active workspace context (re-points all storage paths) */
+	setContext(context: WorkspaceContext | undefined): void;
 	/** Get default settings values */
 	getDefaultSettings(): Settings;
 	/** Whether a settings.json file already exists on disk (used to detect first run) */
@@ -50,6 +52,15 @@ export class SettingsService implements ISettingsService {
 				afterRead: (data, defaults) => ({ ...defaults, ...data }),
 			}
 		);
+	}
+
+	/**
+	 * Switch the active workspace context. Because all storage paths are derived
+	 * from the context on each access, this re-points settings, repositories,
+	 * groves, recent, and sessions storage to the new context's .grove folder.
+	 */
+	setContext(context: WorkspaceContext | undefined): void {
+		this.context = context;
 	}
 
 	/**

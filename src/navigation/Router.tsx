@@ -24,6 +24,7 @@ import { ResumeClaudeScreen } from '../screens/ResumeClaudeScreen.js';
 import { SettingsScreen } from '../screens/SettingsScreen.js';
 import { SetupWizardScreen } from '../screens/SetupWizardScreen.js';
 import { WorkingFolderScreen } from '../screens/WorkingFolderScreen.js';
+import { WorkspaceSwitcherScreen } from '../screens/WorkspaceSwitcherScreen.js';
 import { useNavigation } from './useNavigation.js';
 
 /**
@@ -36,6 +37,8 @@ export function Router() {
 	switch (current.screen) {
 		case 'home':
 			return <HomeScreen />;
+		case 'globalHome':
+			return <WorkspaceSwitcherScreen />;
 		case 'setupWizard':
 			return <SetupWizardScreen />;
 		case 'chat':

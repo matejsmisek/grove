@@ -495,6 +495,161 @@ describe('WorkspaceService', () => {
 		});
 	});
 
+	describe('unified workspace/repo tracking', () => {
+		it('should track repos and workspaces together with a type field', () => {
+			service.addToGlobalTracking({
+				name: 'MyWS',
+				path: '/ws',
+				type: 'workspace',
+				lastUsedAt: '2024-01-01T00:00:00Z',
+			});
+			service.addToGlobalTracking({
+				name: 'repo-a',
+				path: '/repos/a',
+				type: 'repo',
+				lastUsedAt: '2024-01-02T00:00:00Z',
+			});
+
+			const result = service.readGlobalWorkspaces();
+			expect(result.workspaces).toHaveLength(2);
+			expect(result.workspaces.find((w) => w.path === '/ws')?.type).toBe('workspace');
+			expect(result.workspaces.find((w) => w.path === '/repos/a')?.type).toBe('repo');
+		});
+
+		it('should upsert by path, preserving the latest type and timestamp', () => {
+			service.addToGlobalTracking({
+				name: 'repo-a',
+				path: '/repos/a',
+				type: 'repo',
+				lastUsedAt: '2024-01-01T00:00:00Z',
+			});
+			service.addToGlobalTracking({
+				name: 'repo-a',
+				path: '/repos/a',
+				type: 'repo',
+				lastUsedAt: '2024-02-02T00:00:00Z',
+			});
+
+			const result = service.readGlobalWorkspaces();
+			expect(result.workspaces).toHaveLength(1);
+			expect(result.workspaces[0].lastUsedAt).toBe('2024-02-02T00:00:00Z');
+		});
+
+		it('should treat a missing type as a workspace (backward compatibility)', () => {
+			service.addToGlobalTracking({
+				name: 'legacy',
+				path: '/legacy',
+				lastUsedAt: '2024-01-01T00:00:00Z',
+			});
+
+			const result = service.readGlobalWorkspaces();
+			expect(result.workspaces[0].type).toBeUndefined();
+		});
+	});
+
+	describe('ensureLocationId', () => {
+		it('generates and persists an id in the workspace config, stable across calls', () => {
+			const wp = '/ws';
+			vol.mkdirSync(path.join(wp, '.grove'), { recursive: true });
+			service.writeWorkspaceConfig(wp, { name: 'W', version: '1.0.0', grovesFolder: './groves' });
+
+			const id1 = service.ensureLocationId(service.resolveContext(wp));
+			expect(id1).toBeTruthy();
+			expect(service.readWorkspaceConfig(wp).id).toBe(id1);
+
+			// Second launch returns the same id (no regeneration)
+			const id2 = service.ensureLocationId(service.resolveContext(wp));
+			expect(id2).toBe(id1);
+		});
+
+		it('generates and persists an id in <repo>/.grove/id.json for repos', () => {
+			const rp = '/repo';
+			vol.mkdirSync(path.join(rp, '.grove'), { recursive: true });
+
+			const id1 = service.ensureLocationId(service.buildRepoContext(rp));
+			const stored = JSON.parse(vol.readFileSync('/repo/.grove/id.json', 'utf-8') as string);
+			expect(stored.id).toBe(id1);
+
+			const id2 = service.ensureLocationId(service.buildRepoContext(rp));
+			expect(id2).toBe(id1);
+		});
+	});
+
+	describe('registerLocation', () => {
+		const makeWorkspace = (p: string, id?: string) => {
+			vol.mkdirSync(path.join(p, '.grove'), { recursive: true });
+			service.writeWorkspaceConfig(p, {
+				...(id ? { id } : {}),
+				name: path.basename(p),
+				version: '1.0.0',
+				grovesFolder: './groves',
+			});
+		};
+
+		it('registers a single record for the launched workspace', () => {
+			makeWorkspace('/a', 'fixed-id');
+			service.registerLocation(service.resolveContext('/a'));
+
+			const recs = service.readGlobalWorkspaces().workspaces;
+			expect(recs).toHaveLength(1);
+			expect(recs[0]).toMatchObject({ id: 'fixed-id', path: '/a', type: 'workspace' });
+		});
+
+		it('updates the record path (no duplicate) when launched from a new path with the same id', () => {
+			makeWorkspace('/a', 'fixed-id');
+			service.registerLocation(service.resolveContext('/a'));
+
+			// Same workspace (same id) now lives at /b
+			makeWorkspace('/b', 'fixed-id');
+			service.registerLocation(service.resolveContext('/b'));
+
+			const recs = service.readGlobalWorkspaces().workspaces;
+			expect(recs).toHaveLength(1);
+			expect(recs[0].path).toBe('/b');
+			expect(recs[0].id).toBe('fixed-id');
+		});
+
+		it('migrates a legacy record without an id by generating and attaching one', () => {
+			service.addToGlobalTracking({
+				name: 'leg',
+				path: '/leg',
+				type: 'workspace',
+				lastUsedAt: '2024-01-01T00:00:00Z',
+			});
+			makeWorkspace('/leg'); // no id in config yet
+
+			service.registerLocation(service.resolveContext('/leg'));
+
+			const recs = service.readGlobalWorkspaces().workspaces.filter((w) => w.path === '/leg');
+			expect(recs).toHaveLength(1);
+			expect(recs[0].id).toBeTruthy();
+			// id was also written back to the workspace config
+			expect(service.readWorkspaceConfig('/leg').id).toBe(recs[0].id);
+		});
+	});
+
+	describe('getGlobalContext', () => {
+		it('should return a global context pointing at the global grove folder', () => {
+			const context = service.getGlobalContext();
+
+			expect(context.type).toBe('global');
+			expect(context.groveFolder).toBe('/home/testuser/.grove');
+			expect(context.workspacePath).toBeUndefined();
+		});
+	});
+
+	describe('buildRepoContext', () => {
+		it('should build a repo context from a path without git detection', () => {
+			const context = service.buildRepoContext('/repos/my-repo');
+
+			expect(context.type).toBe('repo');
+			expect(context.repoPath).toBe('/repos/my-repo');
+			expect(context.repoName).toBe('my-repo');
+			expect(context.groveFolder).toBe(path.join('/repos/my-repo', '.grove'));
+			expect(context.grovesFolder).toBe(path.join('/repos/my-repo', '.grove', 'groves'));
+		});
+	});
+
 	describe('isWorkspaceRoot', () => {
 		it('should return true when workspace config exists', () => {
 			const workspacePath = '/workspace';

@@ -4,6 +4,8 @@ import { JsonStore } from './JsonStore.js';
 import { AgentSession, SessionsData, SessionsIndex } from './types.js';
 
 export interface ISessionsService {
+	/** Re-point the sessions store at a new sessions.json path (context switch) */
+	setSessionsPath(sessionsPath: string): void;
 	readSessions(): SessionsData;
 	writeSessions(data: SessionsData): void;
 	addSession(session: AgentSession): void;
@@ -39,6 +41,14 @@ export class SessionsService implements ISessionsService {
 				}),
 			}
 		);
+	}
+
+	/**
+	 * Re-point the sessions store at a new sessions.json path. The JsonStore
+	 * reads the path lazily, so mutating storageConfig is sufficient.
+	 */
+	setSessionsPath(sessionsPath: string): void {
+		this.storageConfig = { sessionsPath };
 	}
 
 	readSessions(): SessionsData {
