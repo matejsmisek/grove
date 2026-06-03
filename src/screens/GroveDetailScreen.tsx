@@ -164,6 +164,133 @@ function TreeGutter({ guides, isLast }: { guides: boolean[]; isLast: boolean }) 
 	);
 }
 
+interface SessionCounts {
+	activeCount: number;
+	idleCount: number;
+	attentionCount: number;
+	closedCount: number;
+}
+
+// Format file change stats for display
+function formatFileStats(stats: FileChangeStats): string {
+	if (stats.total === 0) {
+		return 'Clean';
+	}
+
+	const parts: string[] = [];
+	if (stats.modified > 0) parts.push(`${stats.modified} modified`);
+	if (stats.added > 0) parts.push(`${stats.added} added`);
+	if (stats.deleted > 0) parts.push(`${stats.deleted} deleted`);
+	if (stats.untracked > 0) parts.push(`${stats.untracked} untracked`);
+
+	return parts.join(', ');
+}
+
+/**
+ * Renders a single worktree panel. Shared between the grove detail list and the worktree actions
+ * menu so both stay in sync. The list passes `showInitActions={false}` to keep rows compact; the
+ * detail/actions view (and single-worktree mode) passes `showInitActions={true}`.
+ */
+function WorktreePanel({
+	detail,
+	isSelected,
+	sessionCounts,
+	showInitActions,
+}: {
+	detail: WorktreeDetails;
+	isSelected: boolean;
+	sessionCounts: SessionCounts;
+	showInitActions: boolean;
+}) {
+	const isClosed = detail.worktree.closed === true;
+	const repoLabel = detail.worktree.projectPath
+		? `${detail.worktree.repositoryName}.${detail.worktree.projectPath}`
+		: detail.worktree.repositoryName;
+	const hasChanges = !isClosed && detail.fileStats.total > 0;
+	const hasSessions =
+		sessionCounts.activeCount > 0 ||
+		sessionCounts.idleCount > 0 ||
+		sessionCounts.attentionCount > 0 ||
+		sessionCounts.closedCount > 0;
+
+	return (
+		<Box
+			flexGrow={1}
+			flexDirection="column"
+			borderStyle={isSelected ? 'round' : 'single'}
+			borderColor={isClosed ? 'gray' : isSelected ? 'cyan' : 'gray'}
+			paddingX={1}
+		>
+			{/* Worktree Name with Session Indicator */}
+			<Box>
+				<Text bold color={isClosed ? 'gray' : isSelected ? 'cyan' : undefined}>
+					{detail.worktree.name || repoLabel}
+				</Text>
+				{isClosed && <Text dimColor> (Closed)</Text>}
+				{!isClosed && hasSessions && (
+					<Box marginLeft={1}>
+						<SessionIndicator
+							activeCount={sessionCounts.activeCount}
+							idleCount={sessionCounts.idleCount}
+							attentionCount={sessionCounts.attentionCount}
+							closedCount={sessionCounts.closedCount}
+						/>
+					</Box>
+				)}
+			</Box>
+
+			{isClosed ? (
+				<Box>
+					<Text dimColor>Branch: {detail.branch}</Text>
+				</Box>
+			) : (
+				<>
+					{/* Repository (repo.project for monorepo) */}
+					<Box>
+						<Text dimColor>Repository: </Text>
+						<Text>{repoLabel}</Text>
+					</Box>
+
+					{/* Branch */}
+					<Box>
+						<Text dimColor>Branch: </Text>
+						<Text color="yellow">{detail.branch}</Text>
+						{detail.upstreamStatus === 'gone' && <Text color="green"> (Merged)</Text>}
+					</Box>
+
+					{/* File Changes */}
+					<Box>
+						<Text dimColor>Files: </Text>
+						<Text color={hasChanges ? 'yellow' : 'green'}>
+							{hasChanges ? `${detail.fileStats.total} changed` : 'Clean'}
+						</Text>
+						{hasChanges && <Text dimColor> ({formatFileStats(detail.fileStats)})</Text>}
+					</Box>
+
+					{/* Unpushed Commits */}
+					{detail.hasUnpushedCommits && (
+						<Box>
+							<Text color="yellow">⚠ Unpushed commits</Text>
+						</Box>
+					)}
+
+					{/* InitActions Status (detail view only) */}
+					{showInitActions && detail.worktree.initActionsStatus && (
+						<Box>
+							<Text dimColor>Init Actions: </Text>
+							<Text color={detail.worktree.initActionsStatus.success ? 'green' : 'red'}>
+								{detail.worktree.initActionsStatus.success ? '✓' : '✗'}{' '}
+								{detail.worktree.initActionsStatus.successfulActions}/
+								{detail.worktree.initActionsStatus.totalActions} succeeded
+							</Text>
+						</Box>
+					)}
+				</>
+			)}
+		</Box>
+	);
+}
+
 interface GroveDetailScreenProps {
 	groveId: string;
 	focusWorktreeName?: string;
@@ -643,21 +770,6 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		{ isActive: !resultMessage }
 	);
 
-	// Format file change stats for display
-	const formatFileStats = (stats: FileChangeStats): string => {
-		if (stats.total === 0) {
-			return 'Clean';
-		}
-
-		const parts: string[] = [];
-		if (stats.modified > 0) parts.push(`${stats.modified} modified`);
-		if (stats.added > 0) parts.push(`${stats.added} added`);
-		if (stats.deleted > 0) parts.push(`${stats.deleted} deleted`);
-		if (stats.untracked > 0) parts.push(`${stats.untracked} untracked`);
-
-		return parts.join(', ');
-	};
-
 	if (loading) {
 		return (
 			<Box flexDirection="column" padding={1}>
@@ -731,14 +843,15 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 						</Text>
 					</Box>
 
-					{/* Selected Worktree Info */}
+					{/* Selected Worktree Info — same panel as the list, with init actions */}
 					{worktreeDetails[selectedIndex] && (
-						<Box marginBottom={1} flexDirection="column">
-							<Text bold>{worktreeDetails[selectedIndex].worktree.repositoryName}</Text>
-							{worktreeDetails[selectedIndex].worktree.projectPath && (
-								<Text dimColor>Project: {worktreeDetails[selectedIndex].worktree.projectPath}</Text>
-							)}
-							<Text dimColor>Branch: {worktreeDetails[selectedIndex].branch}</Text>
+						<Box marginBottom={1}>
+							<WorktreePanel
+								detail={worktreeDetails[selectedIndex]}
+								isSelected={true}
+								sessionCounts={getSessionCounts(worktreeDetails[selectedIndex].worktree.worktreePath)}
+								showInitActions={true}
+							/>
 						</Box>
 					)}
 
@@ -805,7 +918,6 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 									return null;
 								}
 
-								const hasChanges = !isClosed && detail.fileStats.total > 0;
 								const sessionCounts = getSessionCounts(detail.worktree.worktreePath);
 
 								// Keep forks visually attached to their parent: no gap before a row that is a
@@ -827,81 +939,12 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 										{detail.depth > 0 && (
 											<TreeGutter guides={detail.ancestorGuides} isLast={detail.isLastChild} />
 										)}
-										<Box
-											flexGrow={1}
-											flexDirection="column"
-											borderStyle={isSelected ? 'round' : 'single'}
-											borderColor={isClosed ? 'gray' : isSelected ? 'cyan' : 'gray'}
-											paddingX={1}
-										>
-											{/* Worktree Name with Session Indicator */}
-											<Box>
-												<Text bold color={isClosed ? 'gray' : isSelected ? 'cyan' : undefined}>
-													{detail.worktree.name ||
-														(detail.worktree.projectPath
-															? `${detail.worktree.repositoryName}/${detail.worktree.projectPath}`
-															: detail.worktree.repositoryName)}
-												</Text>
-												{isClosed && <Text dimColor> (Closed)</Text>}
-												{!isClosed &&
-													(sessionCounts.activeCount > 0 ||
-														sessionCounts.idleCount > 0 ||
-														sessionCounts.attentionCount > 0 ||
-														sessionCounts.closedCount > 0) && (
-														<Box marginLeft={1}>
-															<SessionIndicator
-																activeCount={sessionCounts.activeCount}
-																idleCount={sessionCounts.idleCount}
-																attentionCount={sessionCounts.attentionCount}
-																closedCount={sessionCounts.closedCount}
-															/>
-														</Box>
-													)}
-											</Box>
-
-											{isClosed ? (
-												<Box>
-													<Text dimColor>Branch: {detail.branch}</Text>
-												</Box>
-											) : (
-												<>
-													{/* Branch */}
-													<Box marginTop={0}>
-														<Text dimColor>Branch: </Text>
-														<Text color="yellow">{detail.branch}</Text>
-														{detail.upstreamStatus === 'gone' && <Text color="green"> (Merged)</Text>}
-													</Box>
-
-													{/* File Changes */}
-													<Box>
-														<Text dimColor>Files: </Text>
-														<Text color={hasChanges ? 'yellow' : 'green'}>
-															{hasChanges ? `${detail.fileStats.total} changed` : 'Clean'}
-														</Text>
-														{hasChanges && <Text dimColor> ({formatFileStats(detail.fileStats)})</Text>}
-													</Box>
-
-													{/* Unpushed Commits */}
-													{detail.hasUnpushedCommits && (
-														<Box>
-															<Text color="yellow">⚠ Unpushed commits</Text>
-														</Box>
-													)}
-
-													{/* InitActions Status */}
-													{detail.worktree.initActionsStatus && (
-														<Box>
-															<Text dimColor>Init Actions: </Text>
-															<Text color={detail.worktree.initActionsStatus.success ? 'green' : 'red'}>
-																{detail.worktree.initActionsStatus.success ? '✓' : '✗'}{' '}
-																{detail.worktree.initActionsStatus.successfulActions}/
-																{detail.worktree.initActionsStatus.totalActions} succeeded
-															</Text>
-														</Box>
-													)}
-												</>
-											)}
-										</Box>
+										<WorktreePanel
+											detail={detail}
+											isSelected={isSelected}
+											sessionCounts={sessionCounts}
+											showInitActions={isSingleWorktreeMode}
+										/>
 									</Box>
 								);
 							})}
