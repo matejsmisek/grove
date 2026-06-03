@@ -1,5 +1,4 @@
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 
 import type {
@@ -8,6 +7,7 @@ import type {
 	WorkspaceReference,
 	WorkspacesData,
 } from '../storage/types.js';
+import { getGlobalGroveFolder } from '../utils/globalGroveDir.js';
 
 const WORKSPACE_CONFIG_FILENAME = '.grove.workspace.json';
 const WORKSPACE_GROVE_FOLDER = '.grove';
@@ -196,8 +196,7 @@ export class WorkspaceService implements IWorkspaceService {
 			};
 		} else {
 			// Global context
-			const homeDir = os.homedir();
-			const groveFolder = path.join(homeDir, '.grove');
+			const groveFolder = getGlobalGroveFolder();
 
 			return {
 				type: 'global',
@@ -211,8 +210,7 @@ export class WorkspaceService implements IWorkspaceService {
 	 * Get path to global workspaces.json file
 	 */
 	private getGlobalWorkspacesPath(): string {
-		const homeDir = os.homedir();
-		const groveFolder = path.join(homeDir, '.grove');
+		const groveFolder = getGlobalGroveFolder();
 		return path.join(groveFolder, GLOBAL_WORKSPACES_FILENAME);
 	}
 
@@ -240,8 +238,7 @@ export class WorkspaceService implements IWorkspaceService {
 	 */
 	writeGlobalWorkspaces(data: WorkspacesData): void {
 		const workspacesPath = this.getGlobalWorkspacesPath();
-		const homeDir = os.homedir();
-		const groveFolder = path.join(homeDir, '.grove');
+		const groveFolder = getGlobalGroveFolder();
 
 		// Ensure .grove folder exists
 		if (!fs.existsSync(groveFolder)) {

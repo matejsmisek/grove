@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import { getGlobalGroveFolder } from '../utils/globalGroveDir.js';
 import { JsonStore } from './JsonStore.js';
 import type { Settings, StorageConfig, WorkspaceContext } from './types.js';
 
@@ -53,7 +54,7 @@ export class SettingsService implements ISettingsService {
 	 * Get the storage configuration paths
 	 */
 	getStorageConfig(): StorageConfig {
-		const groveFolder = this.context ? this.context.groveFolder : path.join(os.homedir(), '.grove');
+		const groveFolder = this.context ? this.context.groveFolder : getGlobalGroveFolder();
 		const settingsPath = path.join(groveFolder, 'settings.json');
 		const repositoriesPath = path.join(groveFolder, 'repositories.json');
 		const grovesIndexPath = path.join(groveFolder, 'groves.json');

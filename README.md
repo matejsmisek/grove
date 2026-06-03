@@ -180,6 +180,12 @@ Grove's session tracking is designed to be extensible. Future support planned fo
 
 ## Configuration
 
+### Environment Variables
+
+| Variable           | Description                                                                                                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GROVE_GLOBAL_DIR` | Overrides the folder used to store global Grove settings (default: `~/.grove`). The directory is created on startup if it doesn't exist; Grove exits with an error if it can't be. |
+
 ### Repository Configuration (`.grove.json`)
 
 You can configure Grove behavior per-repository by creating a `.grove.json` file in your repository root. For local overrides that shouldn't be committed, use `.grove.local.json`.

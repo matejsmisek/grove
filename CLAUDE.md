@@ -64,7 +64,7 @@ Grove follows a modular, dependency-injection-based architecture with clear sepa
 
 All data is stored as JSON in `~/.grove/`:
 
-**Global Storage** (`~/.grove/`):
+**Global Storage** (`~/.grove/`, or the path in the `GROVE_GLOBAL_DIR` env var when set):
 
 - `settings.json` - User settings (working folder, terminal, IDE preferences, session templates)
 - `repositories.json` - Registered repositories with monorepo flags

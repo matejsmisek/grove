@@ -16,6 +16,7 @@ import {
 	verifyAgentHooks,
 } from './commands/index.js';
 import { App } from './components/App.js';
+import { FatalConfigError } from './components/FatalConfigError.js';
 import { getContainer } from './di/index.js';
 import {
 	SessionsServiceToken,
@@ -25,6 +26,35 @@ import {
 	initializeServices,
 } from './services/index.js';
 import { AgentType, SettingsService } from './storage/index.js';
+import {
+	GROVE_GLOBAL_DIR_ENV,
+	GlobalGroveDirError,
+	ensureGlobalGroveFolder,
+} from './utils/index.js';
+
+// Resolve and create the global Grove directory (honoring GROVE_GLOBAL_DIR)
+// before any storage is touched. If it can't be used, show a full-screen error
+// and exit instead of failing later with a cryptic message.
+try {
+	ensureGlobalGroveFolder();
+} catch (error) {
+	if (error instanceof GlobalGroveDirError) {
+		console.clear();
+		const { waitUntilExit } = render(
+			<FatalConfigError
+				title="Invalid Grove configuration"
+				message={error.message}
+				hints={[
+					`Set ${GROVE_GLOBAL_DIR_ENV} to a writable directory, or unset it to use the default ~/.grove.`,
+					'Make sure the path is a directory (not a file) and that you have permission to create it.',
+				]}
+			/>
+		);
+		await waitUntilExit();
+		process.exit(1);
+	}
+	throw error;
+}
 
 // Discover workspace context
 const workspaceService = new WorkspaceService();
