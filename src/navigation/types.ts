@@ -23,6 +23,7 @@ export type Routes = {
 	claudeTerminalSettings: Record<string, never>;
 	llmSettings: Record<string, never>;
 	pluginSettings: Record<string, never>;
+	gitlabSettings: Record<string, never>;
 	interfaceSettings: Record<string, never>;
 	groveConfigEditor: { repositoryPath?: string };
 };

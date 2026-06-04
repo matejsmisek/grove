@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
+import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
+import { GITLAB_PLUGIN_ID } from '../plugins/gitlab/index.js';
+import { PluginRegistryToken } from '../services/tokens.js';
 
 interface SettingsScreenProps {
 	section?: string;
@@ -15,7 +18,10 @@ type SettingOption = {
 
 export function SettingsScreen({ section }: SettingsScreenProps) {
 	const { navigate, goBack, canGoBack } = useNavigation();
+	const pluginRegistry = useService(PluginRegistryToken);
 	const [selectedIndex, setSelectedIndex] = useState(0);
+
+	const gitlabEnabled = pluginRegistry.isEnabled(GITLAB_PLUGIN_ID);
 
 	const options: SettingOption[] = [
 		{
@@ -42,6 +48,15 @@ export function SettingsScreen({ section }: SettingsScreenProps) {
 			label: 'Plugins',
 			action: () => navigate('pluginSettings', {}),
 		},
+		// Only surfaced once the GitLab plugin is enabled in Plugins
+		...(gitlabEnabled
+			? [
+					{
+						label: 'GitLab Integration',
+						action: () => navigate('gitlabSettings', {}),
+					},
+				]
+			: []),
 		{
 			label: 'Interface',
 			action: () => navigate('interfaceSettings', {}),

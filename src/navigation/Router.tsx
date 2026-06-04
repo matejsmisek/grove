@@ -10,6 +10,7 @@ import { CloseGroveScreen } from '../screens/CloseGroveScreen.js';
 import { CloseMergedWorktreesScreen } from '../screens/CloseMergedWorktreesScreen.js';
 import { CloseWorktreeScreen } from '../screens/CloseWorktreeScreen.js';
 import { CreateGroveScreen } from '../screens/CreateGroveScreen.js';
+import { GitLabSettingsScreen } from '../screens/GitLabSettingsScreen.js';
 import { GroveConfigEditorScreen } from '../screens/GroveConfigEditorScreen.js';
 import { GroveDetailScreen } from '../screens/GroveDetailScreen.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
@@ -137,6 +138,8 @@ export function Router() {
 			return <RepositoriesScreen />;
 		case 'pluginSettings':
 			return <PluginSettingsScreen />;
+		case 'gitlabSettings':
+			return <GitLabSettingsScreen />;
 		case 'interfaceSettings':
 			return <InterfaceSettingsScreen />;
 		case 'groveConfigEditor':

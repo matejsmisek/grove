@@ -6,6 +6,7 @@ import { AdapterRegistry, ClaudeAdapter } from '../agents/index.js';
 import type { IMutableContainer } from '../di/index.js';
 import { Container, getContainer } from '../di/index.js';
 import { AsanaPlugin } from '../plugins/asana/index.js';
+import { GitLabPlugin } from '../plugins/gitlab/index.js';
 import { PluginRegistry } from '../plugins/index.js';
 import {
 	GroveConfigService,
@@ -164,6 +165,7 @@ export function registerServices(
 		const pluginRegistry = new PluginRegistry(cont.resolve(SettingsServiceToken));
 		// Register available plugins
 		pluginRegistry.register(new AsanaPlugin());
+		pluginRegistry.register(new GitLabPlugin());
 		// Future: Add more plugins here
 		return pluginRegistry;
 	});
