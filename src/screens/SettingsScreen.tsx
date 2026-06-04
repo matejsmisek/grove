@@ -43,6 +43,10 @@ export function SettingsScreen({ section }: SettingsScreenProps) {
 			action: () => navigate('pluginSettings', {}),
 		},
 		{
+			label: 'Interface',
+			action: () => navigate('interfaceSettings', {}),
+		},
+		{
 			label: 'Display Preferences (coming soon)',
 			action: () => {}, // Placeholder
 		},

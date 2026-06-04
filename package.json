@@ -74,6 +74,7 @@
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.71.2",
+		"@ink-tools/ink-mouse": "^2.1.0",
 		"glob": "^13.0.0",
 		"ink": "^6.5.1",
 		"ink-text-input": "^6.0.0",

@@ -204,13 +204,20 @@ export function WorkspaceSwitcherScreen({ selectedLocationPath }: WorkspaceSwitc
 						}))}
 						selectedIndex={selectedIndex}
 						onColumnsChange={setColumnCount}
+						onSelectItem={setSelectedIndex}
+						onActivateItem={(index) => {
+							const location = locations[index];
+							if (location) {
+								openLocation(location);
+							}
+						}}
 					/>
 				</Box>
 			)}
 
 			<Box marginTop={1} flexDirection="column">
 				<Text dimColor>
-					↑↓←→ Navigate • Enter Open • <Text bold>m</Text> Menu • <Text bold>q</Text> Quit
+					↑↓←→ Navigate • Enter/Click Open • <Text bold>m</Text> Menu • <Text bold>q</Text> Quit
 				</Text>
 			</Box>
 		</Box>

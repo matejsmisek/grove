@@ -14,6 +14,7 @@ import { GroveConfigEditorScreen } from '../screens/GroveConfigEditorScreen.js';
 import { GroveDetailScreen } from '../screens/GroveDetailScreen.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
 import { IDESettingsScreen } from '../screens/IDESettingsScreen.js';
+import { InterfaceSettingsScreen } from '../screens/InterfaceSettingsScreen.js';
 import { LLMSettingsScreen } from '../screens/LLMSettingsScreen.js';
 import { OpenClaudeScreen } from '../screens/OpenClaudeScreen.js';
 import { OpenIDEScreen } from '../screens/OpenIDEScreen.js';
@@ -136,6 +137,8 @@ export function Router() {
 			return <RepositoriesScreen />;
 		case 'pluginSettings':
 			return <PluginSettingsScreen />;
+		case 'interfaceSettings':
+			return <InterfaceSettingsScreen />;
 		case 'groveConfigEditor':
 			return (
 				<GroveConfigEditorScreen

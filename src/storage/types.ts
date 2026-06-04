@@ -139,6 +139,13 @@ export interface Settings {
 	 * Each plugin can have its own enabled state and settings
 	 */
 	plugins?: PluginConfig[];
+	/**
+	 * Whether mouse control (clicking tiles to navigate) is enabled.
+	 * This is a GLOBAL-only setting and is never read from a workspace
+	 * settings file - it is always persisted to and read from the global
+	 * ~/.grove/settings.json. Defaults to true (on) when unset.
+	 */
+	mouseControlEnabled?: boolean;
 }
 
 export interface StorageConfig {

@@ -262,4 +262,58 @@ describe('SettingsService', () => {
 			expect(updated.selectedIDE).toBe('vscode');
 		});
 	});
+
+	describe('mouse control (global-only setting)', () => {
+		it('should default to true when unset', () => {
+			expect(service.getMouseControlEnabled()).toBe(true);
+		});
+
+		it('should persist the value to the global settings file', () => {
+			service.setMouseControlEnabled(false);
+
+			expect(service.getMouseControlEnabled()).toBe(false);
+
+			const settingsPath = path.join(mockGroveFolder, 'settings.json');
+			const stored = JSON.parse(vol.readFileSync(settingsPath, 'utf-8') as string) as Settings;
+			expect(stored.mouseControlEnabled).toBe(false);
+		});
+
+		it('should round-trip an explicit true value', () => {
+			service.setMouseControlEnabled(false);
+			service.setMouseControlEnabled(true);
+
+			expect(service.getMouseControlEnabled()).toBe(true);
+		});
+
+		it('should read/write the GLOBAL file regardless of workspace context', () => {
+			// Service bound to a workspace context whose .grove folder differs
+			// from the global ~/.grove folder.
+			const workspaceGroveFolder = '/workspace/project/.grove';
+			const workspaceService = new SettingsService({
+				type: 'workspace',
+				groveFolder: workspaceGroveFolder,
+			});
+
+			workspaceService.setMouseControlEnabled(false);
+
+			// The value lands in the GLOBAL file, not the workspace one.
+			const globalSettingsPath = path.join(mockGroveFolder, 'settings.json');
+			const globalStored = JSON.parse(
+				vol.readFileSync(globalSettingsPath, 'utf-8') as string
+			) as Settings;
+			expect(globalStored.mouseControlEnabled).toBe(false);
+
+			// The workspace settings file does not carry the mouse control flag.
+			const workspaceSettingsPath = path.join(workspaceGroveFolder, 'settings.json');
+			if (vol.existsSync(workspaceSettingsPath)) {
+				const workspaceStored = JSON.parse(
+					vol.readFileSync(workspaceSettingsPath, 'utf-8') as string
+				) as Settings;
+				expect(workspaceStored.mouseControlEnabled).toBeUndefined();
+			}
+
+			// A fresh global service sees the same value.
+			expect(new SettingsService().getMouseControlEnabled()).toBe(false);
+		});
+	});
 });

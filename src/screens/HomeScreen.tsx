@@ -104,6 +104,24 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 	// Total items in the grid = 1 (create button) + groves.length
 	const totalItems = 1 + groves.length;
 
+	// Enter/activate a grid item (shared by Enter key and mouse click).
+	const activateItem = (index: number) => {
+		if (index === 0) {
+			// First item is the "Create Grove" button
+			navigate('createGrove', {});
+			return;
+		}
+		// Navigate to grove detail screen (offset by 1 for create button).
+		// Stamp the selection into our own params first so returning via
+		// goBack() re-selects this grove instead of the first tile.
+		const grove = groves[index - 1];
+		if (!grove) {
+			return;
+		}
+		replace('home', { selectedGroveId: grove.id });
+		navigate('groveDetail', { groveId: grove.id });
+	};
+
 	useInput((input, key) => {
 		if (showMenu) {
 			// Menu navigation
@@ -134,17 +152,7 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 					return newIndex < totalItems ? newIndex : prev;
 				});
 			} else if (key.return) {
-				if (selectedGroveIndex === 0) {
-					// First item is the "Create Grove" button
-					navigate('createGrove', {});
-				} else {
-					// Navigate to grove detail screen (offset by 1 for create button).
-					// Stamp the selection into our own params first so returning via
-					// goBack() re-selects this grove instead of the first tile.
-					const groveId = groves[selectedGroveIndex - 1].id;
-					replace('home', { selectedGroveId: groveId });
-					navigate('groveDetail', { groveId });
-				}
+				activateItem(selectedGroveIndex);
 			} else if (input === 'm') {
 				setShowMenu(true);
 				setSelectedMenuIndex(0);
@@ -205,13 +213,15 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 							sessionTrackingService={sessionTrackingService}
 							refreshTick={sessionRefreshTick}
 							onColumnsChange={setColumnCount}
+							onSelectItem={setSelectedGroveIndex}
+							onActivateItem={activateItem}
 						/>
 					</Box>
 
 					{/* Help text */}
 					<Box marginTop={1} flexDirection="column">
 						<Text dimColor>
-							↑↓←→ Navigate • Enter Select • <Text bold>m</Text> Menu
+							↑↓←→ Navigate • Enter/Click Select • <Text bold>m</Text> Menu
 							{canGoBack && (
 								<>
 									{' '}

@@ -4,6 +4,7 @@ import { Box, useStdout } from 'ink';
 
 import type { ISessionTrackingService } from '../../services/SessionTrackingService.js';
 import type { GroveReference } from '../../storage/index.js';
+import { ClickableTile } from './ClickableTile.js';
 import { CreateGrovePanel } from './CreateGrovePanel.js';
 import { GrovePanel } from './GrovePanel.js';
 
@@ -15,6 +16,10 @@ type GroveGridProps = {
 	refreshTick?: number;
 	/** Callback to notify parent of column count changes */
 	onColumnsChange?: (columns: number) => void;
+	/** Called with the flat item index on mouse-down (selects the tile) */
+	onSelectItem?: (index: number) => void;
+	/** Called with the flat item index on mouse-up (enters the tile) */
+	onActivateItem?: (index: number) => void;
 };
 
 export function GroveGrid({
@@ -23,6 +28,8 @@ export function GroveGrid({
 	sessionTrackingService,
 	refreshTick: _refreshTick,
 	onColumnsChange,
+	onSelectItem,
+	onActivateItem,
 }: GroveGridProps) {
 	const { stdout } = useStdout();
 	const terminalWidth = stdout?.columns || 80; // Default to 80 if not available
@@ -64,9 +71,14 @@ export function GroveGrid({
 					if (itemIndex === 0) {
 						// First item is always the Create Grove button
 						items.push(
-							<Box key="create" marginLeft={marginLeft}>
+							<ClickableTile
+								key="create"
+								marginLeft={marginLeft}
+								onPress={() => onSelectItem?.(itemIndex)}
+								onRelease={() => onActivateItem?.(itemIndex)}
+							>
 								<CreateGrovePanel isSelected={isSelected} width={MIN_PANEL_WIDTH} />
-							</Box>
+							</ClickableTile>
 						);
 					} else {
 						// Remaining items are groves (offset by 1)
@@ -76,14 +88,19 @@ export function GroveGrid({
 							const sessionCounts = sessionTrackingService.getGroveSessionCounts(grove.id);
 
 							items.push(
-								<Box key={grove.id} marginLeft={marginLeft}>
+								<ClickableTile
+									key={grove.id}
+									marginLeft={marginLeft}
+									onPress={() => onSelectItem?.(itemIndex)}
+									onRelease={() => onActivateItem?.(itemIndex)}
+								>
 									<GrovePanel
 										grove={grove}
 										isSelected={isSelected}
 										sessionCounts={sessionCounts}
 										width={MIN_PANEL_WIDTH}
 									/>
-								</Box>
+								</ClickableTile>
 							);
 						}
 					}

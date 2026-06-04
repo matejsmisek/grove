@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
-import TextInput from 'ink-text-input';
 import path from 'path';
 
+import TextInput from '../components/GroveTextInput.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {

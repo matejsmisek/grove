@@ -2,6 +2,7 @@ import React from 'react';
 
 import { Box, useStdout } from 'ink';
 
+import { ClickableTile } from './ClickableTile.js';
 import { WorkspacePanel } from './WorkspacePanel.js';
 
 export type WorkspaceGridItem = {
@@ -16,13 +17,23 @@ type WorkspaceGridProps = {
 	selectedIndex: number;
 	/** Callback to notify parent of column count changes */
 	onColumnsChange?: (columns: number) => void;
+	/** Called with the item index on mouse-down (selects the tile) */
+	onSelectItem?: (index: number) => void;
+	/** Called with the item index on mouse-up (opens the tile) */
+	onActivateItem?: (index: number) => void;
 };
 
 /**
  * Responsive grid of workspace/repo tiles for the global switcher. Mirrors the
  * layout of GroveGrid so the two screens feel consistent.
  */
-export function WorkspaceGrid({ items, selectedIndex, onColumnsChange }: WorkspaceGridProps) {
+export function WorkspaceGrid({
+	items,
+	selectedIndex,
+	onColumnsChange,
+	onSelectItem,
+	onActivateItem,
+}: WorkspaceGridProps) {
 	const { stdout } = useStdout();
 	const terminalWidth = stdout?.columns || 80;
 
@@ -56,7 +67,12 @@ export function WorkspaceGrid({ items, selectedIndex, onColumnsChange }: Workspa
 					const marginLeft = i > 0 ? PANEL_MARGIN : 0;
 
 					cells.push(
-						<Box key={itemIndex} marginLeft={marginLeft}>
+						<ClickableTile
+							key={itemIndex}
+							marginLeft={marginLeft}
+							onPress={() => onSelectItem?.(itemIndex)}
+							onRelease={() => onActivateItem?.(itemIndex)}
+						>
 							<WorkspacePanel
 								name={item.name}
 								kind={item.kind}
@@ -65,7 +81,7 @@ export function WorkspaceGrid({ items, selectedIndex, onColumnsChange }: Workspa
 								isSelected={selectedIndex === itemIndex}
 								width={MIN_PANEL_WIDTH}
 							/>
-						</Box>
+						</ClickableTile>
 					);
 				}
 

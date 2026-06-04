@@ -27,6 +27,16 @@ export interface ISettingsService {
 	writeSettings(settings: Settings): void;
 	/** Update specific settings fields */
 	updateSettings(updates: Partial<Settings>): Settings;
+	/**
+	 * Whether mouse control is enabled. Always read from the GLOBAL settings
+	 * file, regardless of the active workspace context. Defaults to true.
+	 */
+	getMouseControlEnabled(): boolean;
+	/**
+	 * Enable/disable mouse control. Always written to the GLOBAL settings file,
+	 * so it cannot be overridden per-workspace.
+	 */
+	setMouseControlEnabled(enabled: boolean): void;
 }
 
 /**
@@ -36,6 +46,11 @@ export interface ISettingsService {
 export class SettingsService implements ISettingsService {
 	private context?: WorkspaceContext;
 	private store: JsonStore<Settings>;
+	/**
+	 * Store bound to the GLOBAL settings file regardless of context. Used for
+	 * settings that must never be overridden per-workspace (e.g. mouse control).
+	 */
+	private globalStore: JsonStore<Settings>;
 
 	/**
 	 * Create a new SettingsService
@@ -47,6 +62,15 @@ export class SettingsService implements ISettingsService {
 			() => this.getStorageConfig().settingsPath,
 			() => this.getStorageConfig().groveFolder,
 			() => this.getDefaultSettings(),
+			{
+				label: 'settings',
+				afterRead: (data, defaults) => ({ ...defaults, ...data }),
+			}
+		);
+		this.globalStore = new JsonStore<Settings>(
+			() => path.join(getGlobalGroveFolder(), 'settings.json'),
+			() => getGlobalGroveFolder(),
+			() => ({ workingFolder: path.join(os.homedir(), 'grove-worktrees') }),
 			{
 				label: 'settings',
 				afterRead: (data, defaults) => ({ ...defaults, ...data }),
@@ -149,6 +173,24 @@ export class SettingsService implements ISettingsService {
 		return this.store.update((current) => ({
 			...current,
 			...updates,
+		}));
+	}
+
+	/**
+	 * Whether mouse control is enabled. Read from the GLOBAL settings file so
+	 * the value is shared across all workspaces. Defaults to true when unset.
+	 */
+	getMouseControlEnabled(): boolean {
+		return this.globalStore.read().mouseControlEnabled ?? true;
+	}
+
+	/**
+	 * Enable/disable mouse control, persisting to the GLOBAL settings file.
+	 */
+	setMouseControlEnabled(enabled: boolean): void {
+		this.globalStore.update((current) => ({
+			...current,
+			mouseControlEnabled: enabled,
 		}));
 	}
 }

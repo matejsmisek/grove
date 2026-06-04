@@ -2,8 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
-import TextInput from 'ink-text-input';
-
+import TextInput from '../components/GroveTextInput.js';
 import { useService } from '../di/index.js';
 import { getRepoProjects } from '../git/index.js';
 import { useTask } from '../hooks/useTasks.js';

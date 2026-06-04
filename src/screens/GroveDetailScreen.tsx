@@ -1,11 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
-import { Box, Text, useInput } from 'ink';
+import { Box, type DOMElement, Text, useInput } from 'ink';
 
+import {
+	type InkMouseEvent,
+	getBoundingClientRect,
+	useOnPress,
+	useOnRelease,
+} from '@ink-tools/ink-mouse';
 import fs from 'fs';
 import path from 'path';
 
 import { SessionIndicator } from '../components/SessionIndicator.js';
+import { ClickableTile } from '../components/home/ClickableTile.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { getContextDisplayName } from '../services/WorkspaceService.js';
@@ -288,6 +295,75 @@ function WorktreePanel({
 					)}
 				</>
 			)}
+		</Box>
+	);
+}
+
+interface WorktreeAction {
+	label: string;
+	action: () => void;
+}
+
+/**
+ * The list of worktree actions, rendered for both the multi-worktree actions
+ * menu and the single-worktree inline actions. Clickable: pressing a row selects
+ * it (like arrow navigation) and releasing runs it (like Enter).
+ *
+ * We attach a single click handler to the list container and derive the row from
+ * the pointer's Y offset, rather than making each row independently clickable.
+ * ink-mouse's hit-test bounds are inclusive on every edge (bottom = top +
+ * height), so adjacent one-line rows share a boundary row and a per-row approach
+ * would fire several actions for one click.
+ */
+function WorktreeActionList({
+	actions,
+	selectedIndex,
+	onSelect,
+	onActivate,
+}: {
+	actions: WorktreeAction[];
+	selectedIndex: number;
+	onSelect: (index: number) => void;
+	onActivate: (index: number) => void;
+}) {
+	const ref = useRef<DOMElement>(null);
+
+	// Rows are contiguous and one line tall, so the clicked row index is simply
+	// the pointer's offset from the list's top. Returns null for non-left clicks
+	// or clicks outside the rows.
+	const rowFromEvent = (event: InkMouseEvent): number | null => {
+		if (event.button !== 'left') {
+			return null;
+		}
+		const rect = getBoundingClientRect(ref.current);
+		if (!rect) {
+			return null;
+		}
+		const row = event.y - rect.top;
+		return row >= 0 && row < actions.length ? row : null;
+	};
+
+	useOnPress(ref, (event) => {
+		const row = rowFromEvent(event);
+		if (row !== null) {
+			onSelect(row);
+		}
+	});
+	useOnRelease(ref, (event) => {
+		const row = rowFromEvent(event);
+		if (row !== null) {
+			onActivate(row);
+		}
+	});
+
+	return (
+		<Box ref={ref} flexDirection="column" marginBottom={1}>
+			{actions.map((action, index) => (
+				<Text key={action.label} color={selectedIndex === index ? 'cyan' : undefined}>
+					{selectedIndex === index ? '❯ ' : '  '}
+					{action.label}
+				</Text>
+			))}
 		</Box>
 	);
 }
@@ -690,6 +766,35 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		? worktreeDetails
 		: worktreeDetails.filter((d) => !d.worktree.closed);
 
+	// Mouse: pressing a worktree panel selects it (like arrow navigation), and
+	// releasing on it opens its actions (like Enter). Closed worktrees are
+	// non-interactive, matching the keyboard which skips them.
+	const handleWorktreePress = (index: number) => {
+		if (worktreeDetails[index]?.worktree.closed) {
+			return;
+		}
+		setSelectedIndex(index);
+	};
+
+	const handleWorktreeActivate = (index: number) => {
+		if (worktreeDetails[index]?.worktree.closed) {
+			return;
+		}
+		setSelectedIndex(index);
+		// In single-worktree mode the actions are already shown inline, so there's
+		// nothing extra to open.
+		if (!isSingleWorktreeMode) {
+			setShowActions(true);
+			setSelectedActionIndex(0);
+		}
+	};
+
+	// Mouse: releasing on an action item runs it (like Enter on a selected action).
+	const handleActionActivate = (index: number) => {
+		setSelectedActionIndex(index);
+		worktreeActions[index]?.action();
+	};
+
 	// Handle keyboard navigation
 	useInput(
 		(input, key) => {
@@ -856,20 +961,16 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					)}
 
 					{/* Actions */}
-					<Box flexDirection="column" marginBottom={1}>
-						{worktreeActions.map((action, index) => (
-							<Box key={action.label}>
-								<Text color={selectedActionIndex === index ? 'cyan' : undefined}>
-									{selectedActionIndex === index ? '❯ ' : '  '}
-									{action.label}
-								</Text>
-							</Box>
-						))}
-					</Box>
+					<WorktreeActionList
+						actions={worktreeActions}
+						selectedIndex={selectedActionIndex}
+						onSelect={setSelectedActionIndex}
+						onActivate={handleActionActivate}
+					/>
 
 					{/* Help text */}
 					<Box marginTop={1}>
-						<Text dimColor>↑↓ Navigate • Enter Select • ESC Cancel</Text>
+						<Text dimColor>↑↓ Navigate • Enter/Click Select • ESC Cancel</Text>
 					</Box>
 				</Box>
 			) : (
@@ -939,12 +1040,18 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 										{detail.depth > 0 && (
 											<TreeGutter guides={detail.ancestorGuides} isLast={detail.isLastChild} />
 										)}
-										<WorktreePanel
-											detail={detail}
-											isSelected={isSelected}
-											sessionCounts={sessionCounts}
-											showInitActions={isSingleWorktreeMode}
-										/>
+										<ClickableTile
+											flexGrow={1}
+											onPress={() => handleWorktreePress(index)}
+											onRelease={() => handleWorktreeActivate(index)}
+										>
+											<WorktreePanel
+												detail={detail}
+												isSelected={isSelected}
+												sessionCounts={sessionCounts}
+												showInitActions={isSingleWorktreeMode}
+											/>
+										</ClickableTile>
 									</Box>
 								);
 							})}
@@ -960,16 +1067,12 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 								</Text>
 							</Box>
 
-							<Box flexDirection="column" marginBottom={1}>
-								{worktreeActions.map((action, index) => (
-									<Box key={action.label}>
-										<Text color={selectedActionIndex === index ? 'cyan' : undefined}>
-											{selectedActionIndex === index ? '❯ ' : '  '}
-											{action.label}
-										</Text>
-									</Box>
-								))}
-							</Box>
+							<WorktreeActionList
+								actions={worktreeActions}
+								selectedIndex={selectedActionIndex}
+								onSelect={setSelectedActionIndex}
+								onActivate={handleActionActivate}
+							/>
 						</>
 					)}
 
