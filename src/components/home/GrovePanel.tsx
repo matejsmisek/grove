@@ -3,9 +3,11 @@ import React from 'react';
 import { Box, Text } from 'ink';
 
 import { useService } from '../../di/index.js';
+import { useMergeRequestStatus } from '../../hooks/useMergeRequestStatus.js';
 import { GrovesServiceToken } from '../../services/tokens.js';
 import type { GroveReference } from '../../storage/index.js';
 import { formatTimeAgo } from '../../utils/time.js';
+import { MergeRequestCell } from '../MergeRequestCell.js';
 import { SessionIndicator } from '../SessionIndicator.js';
 
 type GrovePanelProps = {
@@ -26,6 +28,9 @@ export function GrovePanel({ grove, isSelected, sessionCounts, width = 24 }: Gro
 	// Get grove metadata to count worktrees
 	let worktreeCount = 0;
 	let repoDisplayName = '';
+	// For single-worktree groves, the grove maps 1:1 to a branch, so we surface its MR.
+	let singleRepositoryPath: string | undefined;
+	let singleBranch: string | undefined;
 	try {
 		const metadata = grovesService.readGroveMetadata(grove.path);
 		if (metadata) {
@@ -40,12 +45,18 @@ export function GrovePanel({ grove, isSelected, sessionCounts, width = 24 }: Gro
 						const projectName = worktree.projectPath.split('/').pop() || '';
 						repoDisplayName = `${repoDisplayName}.${projectName}`;
 					}
+					if (!worktree.closed) {
+						singleRepositoryPath = worktree.repositoryPath;
+						singleBranch = worktree.branch;
+					}
 				}
 			}
 		}
 	} catch {
 		// If we can't read metadata, just show 0
 	}
+
+	const mr = useMergeRequestStatus(singleRepositoryPath, singleBranch, worktreeCount === 1);
 
 	return (
 		<Box
@@ -76,6 +87,13 @@ export function GrovePanel({ grove, isSelected, sessionCounts, width = 24 }: Gro
 						: `${worktreeCount} worktree${worktreeCount !== 1 ? 's' : ''}`}
 				</Text>
 			</Box>
+
+			{/* Merge request status (single-worktree groves only) */}
+			{mr && (
+				<Box marginTop={1}>
+					<MergeRequestCell mr={mr} />
+				</Box>
+			)}
 
 			{/* Session indicators */}
 			{sessionCounts && (

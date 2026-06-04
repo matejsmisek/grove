@@ -57,3 +57,89 @@ export interface GitLabApiError {
 	error?: string;
 	error_description?: string;
 }
+
+/**
+ * Native GitLab merge request state
+ */
+export type GitLabMrState = 'opened' | 'closed' | 'merged' | 'locked';
+
+/**
+ * Merge request as returned by the list endpoint (mapped to camelCase)
+ */
+export interface GitLabMergeRequest {
+	/** Project-internal MR id (e.g. the "!123" number) */
+	iid: number;
+	/** Web URL to the MR */
+	webUrl: string;
+	/** Native MR state */
+	state: GitLabMrState;
+	/** Whether the MR is marked as a draft */
+	draft: boolean;
+	/** Aggregate mergeability status (used as a fallback for changes-requested) */
+	detailedMergeStatus?: string;
+	/** Creation timestamp (ISO) */
+	createdAt?: string;
+}
+
+/**
+ * Per-reviewer review state.
+ * (GitLab 17.2+; older instances may not populate it.)
+ */
+export type GitLabReviewerState =
+	| 'unreviewed'
+	| 'review_started'
+	| 'reviewed'
+	| 'requested_changes'
+	| 'approved'
+	| 'unapproved'
+	| 'attention_requested';
+
+/**
+ * A reviewer on a merge request, with their review state
+ */
+export interface GitLabReviewer {
+	/** Reviewer user id */
+	userId: number;
+	/** Reviewer username */
+	username: string;
+	/** The reviewer's review state (string-typed to tolerate unknown future values) */
+	state: GitLabReviewerState | string;
+}
+
+/**
+ * Approval summary for a merge request
+ */
+export interface GitLabApprovals {
+	/** Number of approvals required (0 on Free / no approval rules) */
+	approvalsRequired: number;
+	/** Number of approvals given so far */
+	approvalsGiven: number;
+}
+
+/**
+ * Derived, UI-facing merge request status for a worktree.
+ * This is the high-level status shown on the worktree panel.
+ */
+export type MergeRequestStatusKind =
+	| 'open'
+	| 'draft'
+	| 'in_review'
+	| 'changes_requested'
+	| 'merged'
+	| 'closed';
+
+/**
+ * Resolved merge request status for a worktree branch
+ */
+export interface MergeRequestStatus {
+	/** Project-internal MR id (the "!123" number) */
+	iid: number;
+	/** Web URL to the MR */
+	webUrl: string;
+	/** Derived status */
+	status: MergeRequestStatusKind;
+	/** Number of approvals given */
+	approvalsGiven: number;
+	/** Number of approvals required (0 when none are required) */
+	approvalsRequired: number;
+}

@@ -4,6 +4,7 @@ import { Box, useStdout } from 'ink';
 
 import type { ISessionTrackingService } from '../../services/SessionTrackingService.js';
 import type { GroveReference } from '../../storage/index.js';
+import { wasLinkRecentlyOpened } from '../../utils/links.js';
 import { ClickableTile } from './ClickableTile.js';
 import { CreateGrovePanel } from './CreateGrovePanel.js';
 import { GrovePanel } from './GrovePanel.js';
@@ -92,7 +93,16 @@ export function GroveGrid({
 									key={grove.id}
 									marginLeft={marginLeft}
 									onPress={() => onSelectItem?.(itemIndex)}
-									onRelease={() => onActivateItem?.(itemIndex)}
+									onRelease={() => {
+										// A click on the grove's MR link also fires this tile handler. Defer a
+										// tick so the link can mark itself, then skip entering the grove if so.
+										setTimeout(() => {
+											if (wasLinkRecentlyOpened()) {
+												return;
+											}
+											onActivateItem?.(itemIndex);
+										}, 0);
+									}}
 								>
 									<GrovePanel
 										grove={grove}

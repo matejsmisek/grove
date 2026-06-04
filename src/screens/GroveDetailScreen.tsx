@@ -11,9 +11,11 @@ import {
 import fs from 'fs';
 import path from 'path';
 
+import { MergeRequestCell } from '../components/MergeRequestCell.js';
 import { SessionIndicator } from '../components/SessionIndicator.js';
 import { ClickableTile } from '../components/home/ClickableTile.js';
 import { useService } from '../di/index.js';
+import { useMergeRequestStatus } from '../hooks/useMergeRequestStatus.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { getContextDisplayName } from '../services/WorkspaceService.js';
 import {
@@ -34,6 +36,7 @@ import {
 import type { BranchUpstreamStatus, FileChangeStats } from '../services/types.js';
 import { GroveConfigService } from '../storage/index.js';
 import type { AgentSession, Settings, Worktree } from '../storage/types.js';
+import { wasLinkRecentlyOpened } from '../utils/links.js';
 
 interface WorktreeDetails {
 	worktree: Worktree;
@@ -211,6 +214,11 @@ function WorktreePanel({
 	showInitActions: boolean;
 }) {
 	const isClosed = detail.worktree.closed === true;
+	const mr = useMergeRequestStatus(
+		isClosed ? undefined : detail.worktree.repositoryPath,
+		detail.branch,
+		!isClosed
+	);
 	const repoLabel = detail.worktree.projectPath
 		? `${detail.worktree.repositoryName}.${detail.worktree.projectPath}`
 		: detail.worktree.repositoryName;
@@ -266,13 +274,14 @@ function WorktreePanel({
 						{detail.upstreamStatus === 'gone' && <Text color="green"> (Merged)</Text>}
 					</Box>
 
-					{/* File Changes */}
+					{/* File Changes + Merge Request status (same line) */}
 					<Box>
 						<Text dimColor>Files: </Text>
 						<Text color={hasChanges ? 'yellow' : 'green'}>
 							{hasChanges ? `${detail.fileStats.total} changed` : 'Clean'}
 						</Text>
 						{hasChanges && <Text dimColor> ({formatFileStats(detail.fileStats)})</Text>}
+						<MergeRequestCell mr={mr} marginLeft={2} />
 					</Box>
 
 					{/* Unpushed Commits */}
@@ -1043,7 +1052,17 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 										<ClickableTile
 											flexGrow={1}
 											onPress={() => handleWorktreePress(index)}
-											onRelease={() => handleWorktreeActivate(index)}
+											onRelease={() => {
+												// A click on the MR link also fires this tile handler (overlapping
+												// bounds, no propagation). Defer a tick so the link handler can mark
+												// itself, then skip activation if a link was just opened.
+												setTimeout(() => {
+													if (wasLinkRecentlyOpened()) {
+														return;
+													}
+													handleWorktreeActivate(index);
+												}, 0);
+											}}
 										>
 											<WorktreePanel
 												detail={detail}

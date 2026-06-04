@@ -38,6 +38,7 @@ export interface IGitService {
 	reset(repoPath: string, ref: string, hard?: boolean): Promise<GitCommandResult>;
 	revParse(repoPath: string, ref: string): Promise<GitCommandResult>;
 	getBranchUpstreamStatus(repoPath: string): Promise<BranchUpstreamStatus>;
+	getRemoteUrl(repoPath: string, remote?: string): Promise<string | null>;
 }
 
 /**
@@ -520,5 +521,21 @@ export class GitService implements IGitService {
 		}
 
 		return 'none';
+	}
+
+	/**
+	 * Get the configured URL of a remote
+	 * @param repoPath - Repository root path
+	 * @param remote - Remote name (defaults to 'origin')
+	 * @returns The remote URL, or null if the remote is not configured
+	 */
+	async getRemoteUrl(repoPath: string, remote: string = 'origin'): Promise<string | null> {
+		const result = await this.executeGitCommand(repoPath, ['remote', 'get-url', remote]);
+
+		if (!result.success || !result.stdout) {
+			return null;
+		}
+
+		return result.stdout.trim();
 	}
 }

@@ -2,7 +2,15 @@
  * GitLab API Client
  * Thin wrapper around the GitLab REST API (v4)
  */
-import type { GitLabApiError, GitLabProject, GitLabUser } from './types.js';
+import type {
+	GitLabApiError,
+	GitLabApprovals,
+	GitLabMergeRequest,
+	GitLabMrState,
+	GitLabProject,
+	GitLabReviewer,
+	GitLabUser,
+} from './types.js';
 
 /**
  * Default GitLab instance base URL (SaaS gitlab.com)
@@ -42,6 +50,36 @@ interface RawGitLabProject {
 	name: string;
 	path_with_namespace: string;
 	web_url: string;
+}
+
+/**
+ * Raw merge request shape returned by the GitLab API (snake_case, partial)
+ */
+interface RawGitLabMergeRequest {
+	iid: number;
+	web_url: string;
+	state: string;
+	draft?: boolean;
+	work_in_progress?: boolean;
+	detailed_merge_status?: string;
+	created_at?: string;
+}
+
+/**
+ * Raw reviewer entry returned by the reviewers endpoint.
+ * Note: the top-level `state` is the review state; `user.state` is the account state.
+ */
+interface RawGitLabReviewer {
+	user?: { id?: number; username?: string };
+	state?: string;
+}
+
+/**
+ * Raw approvals shape returned by the approvals endpoint (partial)
+ */
+interface RawGitLabApprovals {
+	approvals_required?: number;
+	approved_by?: Array<{ user?: { id?: number } }>;
 }
 
 /**
@@ -142,5 +180,68 @@ export class GitLabApiClient {
 			pathWithNamespace: p.path_with_namespace,
 			webUrl: p.web_url,
 		}));
+	}
+
+	/**
+	 * List merge requests for a project filtered by source branch, newest first.
+	 * @param projectPath - `namespace/project` path (will be URL-encoded as the project id)
+	 * @param sourceBranch - the worktree's branch name
+	 */
+	async getMergeRequestsBySourceBranch(
+		projectPath: string,
+		sourceBranch: string
+	): Promise<GitLabMergeRequest[]> {
+		const id = encodeURIComponent(projectPath);
+		const branch = encodeURIComponent(sourceBranch);
+		const raw = await this.get<RawGitLabMergeRequest[]>(
+			`/projects/${id}/merge_requests?source_branch=${branch}&order_by=created_at&sort=desc`
+		);
+		return raw.map((mr) => ({
+			iid: mr.iid,
+			webUrl: mr.web_url,
+			state: mr.state as GitLabMrState,
+			draft: mr.draft ?? mr.work_in_progress ?? false,
+			detailedMergeStatus: mr.detailed_merge_status,
+			createdAt: mr.created_at,
+		}));
+	}
+
+	/**
+	 * Get the reviewers of a merge request, including each reviewer's review state.
+	 * @param projectPath - `namespace/project` path
+	 * @param mergeRequestIid - project-internal MR id
+	 */
+	async getMergeRequestReviewers(
+		projectPath: string,
+		mergeRequestIid: number
+	): Promise<GitLabReviewer[]> {
+		const id = encodeURIComponent(projectPath);
+		const raw = await this.get<RawGitLabReviewer[]>(
+			`/projects/${id}/merge_requests/${mergeRequestIid}/reviewers`
+		);
+		return raw.map((r) => ({
+			userId: r.user?.id ?? 0,
+			username: r.user?.username ?? '',
+			state: r.state ?? 'unreviewed',
+		}));
+	}
+
+	/**
+	 * Get the approval summary for a merge request.
+	 * @param projectPath - `namespace/project` path
+	 * @param mergeRequestIid - project-internal MR id
+	 */
+	async getMergeRequestApprovals(
+		projectPath: string,
+		mergeRequestIid: number
+	): Promise<GitLabApprovals> {
+		const id = encodeURIComponent(projectPath);
+		const raw = await this.get<RawGitLabApprovals>(
+			`/projects/${id}/merge_requests/${mergeRequestIid}/approvals`
+		);
+		return {
+			approvalsRequired: raw.approvals_required ?? 0,
+			approvalsGiven: raw.approved_by?.length ?? 0,
+		};
 	}
 }
