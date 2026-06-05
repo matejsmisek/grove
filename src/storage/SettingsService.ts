@@ -21,7 +21,15 @@ export interface ISettingsService {
 	hasSettingsFile(): boolean;
 	/** Initialize the .grove folder structure if it doesn't exist */
 	initializeStorage(): void;
-	/** Read settings from settings.json */
+	/**
+	 * Read the effective settings for the active context.
+	 *
+	 * Settings inherit from the global ~/.grove/settings.json: in a workspace or
+	 * repo context the global settings act as the base layer and any key present
+	 * in the context's own settings.json overrides it. Keys absent from the
+	 * context file fall through to the global value. In the global context the
+	 * global file is read directly.
+	 */
 	readSettings(): Settings;
 	/** Write settings to settings.json */
 	writeSettings(settings: Settings): void;
@@ -85,6 +93,15 @@ export class SettingsService implements ISettingsService {
 	 */
 	setContext(context: WorkspaceContext | undefined): void {
 		this.context = context;
+	}
+
+	/**
+	 * Whether the active context is the global context (no workspace/repo).
+	 * In the global context settings are read directly from the global file;
+	 * otherwise they inherit from it.
+	 */
+	private isGlobalContext(): boolean {
+		return !this.context || this.context.type === 'global';
 	}
 
 	/**
@@ -153,10 +170,26 @@ export class SettingsService implements ISettingsService {
 	}
 
 	/**
-	 * Read settings from settings.json
+	 * Read the effective settings for the active context.
+	 *
+	 * In a workspace/repo context the global settings provide the base layer and
+	 * the context's own settings.json overrides individual keys on top. Keys not
+	 * present in the context file fall through to their global value. In the
+	 * global context the global file is returned directly.
 	 */
 	readSettings(): Settings {
-		return this.store.read();
+		if (this.isGlobalContext()) {
+			return this.store.read();
+		}
+
+		// Workspace/repo: inherit from global, override with context-specific
+		// values. `store.read()` already includes the context defaults (e.g.
+		// workingFolder) merged over the context file, so spreading it last keeps
+		// the context's own working folder and any explicit overrides.
+		return {
+			...this.globalStore.read(),
+			...this.store.read(),
+		};
 	}
 
 	/**

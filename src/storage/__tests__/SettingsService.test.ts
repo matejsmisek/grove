@@ -263,6 +263,94 @@ describe('SettingsService', () => {
 		});
 	});
 
+	describe('inheritance (global -> workspace/repo)', () => {
+		const workspaceGroveFolder = '/workspace/project/.grove';
+		const workspaceGrovesFolder = '/workspace/project/groves';
+
+		const createWorkspaceService = () =>
+			new SettingsService({
+				type: 'workspace',
+				groveFolder: workspaceGroveFolder,
+				grovesFolder: workspaceGrovesFolder,
+			});
+
+		const writeGlobalSettings = (settings: Partial<Settings>) => {
+			vol.writeFileSync(
+				path.join(mockGroveFolder, 'settings.json'),
+				JSON.stringify({ workingFolder: path.join(mockHomeDir, 'grove-worktrees'), ...settings })
+			);
+		};
+
+		it('should inherit unset keys from the global settings file', () => {
+			writeGlobalSettings({
+				selectedIDE: 'phpstorm',
+				terminal: { command: 'gnome-terminal', args: [] },
+			});
+
+			const workspaceService = createWorkspaceService();
+			const settings = workspaceService.readSettings();
+
+			// Inherited from global
+			expect(settings.selectedIDE).toBe('phpstorm');
+			expect(settings.terminal?.command).toBe('gnome-terminal');
+			// Context-specific working folder, not the global one
+			expect(settings.workingFolder).toBe(workspaceGrovesFolder);
+		});
+
+		it('should let the workspace override individual keys', () => {
+			writeGlobalSettings({ selectedIDE: 'phpstorm' });
+
+			const workspaceService = createWorkspaceService();
+			workspaceService.updateSettings({ selectedIDE: 'vscode' });
+
+			expect(workspaceService.readSettings().selectedIDE).toBe('vscode');
+
+			// Global value is untouched
+			const globalStored = JSON.parse(
+				vol.readFileSync(path.join(mockGroveFolder, 'settings.json'), 'utf-8') as string
+			) as Settings;
+			expect(globalStored.selectedIDE).toBe('phpstorm');
+		});
+
+		it('should keep the workspace settings file sparse (no baked-in global keys)', () => {
+			writeGlobalSettings({
+				selectedIDE: 'phpstorm',
+				terminal: { command: 'gnome-terminal', args: [] },
+			});
+
+			const workspaceService = createWorkspaceService();
+			workspaceService.updateSettings({ selectedIDE: 'vscode' });
+
+			const workspaceStored = JSON.parse(
+				vol.readFileSync(path.join(workspaceGroveFolder, 'settings.json'), 'utf-8') as string
+			) as Settings;
+
+			// Only the working folder default and the explicit override are persisted
+			expect(workspaceStored.selectedIDE).toBe('vscode');
+			expect(workspaceStored.terminal).toBeUndefined();
+			expect(Object.keys(workspaceStored).sort()).toEqual(['selectedIDE', 'workingFolder']);
+		});
+
+		it('should propagate later global changes to non-overridden keys', () => {
+			writeGlobalSettings({ selectedIDE: 'phpstorm' });
+
+			const workspaceService = createWorkspaceService();
+			// Workspace overrides something unrelated, leaving terminal unset
+			workspaceService.updateSettings({ workingFolder: '/workspace/custom' });
+
+			// Global terminal is added afterwards
+			writeGlobalSettings({ selectedIDE: 'phpstorm', terminal: { command: 'kitty', args: [] } });
+
+			expect(workspaceService.readSettings().terminal?.command).toBe('kitty');
+		});
+
+		it('should read the global file directly in the global context', () => {
+			writeGlobalSettings({ selectedIDE: 'phpstorm' });
+
+			expect(service.readSettings().selectedIDE).toBe('phpstorm');
+		});
+	});
+
 	describe('mouse control (global-only setting)', () => {
 		it('should default to true when unset', () => {
 			expect(service.getMouseControlEnabled()).toBe(true);

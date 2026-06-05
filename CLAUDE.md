@@ -83,6 +83,28 @@ All data is stored as JSON in `~/.grove/`:
 - `<repo>/.grove.local.json` - Local overrides (gitignored)
 - `<repo>/<project>/.grove.json` - Project-level config for monorepos
 
+### Settings Inheritance
+
+Settings resolve through layers, each overriding the one before it:
+
+```
+Global  →  Workspace / Repo  →  .grove.json  →  .grove.local.json
+```
+
+- **Global** (`~/.grove/settings.json`) is the base layer.
+- **Workspace / Repo** (`<context>/.grove/settings.json`) inherits from global by default. A
+  workspace/repo only needs to store the keys it overrides; any missing key falls through to the
+  global value. This is handled in `SettingsService.readSettings()` by merging the context file
+  over the global file. Writes via `updateSettings()` only persist the changed keys, so the
+  context file stays sparse and inheritance remains live.
+- **`.grove.json` / `.grove.local.json`** are a separate repo-level config (`GroveRepoConfig`)
+  consumed during grove creation and tool launching; for overlapping fields (e.g. `ide`,
+  `claudeSessionTemplates`) their consumers check these files before falling back to settings.
+- `mouseControlEnabled` is the one exception: it is always read from and written to the global
+  file and cannot be overridden per-workspace.
+- `workingFolder` is context-specific (each workspace/repo has its own) and is not inherited from
+  global.
+
 ### Configuration: `.grove.json`
 
 Repositories can include a `.grove.json` file to customize grove creation:
