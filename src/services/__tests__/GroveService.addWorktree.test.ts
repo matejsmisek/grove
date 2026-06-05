@@ -245,4 +245,80 @@ describe('GroveService.addWorktreeToGrove', () => {
 			service.addWorktreeToGrove('grove-1', createSelection(), 'feature', undefined, '/missing')
 		).rejects.toThrow(/fork from/i);
 	});
+
+	it('records the external reference on the created worktree', async () => {
+		const reference = {
+			type: 'asana' as const,
+			id: '1234567890',
+			url: 'https://app.asana.com/0/999/1234567890',
+		};
+
+		await service.addWorktreeToGrove(
+			'grove-1',
+			createSelection(),
+			'feature',
+			undefined,
+			undefined,
+			reference
+		);
+
+		const savedMetadata = vi.mocked(mockGrovesService.writeGroveMetadata).mock
+			.calls[0][1] as GroveMetadata;
+		expect(savedMetadata.worktrees[0].reference).toEqual(reference);
+	});
+
+	it('leaves the reference undefined for a normal add', async () => {
+		await service.addWorktreeToGrove('grove-1', createSelection(), 'feature');
+
+		const savedMetadata = vi.mocked(mockGrovesService.writeGroveMetadata).mock
+			.calls[0][1] as GroveMetadata;
+		expect(savedMetadata.worktrees[0].reference).toBeUndefined();
+	});
+
+	describe('setWorktreeReference', () => {
+		const existing: Worktree = {
+			name: 'feature',
+			repositoryName: 'test-repo',
+			repositoryPath: '/repos/test-repo',
+			worktreePath: '/groves/test-grove/feature-abcde',
+			branch: 'grove/feature',
+		};
+
+		it('attaches the reference to the matching worktree and persists it', () => {
+			vi
+				.mocked(mockGrovesService.readGroveMetadata)
+				.mockReturnValue(createMockMetadata([{ ...existing }]));
+
+			const reference = {
+				type: 'asana' as const,
+				id: '1234567890',
+				url: 'https://app.asana.com/0/999/1234567890',
+			};
+
+			const result = service.setWorktreeReference('grove-1', existing.worktreePath, reference);
+
+			expect(result.worktrees[0].reference).toEqual(reference);
+			const savedMetadata = vi.mocked(mockGrovesService.writeGroveMetadata).mock
+				.calls[0][1] as GroveMetadata;
+			expect(savedMetadata.worktrees[0].reference).toEqual(reference);
+			expect(mockGrovesService.updateGroveInIndex).toHaveBeenCalledWith(
+				'grove-1',
+				expect.objectContaining({ updatedAt: expect.any(String) })
+			);
+		});
+
+		it('throws when the worktree is not in the grove', () => {
+			vi
+				.mocked(mockGrovesService.readGroveMetadata)
+				.mockReturnValue(createMockMetadata([{ ...existing }]));
+
+			expect(() =>
+				service.setWorktreeReference('grove-1', '/missing', {
+					type: 'asana',
+					id: '1',
+					url: 'https://app.asana.com/0/1/1',
+				})
+			).toThrow(/worktree not found/i);
+		});
+	});
 });

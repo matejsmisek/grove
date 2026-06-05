@@ -2,14 +2,16 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
-import TextInput from '../components/GroveTextInput.js';
+import { AsanaNameInput } from '../components/AsanaNameInput.js';
 import { useService } from '../di/index.js';
 import { getMonorepoProjects } from '../git/index.js';
 import { useTask } from '../hooks/useTasks.js';
 import { useNavigation } from '../navigation/useNavigation.js';
+import { ASANA_PLUGIN_ID, AsanaPlugin } from '../plugins/asana/index.js';
 import {
 	GroveServiceToken,
 	GrovesServiceToken,
+	PluginRegistryToken,
 	RecentSelectionsServiceToken,
 	RepositoryServiceToken,
 	TaskServiceToken,
@@ -19,7 +21,9 @@ import type {
 	RecentSelection,
 	Repository,
 	RepositorySelection,
+	WorktreeReference,
 } from '../storage/index.js';
+import { parseAsanaTaskUrl } from '../utils/index.js';
 
 type AddWorktreeStep = 'name' | 'repositories' | 'projects' | 'creating' | 'done' | 'error';
 
@@ -54,6 +58,8 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 	const repositoryService = useService(RepositoryServiceToken);
 	const recentSelectionsService = useService(RecentSelectionsServiceToken);
 	const taskService = useService(TaskServiceToken);
+	const pluginRegistry = useService(PluginRegistryToken);
+	const asanaPlugin = pluginRegistry.get(ASANA_PLUGIN_ID) as AsanaPlugin | undefined;
 
 	const [step, setStep] = useState<AddWorktreeStep>('name');
 	const [worktreeName, setWorktreeName] = useState('');
@@ -62,6 +68,16 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 	const [cursorIndex, setCursorIndex] = useState(0);
 	const [error, setError] = useState<string>('');
 	const [nameError, setNameError] = useState<string>('');
+
+	// Asana "Create from Asana" flow. The resolved reference is held in a ref so that
+	// createWorktree() reads the correct value even when invoked in the same tick that
+	// resolves it (state updates are async).
+	const [asanaBusy, setAsanaBusy] = useState(false);
+	const [asanaError, setAsanaError] = useState<string>('');
+	const asanaReferenceRef = useRef<WorktreeReference | undefined>(undefined);
+	// Resolved worktree name, mirrored into a ref so createWorktree() uses the right value
+	// even when it runs in the same tick the name resolves (e.g. fork mode, Asana fetch).
+	const worktreeNameRef = useRef('');
 
 	// Id of the background task running the worktree creation, observed via useTask.
 	const [taskId, setTaskId] = useState<string | null>(null);
@@ -300,7 +316,46 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 		}
 
 		setNameError('');
-		setWorktreeName(value.trim());
+		// Manual name entry carries no external reference.
+		asanaReferenceRef.current = undefined;
+		proceedWithName(value.trim());
+	};
+
+	// Resolve the worktree name from the pasted Asana task URL, then continue the flow.
+	const handleCreateFromAsana = (taskUrl: string) => {
+		const parsed = parseAsanaTaskUrl(taskUrl);
+		if (!parsed) {
+			return;
+		}
+
+		if (!asanaPlugin) {
+			setAsanaError('Asana plugin is not available.');
+			return;
+		}
+
+		setAsanaError('');
+		setNameError('');
+		setAsanaBusy(true);
+
+		asanaPlugin
+			.getTask(parsed.gid)
+			.then((task) => {
+				setAsanaBusy(false);
+				asanaReferenceRef.current = { type: 'asana', id: parsed.gid, url: task.url };
+				proceedWithName(task.name);
+			})
+			.catch((err: unknown) => {
+				setAsanaBusy(false);
+				setAsanaError(err instanceof Error ? err.message : 'Failed to fetch Asana task');
+			});
+	};
+
+	// Advance past the name step with a resolved worktree name (entered manually or
+	// fetched from Asana). Picks the repository/project step or jumps straight to
+	// creation in fork mode, matching the manual flow.
+	const proceedWithName = (name: string) => {
+		worktreeNameRef.current = name;
+		setWorktreeName(name);
 
 		if (repositories.length === 0) {
 			setError('No repositories registered. Please add repositories in Settings first.');
@@ -343,21 +398,26 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 		};
 		navHandledRef.current = false;
 
+		// Use the resolved name (ref stays correct even on a same-tick create).
+		const name = worktreeNameRef.current || worktreeName;
 		// In fork mode, branch off the source worktree (its branch) and record the parentage.
 		const forkParentPath = isFork ? forkFromWorktreePath : undefined;
+		// External reference resolved via "Create from Asana" (undefined for manual entry).
+		const reference = asanaReferenceRef.current;
 
 		// Run as a background task so it survives navigating away from this screen.
 		const { id } = taskService.run<GroveMetadata>({
 			type: 'addWorktree',
-			title: isFork ? `Fork worktree "${worktreeName}"` : `Add worktree "${worktreeName}"`,
-			meta: { groveId, worktreeName },
+			title: isFork ? `Fork worktree "${name}"` : `Add worktree "${name}"`,
+			meta: { groveId, worktreeName: name },
 			execute: async (ctx) => {
 				const metadata = await groveService.addWorktreeToGrove(
 					groveId,
 					selection,
-					worktreeName,
+					name,
 					ctx.log,
-					forkParentPath
+					forkParentPath,
+					reference
 				);
 				recentSelectionsService.addRecentSelections([selection]);
 				return metadata;
@@ -423,24 +483,36 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 				</Box>
 
 				<Box marginBottom={1}>
-					<Text dimColor>This name will be used for the worktree folder and branch name.</Text>
+					<Text dimColor>
+						This name will be used for the worktree folder and branch name. Paste an Asana task URL to
+						name it from the task.
+					</Text>
 				</Box>
 
-				<Box marginBottom={1}>
-					<Text color="cyan">Name: </Text>
-					<TextInput
-						value={worktreeName}
-						onChange={(value) => {
-							setWorktreeName(value);
-							if (nameError) setNameError('');
-						}}
-						onSubmit={handleNameSubmit}
-					/>
-				</Box>
+				<AsanaNameInput
+					value={worktreeName}
+					onChange={(value) => {
+						setWorktreeName(value);
+						worktreeNameRef.current = value;
+						if (nameError) setNameError('');
+						if (asanaError) setAsanaError('');
+					}}
+					onSubmit={handleNameSubmit}
+					onCreateFromAsana={handleCreateFromAsana}
+					isActive={step === 'name'}
+					label="Name: "
+					busy={asanaBusy}
+				/>
 
 				{nameError && (
-					<Box marginBottom={1}>
+					<Box marginTop={1}>
 						<Text color="red">{nameError}</Text>
+					</Box>
+				)}
+
+				{asanaError && (
+					<Box marginTop={1}>
+						<Text color="red">{asanaError}</Text>
 					</Box>
 				)}
 

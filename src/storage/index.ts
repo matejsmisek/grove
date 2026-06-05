@@ -29,6 +29,7 @@ export type {
 	WorkspaceReference,
 	WorkspacesData,
 	Worktree,
+	WorktreeReference,
 } from './types.js';
 
 // Generic JSON storage

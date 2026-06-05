@@ -8,4 +8,5 @@ export {
 	ASANA_PLUGIN_ID,
 	ASANA_TOKEN_ENV_VAR,
 	AsanaTokenValidationError,
+	AsanaApiRequestError,
 } from './AsanaPlugin.js';

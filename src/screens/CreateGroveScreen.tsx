@@ -2,14 +2,16 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
-import TextInput from '../components/GroveTextInput.js';
+import { AsanaNameInput } from '../components/AsanaNameInput.js';
 import { useService } from '../di/index.js';
 import { getRepoProjects } from '../git/index.js';
 import { useTask } from '../hooks/useTasks.js';
 import { useNavigation } from '../navigation/useNavigation.js';
+import { ASANA_PLUGIN_ID, AsanaPlugin } from '../plugins/asana/index.js';
 import {
 	GroveServiceToken,
 	LLMServiceToken,
+	PluginRegistryToken,
 	RecentSelectionsServiceToken,
 	RepositoryServiceToken,
 	TaskServiceToken,
@@ -19,7 +21,9 @@ import type {
 	RecentSelection,
 	Repository,
 	RepositorySelection,
+	WorktreeReference,
 } from '../storage/index.js';
+import { parseAsanaTaskUrl } from '../utils/index.js';
 
 type CreateStep =
 	| 'description'
@@ -53,6 +57,8 @@ export function CreateGroveScreen() {
 	const repositoryService = useService(RepositoryServiceToken);
 	const recentSelectionsService = useService(RecentSelectionsServiceToken);
 	const taskService = useService(TaskServiceToken);
+	const pluginRegistry = useService(PluginRegistryToken);
+	const asanaPlugin = pluginRegistry.get(ASANA_PLUGIN_ID) as AsanaPlugin | undefined;
 
 	// Start at 'description' if LLM is configured, otherwise start at 'name' (offline mode)
 	const [step, setStep] = useState<CreateStep>(() =>
@@ -60,6 +66,14 @@ export function CreateGroveScreen() {
 	);
 	const [description, setDescription] = useState('');
 	const [groveName, setGroveName] = useState('');
+
+	// Asana "Create from Asana" flow. The reference and resolved name are mirrored into refs
+	// so createGrove()/proceedToRepositorySelection() read the right values even when they run
+	// in the same tick the name resolves (state updates are async).
+	const [asanaBusy, setAsanaBusy] = useState(false);
+	const [asanaError, setAsanaError] = useState<string>('');
+	const asanaReferenceRef = useRef<WorktreeReference | undefined>(undefined);
+	const groveNameRef = useRef('');
 	const [repositories] = useState<Repository[]>(() => repositoryService.getAllRepositories());
 	const [selectedRepoIndices, setSelectedRepoIndices] = useState<Set<number>>(new Set());
 	const [cursorIndex, setCursorIndex] = useState(0);
@@ -426,6 +440,7 @@ export function CreateGroveScreen() {
 		llmService
 			.generateGroveName(trimmed)
 			.then((result) => {
+				groveNameRef.current = result.name;
 				setGroveName(result.name);
 				setStep('generated');
 			})
@@ -436,7 +451,8 @@ export function CreateGroveScreen() {
 	};
 
 	const proceedToRepositorySelection = () => {
-		if (!groveName.trim()) {
+		const effectiveName = groveNameRef.current || groveName;
+		if (!effectiveName.trim()) {
 			setError('Grove name cannot be empty');
 			setStep('error');
 			return;
@@ -473,8 +489,42 @@ export function CreateGroveScreen() {
 		}
 
 		setNameError('');
+		// Manual name entry carries no external reference.
+		asanaReferenceRef.current = undefined;
+		groveNameRef.current = value.trim();
 		setGroveName(value.trim());
 		proceedToRepositorySelection();
+	};
+
+	// Resolve the grove name from a pasted Asana task URL, then continue the flow.
+	const handleCreateFromAsana = (taskUrl: string) => {
+		const parsed = parseAsanaTaskUrl(taskUrl);
+		if (!parsed) {
+			return;
+		}
+
+		if (!asanaPlugin) {
+			setAsanaError('Asana plugin is not available.');
+			return;
+		}
+
+		setAsanaError('');
+		setNameError('');
+		setAsanaBusy(true);
+
+		asanaPlugin
+			.getTask(parsed.gid)
+			.then((task) => {
+				setAsanaBusy(false);
+				asanaReferenceRef.current = { type: 'asana', id: parsed.gid, url: task.url };
+				groveNameRef.current = task.name;
+				setGroveName(task.name);
+				proceedToRepositorySelection();
+			})
+			.catch((err: unknown) => {
+				setAsanaBusy(false);
+				setAsanaError(err instanceof Error ? err.message : 'Failed to fetch Asana task');
+			});
 	};
 
 	const createGrove = (explicitSelections?: RepositorySelection[]) => {
@@ -482,14 +532,19 @@ export function CreateGroveScreen() {
 		setPendingSelections(selections);
 		navHandledRef.current = false;
 
+		// Use the resolved name (ref stays correct even on a same-tick create) and the
+		// external reference resolved via "Create from Asana" (undefined for manual entry).
+		const name = groveNameRef.current || groveName;
+		const reference = asanaReferenceRef.current;
+
 		// Run the creation as a background task so it survives navigating away
 		// from this screen. The task owns the work; this screen only observes it.
 		const { id } = taskService.run<GroveMetadata>({
 			type: 'createGrove',
-			title: `Create grove "${groveName}"`,
-			meta: { groveName },
+			title: `Create grove "${name}"`,
+			meta: { groveName: name },
 			execute: async (ctx) => {
-				const metadata = await groveService.createGrove(groveName, selections, ctx.log);
+				const metadata = await groveService.createGrove(name, selections, ctx.log, reference);
 				// Save selections to recent history on success, regardless of whether
 				// this screen is still mounted.
 				recentSelectionsService.addRecentSelections(selections);
@@ -547,13 +602,28 @@ export function CreateGroveScreen() {
 					<Text dimColor>(or press Enter with empty input to enter name manually)</Text>
 				</Box>
 
-				<Box marginBottom={1}>
-					<Text color="cyan">Description: </Text>
-					<TextInput value={description} onChange={setDescription} onSubmit={handleDescriptionSubmit} />
-				</Box>
+				<AsanaNameInput
+					value={description}
+					onChange={(value) => {
+						setDescription(value);
+						if (asanaError) setAsanaError('');
+					}}
+					onSubmit={handleDescriptionSubmit}
+					onCreateFromAsana={handleCreateFromAsana}
+					isActive={step === 'description'}
+					label="Description: "
+					busy={asanaBusy}
+				/>
+
+				{asanaError && (
+					<Box marginTop={1}>
+						<Text color="red">{asanaError}</Text>
+					</Box>
+				)}
 
 				<Box marginTop={1}>
 					<Text dimColor>AI will generate a grove name from your description</Text>
+					<Text dimColor>Or paste an Asana task URL to name the grove from the task</Text>
 					<Text dimColor>Press Enter to continue, Esc to cancel</Text>
 				</Box>
 			</Box>
@@ -617,23 +687,33 @@ export function CreateGroveScreen() {
 
 				<Box marginBottom={1}>
 					<Text>Enter a name for your grove:</Text>
+					<Text dimColor>(or paste an Asana task URL to name it from the task)</Text>
 				</Box>
 
-				<Box marginBottom={1}>
-					<Text color="cyan">Name: </Text>
-					<TextInput
-						value={groveName}
-						onChange={(value) => {
-							setGroveName(value);
-							if (nameError) setNameError('');
-						}}
-						onSubmit={handleNameSubmit}
-					/>
-				</Box>
+				<AsanaNameInput
+					value={groveName}
+					onChange={(value) => {
+						setGroveName(value);
+						groveNameRef.current = value;
+						if (nameError) setNameError('');
+						if (asanaError) setAsanaError('');
+					}}
+					onSubmit={handleNameSubmit}
+					onCreateFromAsana={handleCreateFromAsana}
+					isActive={step === 'name'}
+					label="Name: "
+					busy={asanaBusy}
+				/>
 
 				{nameError && (
-					<Box marginBottom={1}>
+					<Box marginTop={1}>
 						<Text color="red">{nameError}</Text>
+					</Box>
+				)}
+
+				{asanaError && (
+					<Box marginTop={1}>
+						<Text color="red">{asanaError}</Text>
 					</Box>
 				)}
 

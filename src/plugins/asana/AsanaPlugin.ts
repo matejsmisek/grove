@@ -3,7 +3,22 @@
  * Integrates Grove with Asana task management
  */
 import type { IPlugin, PluginMetadata } from '../types.js';
-import type { AsanaApiError, AsanaApiResponse, AsanaPluginSettings, AsanaUser } from './types.js';
+import type {
+	AsanaApiError,
+	AsanaApiResponse,
+	AsanaPluginSettings,
+	AsanaTask,
+	AsanaUser,
+} from './types.js';
+
+/**
+ * Raw task shape returned by the Asana API for the fields we request.
+ */
+interface RawAsanaTask {
+	gid: string;
+	name: string;
+	permalink_url?: string;
+}
 
 /**
  * Plugin ID constant
@@ -30,6 +45,20 @@ export class AsanaTokenValidationError extends Error {
 	) {
 		super(message);
 		this.name = 'AsanaTokenValidationError';
+	}
+}
+
+/**
+ * Error thrown when an Asana API request (other than token validation) fails
+ */
+export class AsanaApiRequestError extends Error {
+	constructor(
+		message: string,
+		public readonly status?: number,
+		public readonly cause?: unknown
+	) {
+		super(message);
+		this.name = 'AsanaApiRequestError';
 	}
 }
 
@@ -187,12 +216,69 @@ export class AsanaPlugin implements IPlugin {
 	}
 
 	/**
-	 * Get task details by GID
-	 * @placeholder - To be implemented
+	 * Get task details by GID.
+	 * Fetches the task name and permalink, used to name a grove/worktree from an Asana task.
+	 * @param taskGid - The Asana task gid
+	 * @throws AsanaTokenValidationError if no token is configured or it is invalid
+	 * @throws AsanaApiRequestError on other HTTP, parse, or network failures
 	 */
-	async getTask(_taskGid: string): Promise<void> {
-		// TODO: Implement fetching task details
-		throw new Error('Not implemented');
+	async getTask(taskGid: string): Promise<AsanaTask> {
+		const token = this.getAccessToken();
+
+		if (!token) {
+			throw new AsanaTokenValidationError(
+				`Asana token not found. Set the ${ASANA_TOKEN_ENV_VAR} environment variable or configure accessToken in plugin settings.`
+			);
+		}
+
+		let response: Response;
+		try {
+			response = await fetch(
+				`${ASANA_API_BASE_URL}/tasks/${encodeURIComponent(taskGid)}?opt_fields=name,permalink_url`,
+				{
+					method: 'GET',
+					headers: {
+						Authorization: `Bearer ${token}`,
+						Accept: 'application/json',
+					},
+				}
+			);
+		} catch (error) {
+			throw new AsanaApiRequestError(
+				'Failed to connect to Asana API. Check your network connection.',
+				undefined,
+				error
+			);
+		}
+
+		if (!response.ok) {
+			if (response.status === 401) {
+				throw new AsanaTokenValidationError('Invalid Asana token. The token is expired or incorrect.');
+			}
+			if (response.status === 404) {
+				throw new AsanaApiRequestError(`Asana task ${taskGid} not found.`, 404);
+			}
+
+			try {
+				const errorBody = (await response.json()) as AsanaApiError;
+				const errorMessage = errorBody.errors?.[0]?.message || `HTTP ${response.status}`;
+				throw new AsanaApiRequestError(`Asana API error: ${errorMessage}`, response.status);
+			} catch (parseError) {
+				if (parseError instanceof AsanaApiRequestError) {
+					throw parseError;
+				}
+				throw new AsanaApiRequestError(`Asana API returned status ${response.status}`, response.status);
+			}
+		}
+
+		const result = (await response.json()) as AsanaApiResponse<RawAsanaTask>;
+		const raw = result.data;
+		return {
+			gid: raw.gid,
+			name: raw.name,
+			// permalink_url is only present when requested; fall back to a canonical URL.
+			url: raw.permalink_url ?? `https://app.asana.com/0/0/${raw.gid}`,
+		};
 	}
 
 	/**

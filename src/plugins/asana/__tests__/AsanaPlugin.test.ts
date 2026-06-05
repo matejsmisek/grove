@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ASANA_TOKEN_ENV_VAR, AsanaPlugin, AsanaTokenValidationError } from '../AsanaPlugin.js';
+import {
+	ASANA_TOKEN_ENV_VAR,
+	AsanaApiRequestError,
+	AsanaPlugin,
+	AsanaTokenValidationError,
+} from '../AsanaPlugin.js';
 import type { AsanaApiResponse, AsanaUser } from '../types.js';
 
 // Mock fetch globally
@@ -228,6 +233,79 @@ describe('AsanaPlugin', () => {
 
 			expect(plugin.isInitialized()).toBe(false);
 			expect(plugin.getCurrentUser()).toBeNull();
+		});
+	});
+
+	describe('getTask', () => {
+		it('throws when no token is configured', async () => {
+			await expect(plugin.getTask('123')).rejects.toThrow(AsanaTokenValidationError);
+		});
+
+		it('returns task with name and permalink url on success', async () => {
+			process.env[ASANA_TOKEN_ENV_VAR] = 'valid-token';
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					data: {
+						gid: '123',
+						name: 'Fix the login bug',
+						permalink_url: 'https://app.asana.com/0/999/123',
+					},
+				}),
+			});
+
+			const task = await plugin.getTask('123');
+
+			expect(task).toEqual({
+				gid: '123',
+				name: 'Fix the login bug',
+				url: 'https://app.asana.com/0/999/123',
+			});
+			expect(mockFetch).toHaveBeenCalledWith(
+				'https://app.asana.com/api/1.0/tasks/123?opt_fields=name,permalink_url',
+				{
+					method: 'GET',
+					headers: {
+						Authorization: 'Bearer valid-token',
+						Accept: 'application/json',
+					},
+				}
+			);
+		});
+
+		it('falls back to a canonical url when permalink is missing', async () => {
+			process.env[ASANA_TOKEN_ENV_VAR] = 'valid-token';
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: { gid: '123', name: 'No permalink' } }),
+			});
+
+			const task = await plugin.getTask('123');
+
+			expect(task.url).toBe('https://app.asana.com/0/0/123');
+		});
+
+		it('throws AsanaTokenValidationError on 401', async () => {
+			process.env[ASANA_TOKEN_ENV_VAR] = 'bad-token';
+			mockFetch.mockResolvedValueOnce({ ok: false, status: 401 });
+
+			await expect(plugin.getTask('123')).rejects.toThrow(AsanaTokenValidationError);
+		});
+
+		it('throws AsanaApiRequestError with a not-found message on 404', async () => {
+			process.env[ASANA_TOKEN_ENV_VAR] = 'valid-token';
+			mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+			await expect(plugin.getTask('123')).rejects.toThrow(AsanaApiRequestError);
+			await expect(plugin.getTask('123')).rejects.toThrow('Asana task 123 not found');
+		});
+
+		it('throws AsanaApiRequestError on network failure', async () => {
+			process.env[ASANA_TOKEN_ENV_VAR] = 'valid-token';
+			mockFetch.mockRejectedValue(new Error('Network error'));
+
+			await expect(plugin.getTask('123')).rejects.toThrow(AsanaApiRequestError);
+			await expect(plugin.getTask('123')).rejects.toThrow('Failed to connect to Asana API');
 		});
 	});
 

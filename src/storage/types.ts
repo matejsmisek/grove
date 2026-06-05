@@ -231,6 +231,20 @@ export interface RepositorySelection {
 }
 
 /**
+ * External reference attached to a worktree.
+ * Links the worktree back to an item in an external system (e.g. an Asana task)
+ * that the work was created for. Stored under `reference` in grove.json.
+ */
+export interface WorktreeReference {
+	/** External system the reference points to */
+	type: 'asana';
+	/** Identifier of the referenced item (e.g. Asana task gid) */
+	id: string;
+	/** Canonical URL of the referenced item */
+	url: string;
+}
+
+/**
  * Represents a worktree within a grove
  */
 export interface Worktree {
@@ -258,6 +272,11 @@ export interface Worktree {
 	 * Used to display fork relationships as a tree in the grove detail view.
 	 */
 	forkedFromPath?: string;
+	/**
+	 * External reference this worktree was created from (e.g. an Asana task).
+	 * Set when the grove/worktree name was resolved from an external item.
+	 */
+	reference?: WorktreeReference;
 	/**
 	 * Whether this worktree has been closed (removed from disk but kept in metadata)
 	 */

@@ -12,6 +12,7 @@ import type {
 	Repository,
 	RepositorySelection,
 	Worktree,
+	WorktreeReference,
 } from '../storage/types.js';
 import { generateGroveIdentifier, normalizeGroveName, normalizeName } from '../utils/index.js';
 import type { IContextService } from './ContextService.js';
@@ -33,7 +34,8 @@ export interface IGroveService {
 	createGrove(
 		name: string,
 		selections: RepositorySelection[],
-		onLog?: (message: string) => void
+		onLog?: (message: string) => void,
+		reference?: WorktreeReference
 	): Promise<GroveMetadata>;
 	/**
 	 * Add a worktree to an existing grove
@@ -43,8 +45,18 @@ export interface IGroveService {
 		selection: RepositorySelection,
 		worktreeName: string,
 		onLog?: (message: string) => void,
-		forkFromWorktreePath?: string
+		forkFromWorktreePath?: string,
+		reference?: WorktreeReference
 	): Promise<GroveMetadata>;
+	/**
+	 * Attach (or replace) an external reference on an existing worktree, persisting it to grove.json.
+	 * @returns The updated grove metadata
+	 */
+	setWorktreeReference(
+		groveId: string,
+		worktreePath: string,
+		reference: WorktreeReference
+	): GroveMetadata;
 	/** Close a grove - removes worktrees and deletes folder */
 	closeGrove(groveId: string): Promise<CloseGroveResult>;
 	/** Close a single worktree within a grove */
@@ -350,12 +362,15 @@ Completed at: ${new Date().toISOString()}
 	 * @param name - Name of the grove (will be normalized for folder/branch names)
 	 * @param selections - Array of repository selections, each optionally with a project path
 	 * @param onLog - Optional callback for progress logging
+	 * @param reference - Optional external reference (e.g. an Asana task) to attach to each
+	 *   created worktree, recording where the grove originated.
 	 * @returns The created grove metadata
 	 */
 	async createGrove(
 		name: string,
 		selections: RepositorySelection[],
-		onLog?: (message: string) => void
+		onLog?: (message: string) => void,
+		reference?: WorktreeReference
 	): Promise<GroveMetadata> {
 		const settings = this.settingsService.readSettings();
 		const groveId = this.generateGroveId();
@@ -558,6 +573,7 @@ Completed at: ${new Date().toISOString()}
 					branch: branchName,
 					projectPath: selection.projectPath,
 					initActionsStatus,
+					reference,
 				};
 
 				worktrees.push(worktree);
@@ -609,6 +625,7 @@ Completed at: ${new Date().toISOString()}
 	 * @param forkFromWorktreePath - When set, branch the new worktree off the branch of the
 	 *   worktree at this path (instead of the repository's main branch). Used by the "Fork" flow.
 	 *   Skips the reset-to-main behaviour and records the parent for tree display.
+	 * @param reference - Optional external reference (e.g. an Asana task) to attach to the worktree.
 	 * @returns Updated grove metadata
 	 */
 	async addWorktreeToGrove(
@@ -616,7 +633,8 @@ Completed at: ${new Date().toISOString()}
 		selection: RepositorySelection,
 		worktreeName: string,
 		onLog?: (message: string) => void,
-		forkFromWorktreePath?: string
+		forkFromWorktreePath?: string,
+		reference?: WorktreeReference
 	): Promise<GroveMetadata> {
 		// Get grove reference
 		const groveRef = this.grovesService.getGroveById(groveId);
@@ -817,6 +835,7 @@ Completed at: ${new Date().toISOString()}
 				projectPath: selection.projectPath,
 				initActionsStatus,
 				forkedFromPath: forkFromWorktreePath,
+				reference,
 			};
 
 			// Add worktree to metadata
@@ -835,6 +854,42 @@ Completed at: ${new Date().toISOString()}
 			const displayName = selection.projectPath ? `${repo.name}/${selection.projectPath}` : repo.name;
 			throw new Error(`Failed to add worktree for ${displayName}: ${errorMsg}`);
 		}
+	}
+
+	/**
+	 * Attach (or replace) an external reference on an existing worktree.
+	 * @param groveId - ID of the grove containing the worktree
+	 * @param worktreePath - Path of the worktree to update
+	 * @param reference - The external reference to store under the worktree
+	 * @returns The updated grove metadata
+	 */
+	setWorktreeReference(
+		groveId: string,
+		worktreePath: string,
+		reference: WorktreeReference
+	): GroveMetadata {
+		const groveRef = this.grovesService.getGroveById(groveId);
+		if (!groveRef) {
+			throw new Error('Grove not found');
+		}
+
+		const metadata = this.grovesService.readGroveMetadata(groveRef.path);
+		if (!metadata) {
+			throw new Error('Grove metadata not found');
+		}
+
+		const worktree = metadata.worktrees.find((w) => w.worktreePath === worktreePath);
+		if (!worktree) {
+			throw new Error('Worktree not found in grove');
+		}
+
+		worktree.reference = reference;
+		metadata.updatedAt = new Date().toISOString();
+
+		this.grovesService.writeGroveMetadata(groveRef.path, metadata);
+		this.grovesService.updateGroveInIndex(groveId, { updatedAt: metadata.updatedAt });
+
+		return metadata;
 	}
 
 	/**

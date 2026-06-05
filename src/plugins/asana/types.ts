@@ -31,6 +31,18 @@ export interface AsanaTaskReference {
 }
 
 /**
+ * Asana task details fetched from the API
+ */
+export interface AsanaTask {
+	/** Asana task GID */
+	gid: string;
+	/** Task name/title */
+	name: string;
+	/** Canonical permalink URL of the task */
+	url: string;
+}
+
+/**
  * Asana workspace reference
  */
 export interface AsanaWorkspace {

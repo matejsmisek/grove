@@ -11,12 +11,15 @@ import {
 import fs from 'fs';
 import path from 'path';
 
+import { AsanaReferenceCell } from '../components/AsanaReferenceCell.js';
+import TextInput from '../components/GroveTextInput.js';
 import { MergeRequestCell } from '../components/MergeRequestCell.js';
 import { SessionIndicator } from '../components/SessionIndicator.js';
 import { ClickableTile } from '../components/home/ClickableTile.js';
 import { useService } from '../di/index.js';
 import { useMergeRequestStatus } from '../hooks/useMergeRequestStatus.js';
 import { useNavigation } from '../navigation/useNavigation.js';
+import { ASANA_PLUGIN_ID, AsanaPlugin } from '../plugins/asana/index.js';
 import { getContextDisplayName } from '../services/WorkspaceService.js';
 import {
 	detectTerminal,
@@ -28,15 +31,18 @@ import {
 import {
 	ClaudeSessionServiceToken,
 	GitServiceToken,
+	GroveServiceToken,
 	GrovesServiceToken,
+	PluginRegistryToken,
 	SessionsServiceToken,
 	SettingsServiceToken,
 	WorkspaceServiceToken,
 } from '../services/tokens.js';
 import type { BranchUpstreamStatus, FileChangeStats } from '../services/types.js';
 import { GroveConfigService } from '../storage/index.js';
-import type { AgentSession, Settings, Worktree } from '../storage/types.js';
-import { wasLinkRecentlyOpened } from '../utils/links.js';
+import type { AgentSession, Settings, Worktree, WorktreeReference } from '../storage/types.js';
+import { parseAsanaTaskUrl } from '../utils/index.js';
+import { openUrl, wasLinkRecentlyOpened } from '../utils/links.js';
 
 interface WorktreeDetails {
 	worktree: Worktree;
@@ -207,11 +213,17 @@ function WorktreePanel({
 	isSelected,
 	sessionCounts,
 	showInitActions,
+	asanaEnabled = false,
+	onAttachAsana,
 }: {
 	detail: WorktreeDetails;
 	isSelected: boolean;
 	sessionCounts: SessionCounts;
 	showInitActions: boolean;
+	/** Whether the Asana plugin is enabled (controls the reference line / attach affordance). */
+	asanaEnabled?: boolean;
+	/** Called when the unlinked "Attach Asana" affordance is clicked. */
+	onAttachAsana?: () => void;
 }) {
 	const isClosed = detail.worktree.closed === true;
 	const mr = useMergeRequestStatus(
@@ -283,6 +295,14 @@ function WorktreePanel({
 						{hasChanges && <Text dimColor> ({formatFileStats(detail.fileStats)})</Text>}
 						<MergeRequestCell mr={mr} marginLeft={2} />
 					</Box>
+
+					{/* External reference line. Linked tasks always show; the "Attach Asana"
+					    affordance appears for unlinked worktrees only when the plugin is enabled. */}
+					{detail.worktree.reference?.type === 'asana' ? (
+						<AsanaReferenceCell url={detail.worktree.reference.url} />
+					) : asanaEnabled ? (
+						<AsanaReferenceCell onAttach={onAttachAsana} />
+					) : null}
 
 					{/* Unpushed Commits */}
 					{detail.hasUnpushedCommits && (
@@ -436,9 +456,13 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	const gitService = useService(GitServiceToken);
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
 	const grovesService = useService(GrovesServiceToken);
+	const groveService = useService(GroveServiceToken);
 	const sessionsService = useService(SessionsServiceToken);
 	const settingsService = useService(SettingsServiceToken);
 	const workspaceService = useService(WorkspaceServiceToken);
+	const pluginRegistry = useService(PluginRegistryToken);
+	const asanaEnabled = pluginRegistry.isEnabled(ASANA_PLUGIN_ID);
+	const asanaPlugin = pluginRegistry.get(ASANA_PLUGIN_ID) as AsanaPlugin | undefined;
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
 	const [grovePath, setGrovePath] = useState('');
@@ -457,6 +481,13 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	const [initLogContent, setInitLogContent] = useState<string>('');
 	// Whether closed worktrees are shown. Defaults to hidden and is not persisted.
 	const [showClosed, setShowClosed] = useState(false);
+
+	// Asana "Attach reference" flow. When a worktree path is set, a paste-the-URL prompt
+	// takes over the screen; submitting verifies the task via the API before persisting.
+	const [attachingWorktreePath, setAttachingWorktreePath] = useState<string | null>(null);
+	const [attachInput, setAttachInput] = useState('');
+	const [attachError, setAttachError] = useState<string>('');
+	const [attachBusy, setAttachBusy] = useState(false);
 
 	// Load grove details on mount
 	useEffect(() => {
@@ -697,6 +728,81 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		navigate('closeWorktree', { groveId, worktreePath: selected.worktreePath });
 	};
 
+	// Open the attach-Asana prompt for a worktree.
+	const startAttachAsana = (worktreePath: string) => {
+		setShowActions(false);
+		setAttachingWorktreePath(worktreePath);
+		setAttachInput('');
+		setAttachError('');
+		setAttachBusy(false);
+	};
+
+	const cancelAttachAsana = () => {
+		setAttachingWorktreePath(null);
+		setAttachInput('');
+		setAttachError('');
+		setAttachBusy(false);
+	};
+
+	// Verify the pasted Asana task URL via the API, then persist it onto the worktree.
+	const submitAttachAsana = (value: string) => {
+		const worktreePath = attachingWorktreePath;
+		if (!worktreePath) {
+			return;
+		}
+
+		const parsed = parseAsanaTaskUrl(value);
+		if (!parsed) {
+			setAttachError('That does not look like an Asana task URL.');
+			return;
+		}
+		if (!asanaPlugin) {
+			setAttachError('Asana plugin is not available.');
+			return;
+		}
+
+		setAttachBusy(true);
+		setAttachError('');
+
+		asanaPlugin
+			.getTask(parsed.gid)
+			.then((task) => {
+				const reference: WorktreeReference = { type: 'asana', id: parsed.gid, url: task.url };
+				groveService.setWorktreeReference(groveId, worktreePath, reference);
+				// Reflect the new reference locally so the panel updates without a full reload.
+				setWorktreeDetails((prev) =>
+					prev.map((d) =>
+						d.worktree.worktreePath === worktreePath
+							? { ...d, worktree: { ...d.worktree, reference } }
+							: d
+					)
+				);
+				cancelAttachAsana();
+				setResultMessage(`Linked Asana task: ${task.name}`);
+				setTimeout(() => setResultMessage(null), 2000);
+			})
+			.catch((err: unknown) => {
+				setAttachBusy(false);
+				setAttachError(err instanceof Error ? err.message : 'Failed to fetch Asana task');
+			});
+	};
+
+	// Keyboard affordance for the selected worktree: open the linked task, or start attaching.
+	const handleReferenceShortcut = () => {
+		if (!asanaEnabled) {
+			return;
+		}
+		const selected = worktreeDetails[selectedIndex]?.worktree;
+		if (!selected || selected.closed) {
+			return;
+		}
+		if (selected.reference?.type === 'asana') {
+			openUrl(selected.reference.url);
+		} else {
+			startAttachAsana(selected.worktreePath);
+		}
+	};
+
 	// Worktree action options (dynamically built based on worktree state)
 	const selectedWorktree = worktreeDetails[selectedIndex]?.worktree;
 	const isSelectedWorktreeClosed = selectedWorktree?.closed === true;
@@ -807,6 +913,14 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	// Handle keyboard navigation
 	useInput(
 		(input, key) => {
+			if (attachingWorktreePath !== null) {
+				// The attach prompt's text input handles typing/submit; only Esc cancels here.
+				if (key.escape) {
+					cancelAttachAsana();
+				}
+				return;
+			}
+
 			if (showInitLog) {
 				// Init log viewer navigation
 				if (key.escape) {
@@ -847,6 +961,9 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 				} else if (input === 'd' && isSingleWorktreeMode) {
 					// Toggle visibility of closed worktrees
 					setShowClosed((prev) => !prev);
+				} else if (input === 'r' && isSingleWorktreeMode && asanaEnabled) {
+					// Open or attach the worktree's Asana reference
+					handleReferenceShortcut();
 				}
 			} else {
 				// Main screen navigation (multiple worktrees)
@@ -878,6 +995,9 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 				} else if (input === 'd') {
 					// Toggle visibility of closed worktrees
 					setShowClosed((prev) => !prev);
+				} else if (input === 'r' && asanaEnabled) {
+					// Open or attach the selected worktree's Asana reference
+					handleReferenceShortcut();
 				}
 			}
 		},
@@ -945,6 +1065,61 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		);
 	}
 
+	if (attachingWorktreePath !== null) {
+		const attachingWorktree = worktreeDetails.find(
+			(d) => d.worktree.worktreePath === attachingWorktreePath
+		)?.worktree;
+
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box marginBottom={1}>
+					<Text bold color="green">
+						Attach Asana Task
+					</Text>
+				</Box>
+
+				{attachingWorktree && (
+					<Box marginBottom={1}>
+						<Text dimColor>Worktree: {attachingWorktree.name || attachingWorktree.repositoryName}</Text>
+					</Box>
+				)}
+
+				<Box marginBottom={1}>
+					<Text>Paste the Asana task URL:</Text>
+				</Box>
+
+				<Box borderStyle="round" borderColor="cyan" paddingX={1} width="100%">
+					<Text color="cyan">URL: </Text>
+					{attachBusy ? (
+						<Text dimColor>Verifying task…</Text>
+					) : (
+						<Box flexGrow={1}>
+							<TextInput
+								value={attachInput}
+								onChange={(value) => {
+									setAttachInput(value);
+									if (attachError) setAttachError('');
+								}}
+								onSubmit={submitAttachAsana}
+								placeholder="https://app.asana.com/..."
+							/>
+						</Box>
+					)}
+				</Box>
+
+				{attachError && (
+					<Box marginTop={1}>
+						<Text color="red">{attachError}</Text>
+					</Box>
+				)}
+
+				<Box marginTop={1}>
+					<Text dimColor>Enter to verify &amp; link • ESC to cancel</Text>
+				</Box>
+			</Box>
+		);
+	}
+
 	return (
 		<Box flexDirection="column" padding={1}>
 			{showActions && !isSingleWorktreeMode ? (
@@ -965,6 +1140,8 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 								isSelected={true}
 								sessionCounts={getSessionCounts(worktreeDetails[selectedIndex].worktree.worktreePath)}
 								showInitActions={true}
+								asanaEnabled={asanaEnabled}
+								onAttachAsana={() => startAttachAsana(worktreeDetails[selectedIndex].worktree.worktreePath)}
 							/>
 						</Box>
 					)}
@@ -1069,6 +1246,8 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 												isSelected={isSelected}
 												sessionCounts={sessionCounts}
 												showInitActions={isSingleWorktreeMode}
+												asanaEnabled={asanaEnabled}
+												onAttachAsana={() => startAttachAsana(detail.worktree.worktreePath)}
 											/>
 										</ClickableTile>
 									</Box>
@@ -1103,6 +1282,11 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 							{hasClosed && (
 								<>
 									<Text bold>d</Text> {showClosed ? 'Hide' : 'Show'} Closed •{' '}
+								</>
+							)}
+							{asanaEnabled && (
+								<>
+									<Text bold>r</Text> Reference •{' '}
 								</>
 							)}
 							<Text bold>ESC</Text> Back
