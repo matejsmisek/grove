@@ -4,6 +4,7 @@ import { Box, Text } from 'ink';
 
 import { ActivityScreen } from '../screens/ActivityScreen.js';
 import { AddWorktreeScreen } from '../screens/AddWorktreeScreen.js';
+import { AsanaSettingsScreen } from '../screens/AsanaSettingsScreen.js';
 import { ChatScreen } from '../screens/ChatScreen.js';
 import { ClaudeTerminalSettingsScreen } from '../screens/ClaudeTerminalSettingsScreen.js';
 import { CloseGroveScreen } from '../screens/CloseGroveScreen.js';
@@ -137,9 +138,17 @@ export function Router() {
 		case 'repositories':
 			return <RepositoriesScreen />;
 		case 'pluginSettings':
-			return <PluginSettingsScreen />;
+			return (
+				<PluginSettingsScreen
+					selectedPluginId={
+						'selectedPluginId' in current.params ? current.params.selectedPluginId : undefined
+					}
+				/>
+			);
 		case 'gitlabSettings':
 			return <GitLabSettingsScreen />;
+		case 'asanaSettings':
+			return <AsanaSettingsScreen />;
 		case 'interfaceSettings':
 			return <InterfaceSettingsScreen />;
 		case 'groveConfigEditor':

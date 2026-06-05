@@ -4,16 +4,34 @@ import { Box, Text, useInput } from 'ink';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
+import { ASANA_PLUGIN_ID } from '../plugins/asana/index.js';
+import { GITLAB_PLUGIN_ID } from '../plugins/gitlab/index.js';
 import { PluginRegistryToken } from '../services/tokens.js';
 
-export function PluginSettingsScreen() {
-	const { goBack, canGoBack } = useNavigation();
+interface PluginSettingsScreenProps {
+	selectedPluginId?: string;
+}
+
+export function PluginSettingsScreen({ selectedPluginId }: PluginSettingsScreenProps) {
+	const { navigate, replace, goBack, canGoBack } = useNavigation();
 	const pluginRegistry = useService(PluginRegistryToken);
 
 	const plugins = pluginRegistry.getAll();
-	const [selectedIndex, setSelectedIndex] = useState(0);
-	const [isToggling, setIsToggling] = useState(false);
-	const [refreshKey, setRefreshKey] = useState(0);
+
+	// Restore the selection when returning from a plugin's settings screen
+	const initialIndex = selectedPluginId
+		? Math.max(
+				0,
+				plugins.findIndex((plugin) => plugin.metadata.id === selectedPluginId)
+			)
+		: 0;
+	const [selectedIndex, setSelectedIndex] = useState(initialIndex);
+
+	// Map each plugin to the screen that hosts its settings (including the on/off toggle)
+	const settingsNavigators: Record<string, () => void> = {
+		[GITLAB_PLUGIN_ID]: () => navigate('gitlabSettings', {}),
+		[ASANA_PLUGIN_ID]: () => navigate('asanaSettings', {}),
+	};
 
 	// Get current enabled states
 	const pluginStates = plugins.map((plugin) => ({
@@ -21,35 +39,24 @@ export function PluginSettingsScreen() {
 		enabled: pluginRegistry.isEnabled(plugin.metadata.id),
 	}));
 
-	useInput(async (input, key) => {
+	useInput((_input, key) => {
 		if (key.escape && canGoBack) {
 			goBack();
-		} else if (key.upArrow && !isToggling) {
+		} else if (key.upArrow) {
 			setSelectedIndex((prev) => (prev > 0 ? prev - 1 : plugins.length - 1));
-		} else if (key.downArrow && !isToggling) {
+		} else if (key.downArrow) {
 			setSelectedIndex((prev) => (prev < plugins.length - 1 ? prev + 1 : 0));
-		} else if ((key.return || input === ' ') && plugins.length > 0 && !isToggling) {
-			// Toggle selected plugin
+		} else if (key.return && plugins.length > 0) {
+			// Open the selected plugin's settings (where it can be enabled/disabled).
+			// Stamp the selection into our own params first so goBack() restores it.
 			const selectedPlugin = plugins[selectedIndex];
-			const isEnabled = pluginRegistry.isEnabled(selectedPlugin.metadata.id);
-
-			setIsToggling(true);
-			try {
-				if (isEnabled) {
-					await pluginRegistry.disable(selectedPlugin.metadata.id);
-				} else {
-					await pluginRegistry.enable(selectedPlugin.metadata.id);
-				}
-				// Force re-render to reflect new state
-				setRefreshKey((prev) => prev + 1);
-			} finally {
-				setIsToggling(false);
-			}
+			replace('pluginSettings', { selectedPluginId: selectedPlugin.metadata.id });
+			settingsNavigators[selectedPlugin.metadata.id]?.();
 		}
 	});
 
 	return (
-		<Box flexDirection="column" padding={1} key={refreshKey}>
+		<Box flexDirection="column" padding={1}>
 			<Box marginBottom={1}>
 				<Text bold color="yellow">
 					Plugins
@@ -57,7 +64,7 @@ export function PluginSettingsScreen() {
 			</Box>
 
 			<Box marginBottom={1}>
-				<Text dimColor>Enable or disable Grove plugins:</Text>
+				<Text dimColor>Select a plugin to open its settings:</Text>
 			</Box>
 
 			{plugins.length === 0 ? (
@@ -96,8 +103,8 @@ export function PluginSettingsScreen() {
 
 			<Box marginTop={2} flexDirection="column">
 				<Text dimColor>
-					Use <Text color="cyan">arrows</Text> to select, <Text color="cyan">Enter</Text> or{' '}
-					<Text color="cyan">Space</Text> to toggle
+					Use <Text color="cyan">arrows</Text> to select, <Text color="cyan">Enter</Text> to open
+					settings
 				</Text>
 				{canGoBack && (
 					<Text dimColor>
@@ -105,12 +112,6 @@ export function PluginSettingsScreen() {
 					</Text>
 				)}
 			</Box>
-
-			{isToggling && (
-				<Box marginTop={1}>
-					<Text color="yellow">Saving...</Text>
-				</Box>
-			)}
 		</Box>
 	);
 }
