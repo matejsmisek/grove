@@ -67,10 +67,15 @@ export class LLMService implements ILLMService {
 	}
 
 	/**
-	 * Check if the LLM service is configured with an API key
+	 * Check if the LLM service is enabled and configured with an API key.
+	 * Returns false when LLM features are explicitly disabled, regardless of
+	 * whether an API key is present.
 	 */
 	isConfigured(): boolean {
 		const settings = this.settingsService.readSettings();
+		if (settings.llmEnabled === false) {
+			return false;
+		}
 		return !!settings.openrouterApiKey && settings.openrouterApiKey.trim().length > 0;
 	}
 

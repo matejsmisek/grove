@@ -9,6 +9,8 @@ import { SettingsServiceToken } from '../services/tokens.js';
 
 type FieldType = 'apiKey' | 'model' | 'siteUrl' | 'appName' | null;
 
+const FIELD_COUNT = 5; // enabled, apiKey, model, siteUrl, appName
+
 const DEFAULT_MODEL = 'anthropic/claude-3.5-haiku';
 const SUGGESTED_MODELS = [
 	'anthropic/claude-3.5-haiku',
@@ -24,13 +26,23 @@ export function LLMSettingsScreen() {
 	const settingsService = useService(SettingsServiceToken);
 	const settings = settingsService.readSettings();
 
-	const [fieldIndex, setFieldIndex] = useState(0); // 0 = apiKey, 1 = model, 2 = siteUrl, 3 = appName
+	const [fieldIndex, setFieldIndex] = useState(0); // 0 = enabled, 1 = apiKey, 2 = model, 3 = siteUrl, 4 = appName
 	const [editingField, setEditingField] = useState<FieldType>(null);
+	const [enabled, setEnabled] = useState(settings.llmEnabled !== false);
 	const [tempApiKey, setTempApiKey] = useState(settings.openrouterApiKey || '');
 	const [tempModel, setTempModel] = useState(settings.llmModel || DEFAULT_MODEL);
 	const [tempSiteUrl, setTempSiteUrl] = useState(settings.llmSiteUrl || '');
 	const [tempAppName, setTempAppName] = useState(settings.llmAppName || '');
 	const [savedMessage, setSavedMessage] = useState<string | null>(null);
+
+	// Toggle whether LLM features are enabled
+	const toggleEnabled = () => {
+		const next = !enabled;
+		setEnabled(next);
+		settingsService.updateSettings({ llmEnabled: next });
+		setSavedMessage(next ? 'LLM features enabled' : 'LLM features disabled');
+		setTimeout(() => setSavedMessage(null), 2000);
+	};
 
 	// Save API key
 	const saveApiKey = () => {
@@ -79,14 +91,15 @@ export function LLMSettingsScreen() {
 			if (key.escape && canGoBack) {
 				goBack();
 			} else if (key.upArrow) {
-				setFieldIndex((prev) => (prev > 0 ? prev - 1 : 3));
+				setFieldIndex((prev) => (prev > 0 ? prev - 1 : FIELD_COUNT - 1));
 			} else if (key.downArrow) {
-				setFieldIndex((prev) => (prev < 3 ? prev + 1 : 0));
+				setFieldIndex((prev) => (prev < FIELD_COUNT - 1 ? prev + 1 : 0));
 			} else if (key.return) {
-				if (fieldIndex === 0) setEditingField('apiKey');
-				else if (fieldIndex === 1) setEditingField('model');
-				else if (fieldIndex === 2) setEditingField('siteUrl');
-				else if (fieldIndex === 3) setEditingField('appName');
+				if (fieldIndex === 0) toggleEnabled();
+				else if (fieldIndex === 1) setEditingField('apiKey');
+				else if (fieldIndex === 2) setEditingField('model');
+				else if (fieldIndex === 3) setEditingField('siteUrl');
+				else if (fieldIndex === 4) setEditingField('appName');
 			}
 		},
 		{ isActive: editingField === null }
@@ -113,7 +126,12 @@ export function LLMSettingsScreen() {
 			<Box flexDirection="column" marginBottom={1}>
 				<Box>
 					<Text color={fieldIndex === 0 ? 'cyan' : undefined}>{fieldIndex === 0 ? '> ' : '  '}</Text>
-					<Text bold={fieldIndex === 0}>API Key: </Text>
+					<Text bold={fieldIndex === 0}>Enabled: </Text>
+					<Text color={enabled ? 'green' : 'red'}>{enabled ? 'On' : 'Off'}</Text>
+				</Box>
+				<Box marginTop={1}>
+					<Text color={fieldIndex === 1 ? 'cyan' : undefined}>{fieldIndex === 1 ? '> ' : '  '}</Text>
+					<Text bold={fieldIndex === 1}>API Key: </Text>
 					{editingField === 'apiKey' ? (
 						<TextInput value={tempApiKey} onChange={setTempApiKey} onSubmit={saveApiKey} />
 					) : (
@@ -123,8 +141,8 @@ export function LLMSettingsScreen() {
 					)}
 				</Box>
 				<Box marginTop={1}>
-					<Text color={fieldIndex === 1 ? 'cyan' : undefined}>{fieldIndex === 1 ? '> ' : '  '}</Text>
-					<Text bold={fieldIndex === 1}>Model: </Text>
+					<Text color={fieldIndex === 2 ? 'cyan' : undefined}>{fieldIndex === 2 ? '> ' : '  '}</Text>
+					<Text bold={fieldIndex === 2}>Model: </Text>
 					{editingField === 'model' ? (
 						<TextInput value={tempModel} onChange={setTempModel} onSubmit={saveModel} />
 					) : (
@@ -132,8 +150,8 @@ export function LLMSettingsScreen() {
 					)}
 				</Box>
 				<Box marginTop={1}>
-					<Text color={fieldIndex === 2 ? 'cyan' : undefined}>{fieldIndex === 2 ? '> ' : '  '}</Text>
-					<Text bold={fieldIndex === 2}>Site URL (optional): </Text>
+					<Text color={fieldIndex === 3 ? 'cyan' : undefined}>{fieldIndex === 3 ? '> ' : '  '}</Text>
+					<Text bold={fieldIndex === 3}>Site URL (optional): </Text>
 					{editingField === 'siteUrl' ? (
 						<TextInput value={tempSiteUrl} onChange={setTempSiteUrl} onSubmit={saveSiteUrl} />
 					) : (
@@ -141,8 +159,8 @@ export function LLMSettingsScreen() {
 					)}
 				</Box>
 				<Box marginTop={1}>
-					<Text color={fieldIndex === 3 ? 'cyan' : undefined}>{fieldIndex === 3 ? '> ' : '  '}</Text>
-					<Text bold={fieldIndex === 3}>App Name (optional): </Text>
+					<Text color={fieldIndex === 4 ? 'cyan' : undefined}>{fieldIndex === 4 ? '> ' : '  '}</Text>
+					<Text bold={fieldIndex === 4}>App Name (optional): </Text>
 					{editingField === 'appName' ? (
 						<TextInput value={tempAppName} onChange={setTempAppName} onSubmit={saveAppName} />
 					) : (
@@ -159,7 +177,7 @@ export function LLMSettingsScreen() {
 
 			<Box marginTop={1} flexDirection="column">
 				<Text dimColor>
-					<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Edit
+					<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Edit/Toggle
 				</Text>
 				{canGoBack && (
 					<Text dimColor>

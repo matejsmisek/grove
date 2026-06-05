@@ -112,6 +112,12 @@ export interface Settings {
 	 */
 	claudeSessionTemplates?: ClaudeSessionTemplates;
 	/**
+	 * Whether LLM-powered features (grove name generation, etc.) are enabled.
+	 * When disabled, the LLM is treated as unconfigured even if an API key is
+	 * set. Defaults to enabled (true) when unset.
+	 */
+	llmEnabled?: boolean;
+	/**
 	 * OpenRouter API key for LLM features (grove name generation, etc.)
 	 * Get your key at: https://openrouter.ai/keys
 	 */
