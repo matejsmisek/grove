@@ -7,6 +7,7 @@ import {
 	addWorktree,
 	createGrove,
 	formatGrovesText,
+	groveStatus,
 	handleSessionHook,
 	initWorkspace,
 	listGroves,
@@ -141,6 +142,9 @@ if (args.includes('--help') || args.includes('-h')) {
 	);
 	console.log('  claude [grove-id]                             Open Claude CLI for a grove');
 	console.log('  list [--json]                                 List all groves and their worktrees');
+	console.log(
+		'  status [--json]                               Show grove/worktree info for the current directory'
+	);
 	console.log(
 		'  workspace init                                Initialize a workspace in the current directory'
 	);
@@ -329,6 +333,33 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 			console.log(JSON.stringify(result.groves, null, 2));
 		} else {
 			console.log(formatGrovesText(result));
+		}
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		process.exit(1);
+	}
+} else if (args[0] === 'status') {
+	// Handle status command: grove status [--json]
+	// Detects the grove worktree containing the current directory and prints
+	// the grove ID, worktree ID, and repository (repo.project for monorepos).
+	const jsonOutput = args.includes('--json');
+	const result = groveStatus();
+
+	if (jsonOutput) {
+		console.log(JSON.stringify(result, null, 2));
+		process.exit(result.success ? 0 : 1);
+	}
+
+	if (result.success) {
+		if (result.groveId) {
+			console.log('Grove ID:  ', result.groveId);
+		}
+		if (result.worktreeId) {
+			console.log('Worktree:  ', result.worktreeId);
+		}
+		if (result.repository) {
+			console.log('Repository:', result.repository);
 		}
 		process.exit(0);
 	} else {

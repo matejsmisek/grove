@@ -12,7 +12,9 @@ export {
 } from './sessions.js';
 export { setupAgentHooks, verifyAgentHooks } from './setupHooks.js';
 export { formatGrovesText, listGroves } from './list.js';
+export { groveStatus } from './status.js';
 export type { RegisterResult, WorkspaceInitResult } from './types.js';
+export type { StatusResult } from './status.js';
 export type { CreateResult } from './create.js';
 export type { AddWorktreeResult } from './addWorktree.js';
 export type { ClaudeResult } from './claude.js';
