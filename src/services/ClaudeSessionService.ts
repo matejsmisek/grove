@@ -11,7 +11,6 @@ import type { ClaudeTerminalType } from '../storage/types.js';
 import {
 	type ClaudeAgentInfo,
 	listClaudeAgentSessions,
-	reconcileSessions,
 	shortSessionId,
 } from '../utils/claudeAgents.js';
 import { hasExternalEditor, openExternalEditor } from '../utils/externalEditor.js';
@@ -434,26 +433,14 @@ launch --title "cmd" bash
 	}
 
 	/**
-	 * List the sessions Grove should display. Reads the live sessions from
-	 * `claude agents --json`, reconciles them against the persisted registry
-	 * (archiving entries no longer reported live, registering newly-seen ones),
-	 * and returns the live sessions with archived ones filtered out.
+	 * List the sessions Grove should display. Relies solely on the live
+	 * `claude agents --json` data — the hook-written registry (`sessions.json`)
+	 * is intentionally ignored, so what's shown always matches what Claude
+	 * currently reports. Archived sessions are still hidden via `claude rm`,
+	 * which drops them from the live list (see `archiveSession`).
 	 */
-	async listTrackedSessions(): Promise<ClaudeAgentInfo[]> {
-		const live = await this.listAgentSessions();
-		let archivedIds: Set<string>;
-		try {
-			const data = this.sessionsService.readSessions();
-			const { sessions, changed } = reconcileSessions(data.sessions, live, new Date().toISOString());
-			if (changed) {
-				this.sessionsService.writeSessions({ ...data, sessions });
-			}
-			archivedIds = new Set(sessions.filter((s) => s.archived).map((s) => s.sessionId));
-		} catch {
-			// If the registry can't be read/written, fall back to the live list.
-			archivedIds = new Set();
-		}
-		return live.filter((agent) => !(agent.sessionId && archivedIds.has(agent.sessionId)));
+	listTrackedSessions(): Promise<ClaudeAgentInfo[]> {
+		return this.listAgentSessions();
 	}
 
 	/**
