@@ -474,6 +474,11 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		| null
 	>(null);
 	const [submenuIndex, setSubmenuIndex] = useState(0);
+	// Launching a Claude session blocks (spawnSync / $EDITOR), which freezes the
+	// Ink render loop. We show a loading screen first and run the blocking work
+	// from an effect on the next tick, so the feedback paints before we block.
+	const [launchingMessage, setLaunchingMessage] = useState<string | null>(null);
+	const launchRunnerRef = useRef<(() => void) | null>(null);
 
 	// Get workspace context to display workspace name
 	const workspaceContext = workspaceService.getCurrentContext();
@@ -585,7 +590,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	}, [groveId]);
 
 	// Poll live Claude sessions from `claude agents --json` in the background.
-	// The CLI reports the authoritative status, refreshed every 2 minutes.
+	// The CLI reports the authoritative status, refreshed every 30 seconds.
 	useEffect(() => {
 		let cancelled = false;
 
@@ -597,13 +602,36 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		};
 
 		void refreshAgents();
-		const interval = setInterval(() => void refreshAgents(), 2 * 60 * 1000);
+		const interval = setInterval(() => void refreshAgents(), 30 * 1000);
 
 		return () => {
 			cancelled = true;
 			clearInterval(interval);
 		};
 	}, [claudeSessionService]);
+
+	// Run a pending launch once its loading screen has been committed/painted.
+	// `setTimeout` yields to the event loop so Ink flushes the message to the
+	// terminal before the (blocking) launch runs.
+	useEffect(() => {
+		if (!launchingMessage || !launchRunnerRef.current) {
+			return;
+		}
+		const timer = setTimeout(() => {
+			const run = launchRunnerRef.current;
+			launchRunnerRef.current = null;
+			run?.();
+		}, 0);
+		return () => clearTimeout(timer);
+	}, [launchingMessage]);
+
+	// Show a loading screen, then run the (blocking) launch work on the next tick.
+	const beginLaunch = (message: string, run: () => void) => {
+		setShowActions(false);
+		setClaudeSubmenu(null);
+		launchRunnerRef.current = run;
+		setLaunchingMessage(message);
+	};
 
 	// Live Claude sessions (interactive + background) matched to a worktree: by
 	// the background session's short id, or by any session whose cwd is inside
@@ -639,30 +667,39 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		);
 	};
 
+	// Finish a launch: clear the loading screen and show a result or error.
+	const finishLaunch = (success: boolean, message: string) => {
+		setLaunchingMessage(null);
+		if (success) {
+			setResultMessage(message);
+			setTimeout(() => setResultMessage(null), 2000);
+		} else {
+			setError(message);
+		}
+	};
+
 	// Standard launch: start a background session (no prompt) and attach right
 	// away, so it's a tracked, re-attachable agent. Persist its session id.
 	const handleOpenInClaude = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
-		const result = claudeSessionService.launchStandardSession(
-			targetPath,
-			selected.repositoryPath,
-			selected.projectPath,
-			undefined,
-			groveName,
-			selected.name
-		);
-		setShowActions(false);
-
-		if (result.sessionId) {
-			persistBackgroundSession(selected, result.sessionId, result.sessionName);
-		}
-		if (result.success) {
-			setResultMessage(`Opened Claude session in ${selected.repositoryName}`);
-			setTimeout(() => setResultMessage(null), 2000);
-		} else {
-			setError(result.message);
-		}
+		beginLaunch(`Launching Claude in ${selected.repositoryName}…`, () => {
+			const result = claudeSessionService.launchStandardSession(
+				targetPath,
+				selected.repositoryPath,
+				selected.projectPath,
+				undefined,
+				groveName,
+				selected.name
+			);
+			if (result.sessionId) {
+				persistBackgroundSession(selected, result.sessionId, result.sessionName);
+			}
+			finishLaunch(
+				result.success,
+				result.success ? `Opened Claude session in ${selected.repositoryName}` : result.message
+			);
+		});
 	};
 
 	// Instant Claude: edit the prompt template, dispatch a background session via
@@ -670,44 +707,42 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	const handleInstantClaude = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
-		const result = claudeSessionService.launchInstantSession(
-			targetPath,
-			selected.repositoryPath,
-			selected.projectPath,
-			groveName,
-			selected.name
-		);
-		setShowActions(false);
-
-		if (result.success && result.sessionId) {
-			persistBackgroundSession(selected, result.sessionId, result.sessionName);
-			setResultMessage(`Started Instant Claude in ${selected.repositoryName}`);
-			setTimeout(() => setResultMessage(null), 2000);
-		} else {
-			setError(result.message);
-		}
+		beginLaunch(`Opening prompt editor for ${selected.repositoryName}…`, () => {
+			const result = claudeSessionService.launchInstantSession(
+				targetPath,
+				selected.repositoryPath,
+				selected.projectPath,
+				groveName,
+				selected.name
+			);
+			if (result.success && result.sessionId) {
+				persistBackgroundSession(selected, result.sessionId, result.sessionName);
+				finishLaunch(true, `Started Instant Claude in ${selected.repositoryName}`);
+			} else {
+				finishLaunch(false, result.message);
+			}
+		});
 	};
 
 	// Attach to a background session (`claude attach <short id>`).
 	const handleAttachSession = (session: ClaudeAgentInfo) => {
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
-		const result = claudeSessionService.attachSession(
-			shortSessionId(session.sessionId ?? ''),
-			targetPath,
-			selected.repositoryPath,
-			selected.projectPath,
-			undefined,
-			groveName,
-			selected.name
-		);
-		setShowActions(false);
-		if (result.success) {
-			setResultMessage(`Attaching to Claude in ${selected.repositoryName}`);
-			setTimeout(() => setResultMessage(null), 2000);
-		} else {
-			setError(result.message);
-		}
+		beginLaunch(`Attaching to Claude in ${selected.repositoryName}…`, () => {
+			const result = claudeSessionService.attachSession(
+				shortSessionId(session.sessionId ?? ''),
+				targetPath,
+				selected.repositoryPath,
+				selected.projectPath,
+				undefined,
+				groveName,
+				selected.name
+			);
+			finishLaunch(
+				result.success,
+				result.success ? `Attaching to Claude in ${selected.repositoryName}` : result.message
+			);
+		});
 	};
 
 	// Resume a standard (interactive) session (`claude --resume <session id>`).
@@ -719,23 +754,23 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 			settings.selectedClaudeTerminal ?? claudeSessionService.detectTerminal() ?? undefined;
 		if (!terminal) {
 			setShowActions(false);
+			setClaudeSubmenu(null);
 			setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
 			return;
 		}
-		const result = claudeSessionService.resumeSession(
-			session.sessionId ?? '',
-			targetPath,
-			terminal,
-			groveName,
-			selected.name
-		);
-		setShowActions(false);
-		if (result.success) {
-			setResultMessage(`Resuming Claude session in ${selected.repositoryName}`);
-			setTimeout(() => setResultMessage(null), 2000);
-		} else {
-			setError(result.message);
-		}
+		beginLaunch(`Resuming Claude session in ${selected.repositoryName}…`, () => {
+			const result = claudeSessionService.resumeSession(
+				session.sessionId ?? '',
+				targetPath,
+				terminal,
+				groveName,
+				selected.name
+			);
+			finishLaunch(
+				result.success,
+				result.success ? `Resuming Claude session in ${selected.repositoryName}` : result.message
+			);
+		});
 	};
 
 	// Archive a session so Grove stops tracking/showing it (with confirmation).
@@ -749,7 +784,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		claudeSessionService.archiveSession(sessionId);
 		// Reflect locally so the session disappears without waiting for the poll.
 		setAgentSessions((prev) => prev.filter((agent) => agent.sessionId !== sessionId));
-		setResultMessage('Archived Claude session');
+		setResultMessage('Terminated Claude session');
 		setTimeout(() => setResultMessage(null), 2000);
 	};
 
@@ -1012,7 +1047,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 							},
 						},
 				{
-					label: 'Archive',
+					label: 'Terminate',
 					run: () => {
 						setClaudeSubmenu({ mode: 'archiveConfirm', sessionId: session.sessionId ?? '' });
 						setSubmenuIndex(0);
@@ -1023,7 +1058,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		// archiveConfirm
 		return [
 			{
-				label: 'Yes, archive (removes from grove tracking)',
+				label: 'Yes, terminate this session',
 				run: () => {
 					setClaudeSubmenu(null);
 					handleArchiveSession(session);
@@ -1243,7 +1278,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 				}
 			}
 		},
-		{ isActive: !resultMessage }
+		{ isActive: !resultMessage && !launchingMessage }
 	);
 
 	// Renders the Claude section shown in the worktree actions/detail view: the
@@ -1260,7 +1295,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 				claudeSubmenu.mode === 'launch'
 					? 'Launch Claude'
 					: claudeSubmenu.mode === 'archiveConfirm'
-						? 'Archive this session?'
+						? 'Terminate this session?'
 						: 'Session actions';
 			return (
 				<Box flexDirection="column" marginBottom={1}>
@@ -1271,7 +1306,10 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					</Box>
 					{claudeSubmenu.mode === 'archiveConfirm' && (
 						<Box marginBottom={1}>
-							<Text dimColor>Removes it from grove tracking (the session itself keeps running).</Text>
+							<Text dimColor>
+								This terminates the running Claude session (`claude rm`) and removes it from Grove. You can
+								always resume the session later.
+							</Text>
 						</Box>
 					)}
 					{options.map((opt, i) => (
@@ -1289,7 +1327,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 
 		const launchIndex = actionsSessions.length;
 		const launchSelected = selectedActionIndex === launchIndex;
-		const panelWidth = 28;
+		const panelWidth = 42;
 
 		return (
 			<Box flexDirection="row" flexWrap="wrap" marginBottom={1}>
@@ -1302,7 +1340,6 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 						session.waitingFor && (status === 'waiting' || status === 'blocked')
 							? `${status} — ${session.waitingFor}`
 							: status;
-					const typeLabel = session.kind === 'background' ? 'Background' : 'Standard';
 					return (
 						<ClickableTile
 							key={session.sessionId ?? i}
@@ -1327,7 +1364,9 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 										{meta.icon} {statusText}
 									</Text>
 								</Box>
-								<Text dimColor>Type: {typeLabel}</Text>
+								<Text dimColor wrap="truncate-end">
+									ID: {shortSessionId(session.sessionId ?? '') || 'unknown'}
+								</Text>
 							</Box>
 						</ClickableTile>
 					);
@@ -1358,6 +1397,17 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 			</Box>
 		);
 	};
+
+	if (launchingMessage) {
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Text color="cyan">{launchingMessage}</Text>
+				<Box marginTop={1}>
+					<Text dimColor>Please wait…</Text>
+				</Box>
+			</Box>
+		);
+	}
 
 	if (loading) {
 		return (

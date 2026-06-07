@@ -45,7 +45,7 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
 
 	// Poll live Claude sessions (interactive + background) from `claude agents --json`
-	// every 2 minutes to drive the per-worktree status icons on each grove tile.
+	// every 30 seconds to drive the per-worktree status icons on each grove tile.
 	useEffect(() => {
 		let cancelled = false;
 
@@ -57,7 +57,7 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 		};
 
 		void refreshAgents();
-		const interval = setInterval(() => void refreshAgents(), 2 * 60 * 1000);
+		const interval = setInterval(() => void refreshAgents(), 30 * 1000);
 
 		return () => {
 			cancelled = true;
