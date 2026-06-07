@@ -262,7 +262,7 @@ describe('AsanaPlugin', () => {
 				url: 'https://app.asana.com/0/999/123',
 			});
 			expect(mockFetch).toHaveBeenCalledWith(
-				'https://app.asana.com/api/1.0/tasks/123?opt_fields=name,permalink_url',
+				'https://app.asana.com/api/1.0/tasks/123?opt_fields=name,permalink_url,notes',
 				{
 					method: 'GET',
 					headers: {
@@ -271,6 +271,25 @@ describe('AsanaPlugin', () => {
 					},
 				}
 			);
+		});
+
+		it('returns the task description (notes) when present', async () => {
+			process.env[ASANA_TOKEN_ENV_VAR] = 'valid-token';
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					data: {
+						gid: '123',
+						name: 'Fix the login bug',
+						permalink_url: 'https://app.asana.com/0/999/123',
+						notes: 'Steps to reproduce:\n1. Open login',
+					},
+				}),
+			});
+
+			const task = await plugin.getTask('123');
+
+			expect(task.notes).toBe('Steps to reproduce:\n1. Open login');
 		});
 
 		it('falls back to a canonical url when permalink is missing', async () => {

@@ -15,7 +15,11 @@ import {
 	shortSessionId,
 } from '../utils/claudeAgents.js';
 import { hasExternalEditor, openExternalEditor } from '../utils/externalEditor.js';
-import { preparePromptTemplate, stripPlaceholder } from '../utils/promptTemplate.js';
+import {
+	fillPromptTemplate,
+	preparePromptTemplate,
+	stripPlaceholder,
+} from '../utils/promptTemplate.js';
 import type { ClaudeSessionResult } from './types.js';
 
 /**
@@ -51,6 +55,20 @@ export interface IClaudeSessionService {
 	launchInstantSession(
 		workingDir: string,
 		repositoryPath: string,
+		projectPath?: string,
+		groveName?: string,
+		worktreeName?: string
+	): ClaudeSessionResult;
+	/**
+	 * Launch an "Instant Claude" background session like {@link launchInstantSession},
+	 * but seed the prompt by replacing the template's `{prompt}` placeholder with
+	 * `promptBody` (e.g. the contents of a linked Asana task) instead of removing it.
+	 * The filled prompt is opened in $EDITOR for review before dispatch.
+	 */
+	launchInstantSessionFromReference(
+		workingDir: string,
+		repositoryPath: string,
+		promptBody: string,
 		projectPath?: string,
 		groveName?: string,
 		worktreeName?: string
@@ -295,16 +313,27 @@ launch --title "cmd" bash
 	/**
 	 * Resolve the prompt text for an "Instant Claude" launch.
 	 *
-	 * Resolves the configured prompt template, opens it in the user's $EDITOR
-	 * (with the `{prompt}` placeholder removed and the caret positioned there) so
-	 * it can be edited, and returns the resulting text. When no template is
-	 * configured the editor opens empty so the user can type a prompt.
+	 * Resolves the configured prompt template, opens it in the user's $EDITOR (with
+	 * the caret positioned at the `{prompt}` placeholder) so it can be edited, and
+	 * returns the resulting text. When no template is configured the editor opens
+	 * empty so the user can type a prompt.
+	 *
+	 * When `placeholderReplacement` is provided the `{prompt}` placeholder is filled
+	 * with it (e.g. a linked Asana task's contents); otherwise the placeholder is
+	 * removed. Any remaining placeholder tokens are stripped before launch.
 	 *
 	 * Returns null when the user cancels the editor or leaves the prompt empty.
 	 */
-	private resolvePromptText(repositoryPath: string, projectPath?: string): string | null {
+	private resolvePromptText(
+		repositoryPath: string,
+		projectPath?: string,
+		placeholderReplacement?: string
+	): string | null {
 		const template = this.getPromptTemplateForRepo(repositoryPath, projectPath) ?? '';
-		const prepared = preparePromptTemplate(template);
+		const prepared =
+			placeholderReplacement === undefined
+				? preparePromptTemplate(template)
+				: fillPromptTemplate(template, placeholderReplacement);
 
 		if (hasExternalEditor()) {
 			const edited = openExternalEditor(prepared.content, {
@@ -494,6 +523,49 @@ launch --title "cmd" bash
 		}
 
 		const prompt = this.resolvePromptText(repositoryPath, projectPath);
+		if (!prompt) {
+			return {
+				success: false,
+				message: 'No prompt provided for Instant Claude.',
+			};
+		}
+
+		const name = this.buildSessionName(repositoryPath, groveName, worktreeName);
+		const dispatched = this.dispatchBackgroundSession(workingDir, name, prompt);
+		if ('errorMessage' in dispatched) {
+			return { success: false, message: dispatched.errorMessage };
+		}
+
+		return {
+			success: true,
+			message: `Started background Claude session (${dispatched.sessionId})`,
+			sessionId: dispatched.sessionId,
+			sessionName: name,
+		};
+	}
+
+	/**
+	 * Launch an "Instant Claude" background session seeded with `promptBody`: the
+	 * configured prompt template's `{prompt}` placeholder is filled with the body
+	 * (e.g. a linked Asana task's name + description), opened in $EDITOR for review,
+	 * then dispatched via `claude --bg`. Mirrors {@link launchInstantSession}.
+	 */
+	launchInstantSessionFromReference(
+		workingDir: string,
+		repositoryPath: string,
+		promptBody: string,
+		projectPath?: string,
+		groveName?: string,
+		worktreeName?: string
+	): ClaudeSessionResult {
+		if (!this.commandExists('claude')) {
+			return {
+				success: false,
+				message: 'Claude CLI not found. Please install Claude CLI first.',
+			};
+		}
+
+		const prompt = this.resolvePromptText(repositoryPath, projectPath, promptBody);
 		if (!prompt) {
 			return {
 				success: false,

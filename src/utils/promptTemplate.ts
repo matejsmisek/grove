@@ -67,6 +67,33 @@ export function preparePromptTemplate(template: string): PreparedPromptTemplate 
 }
 
 /**
+ * Fill a prompt template by replacing the `{prompt}` placeholder with `replacement`
+ * (instead of removing it, as {@link preparePromptTemplate} does).
+ *
+ * - If the template contains `{prompt}`, every occurrence is replaced with
+ *   `replacement` and the caret is placed at the end of the first replacement.
+ * - If the template has no placeholder, the replacement is appended (separated by
+ *   a blank line when the template is non-empty) and the caret is placed at the
+ *   end of the content.
+ */
+export function fillPromptTemplate(template: string, replacement: string): PreparedPromptTemplate {
+	const placeholderIndex = template.indexOf(PROMPT_PLACEHOLDER);
+
+	if (placeholderIndex === -1) {
+		const content = template.trim() ? `${template}\n\n${replacement}` : replacement;
+		return {
+			content,
+			cursor: indexToCaret(content, content.length),
+		};
+	}
+
+	const content = template.split(PROMPT_PLACEHOLDER).join(replacement);
+	const cursor = indexToCaret(content, placeholderIndex + replacement.length);
+
+	return { content, cursor };
+}
+
+/**
  * Remove every `{prompt}` placeholder occurrence from the text.
  */
 export function stripPlaceholder(text: string): string {

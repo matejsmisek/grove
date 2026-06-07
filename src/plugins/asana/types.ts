@@ -40,6 +40,8 @@ export interface AsanaTask {
 	name: string;
 	/** Canonical permalink URL of the task */
 	url: string;
+	/** Plain-text task description (the Asana `notes` field) */
+	notes?: string;
 }
 
 /**

@@ -18,6 +18,7 @@ interface RawAsanaTask {
 	gid: string;
 	name: string;
 	permalink_url?: string;
+	notes?: string;
 }
 
 /**
@@ -217,7 +218,8 @@ export class AsanaPlugin implements IPlugin {
 
 	/**
 	 * Get task details by GID.
-	 * Fetches the task name and permalink, used to name a grove/worktree from an Asana task.
+	 * Fetches the task name, permalink, and description (notes), used to name a
+	 * grove/worktree from an Asana task and to seed a Claude prompt from it.
 	 * @param taskGid - The Asana task gid
 	 * @throws AsanaTokenValidationError if no token is configured or it is invalid
 	 * @throws AsanaApiRequestError on other HTTP, parse, or network failures
@@ -234,7 +236,7 @@ export class AsanaPlugin implements IPlugin {
 		let response: Response;
 		try {
 			response = await fetch(
-				`${ASANA_API_BASE_URL}/tasks/${encodeURIComponent(taskGid)}?opt_fields=name,permalink_url`,
+				`${ASANA_API_BASE_URL}/tasks/${encodeURIComponent(taskGid)}?opt_fields=name,permalink_url,notes`,
 				{
 					method: 'GET',
 					headers: {
@@ -278,6 +280,7 @@ export class AsanaPlugin implements IPlugin {
 			name: raw.name,
 			// permalink_url is only present when requested; fall back to a canonical URL.
 			url: raw.permalink_url ?? `https://app.asana.com/0/0/${raw.gid}`,
+			notes: raw.notes,
 		};
 	}
 
