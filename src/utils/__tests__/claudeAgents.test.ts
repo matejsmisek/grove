@@ -7,6 +7,7 @@ import {
 	lastActionAt,
 	parseClaudeAgentsJson,
 	reconcileSessions,
+	sessionMatchesWorktree,
 	shortSessionId,
 } from '../claudeAgents.js';
 
@@ -107,6 +108,54 @@ describe('claudeAgents', () => {
 		it('does not match on short id when no bgSessionId is provided', () => {
 			const agent: ClaudeAgentInfo = { ...base, cwd: '/elsewhere' };
 			expect(agentMatchesWorktree(agent, '/home/me/grove/wt')).toBe(false);
+		});
+	});
+
+	describe('sessionMatchesWorktree', () => {
+		const base: AgentSession = {
+			sessionId: '936f9efe-5133-4ca4-8955-e20d41a2bd99',
+			agentType: 'claude',
+			groveId: null,
+			workspacePath: '/home/me/grove/wt',
+			worktreePath: null,
+			status: 'closed',
+			isRunning: false,
+			archived: true,
+			lastUpdate: '2026-06-07T00:00:00.000Z',
+		};
+
+		it('matches by workspacePath (the cwd it ran in)', () => {
+			expect(sessionMatchesWorktree(base, '/home/me/grove/wt')).toBe(true);
+		});
+
+		it('matches a session whose workspacePath is a subdirectory of the worktree', () => {
+			expect(
+				sessionMatchesWorktree({ ...base, workspacePath: '/home/me/grove/wt/api' }, '/home/me/grove/wt')
+			).toBe(true);
+		});
+
+		it('matches by an exact worktreePath', () => {
+			const session: AgentSession = {
+				...base,
+				workspacePath: '/elsewhere',
+				worktreePath: '/home/me/grove/wt',
+			};
+			expect(sessionMatchesWorktree(session, '/home/me/grove/wt')).toBe(true);
+		});
+
+		it('matches a background session by its short id', () => {
+			const session: AgentSession = { ...base, workspacePath: '/elsewhere' };
+			expect(sessionMatchesWorktree(session, '/home/me/grove/wt', '936f9efe')).toBe(true);
+		});
+
+		it('does not match a sibling whose path is a string prefix', () => {
+			const session: AgentSession = { ...base, workspacePath: '/home/me/grove/wt-2' };
+			expect(sessionMatchesWorktree(session, '/home/me/grove/wt')).toBe(false);
+		});
+
+		it('does not match a different worktree without a matching id', () => {
+			const session: AgentSession = { ...base, workspacePath: '/elsewhere' };
+			expect(sessionMatchesWorktree(session, '/home/me/grove/wt')).toBe(false);
 		});
 	});
 

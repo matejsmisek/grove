@@ -724,6 +724,46 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		});
 	};
 
+	// Instant Claude from Asana: fetch the linked task, seed the prompt template's
+	// `{prompt}` placeholder with the task name + description, then dispatch a
+	// background session (same flow as Instant Claude). Fetching is async, so we
+	// show a loading screen first and run the blocking editor/launch once resolved.
+	const handleInstantClaudeFromAsana = () => {
+		const selected = worktreeDetails[selectedIndex].worktree;
+		const reference = selected.reference;
+		if (!asanaPlugin || reference?.type !== 'asana') {
+			return;
+		}
+		const targetPath = getWorktreePath(selected);
+		setShowActions(false);
+		setClaudeSubmenu(null);
+		setLaunchingMessage(`Fetching Asana task for ${selected.repositoryName}…`);
+		asanaPlugin
+			.getTask(reference.id)
+			.then((task) => {
+				const promptBody = `Task Name: ${task.name}\n<description>${task.notes ?? ''}</description>`;
+				beginLaunch(`Opening prompt editor for ${selected.repositoryName}…`, () => {
+					const result = claudeSessionService.launchInstantSessionFromReference(
+						targetPath,
+						selected.repositoryPath,
+						promptBody,
+						selected.projectPath,
+						groveName,
+						selected.name
+					);
+					if (result.success && result.sessionId) {
+						persistBackgroundSession(selected, result.sessionId, result.sessionName);
+						finishLaunch(true, `Started Instant Claude from Asana in ${selected.repositoryName}`);
+					} else {
+						finishLaunch(false, result.message);
+					}
+				});
+			})
+			.catch((err: unknown) => {
+				finishLaunch(false, err instanceof Error ? err.message : 'Failed to fetch Asana task');
+			});
+	};
+
 	// Attach to a background session (`claude attach <short id>`).
 	const handleAttachSession = (session: ClaudeAgentInfo) => {
 		const selected = worktreeDetails[selectedIndex].worktree;
@@ -788,11 +828,12 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		setTimeout(() => setResultMessage(null), 2000);
 	};
 
-	// Debug: list the Claude sessions tracked to the selected worktree.
-	const handleShowClaudeSessions = () => {
+	// List the archived/terminated Claude sessions for the selected worktree and
+	// allow resuming them.
+	const handleShowArchivedSessions = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
 		setShowActions(false);
-		navigate('claudeSessions', { groveId, worktreePath: selected.worktreePath });
+		navigate('archivedSessions', { groveId, worktreePath: selected.worktreePath });
 	};
 
 	const handleOpenInTerminal = async () => {
@@ -986,8 +1027,8 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 						]
 					: []),
 				{
-					label: 'Show Claude Sessions',
-					action: handleShowClaudeSessions,
+					label: 'Show Archived Sessions',
+					action: handleShowArchivedSessions,
 				},
 				{
 					label: 'Close Worktree',
@@ -1007,7 +1048,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 			return [];
 		}
 		if (claudeSubmenu.mode === 'launch') {
-			return [
+			const options = [
 				{
 					label: 'Launch background claude',
 					run: () => {
@@ -1023,6 +1064,19 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					},
 				},
 			];
+			// Offer seeding the prompt from a linked Asana task, when one is attached
+			// and the Asana plugin is active.
+			const selected = worktreeDetails[selectedIndex]?.worktree;
+			if (asanaEnabled && asanaPlugin && selected?.reference?.type === 'asana') {
+				options.push({
+					label: 'Launch instant Claude from Asana',
+					run: () => {
+						setClaudeSubmenu(null);
+						handleInstantClaudeFromAsana();
+					},
+				});
+			}
+			return options;
 		}
 		const session = actionsSessions.find((s) => s.sessionId === claudeSubmenu.sessionId);
 		if (!session) {

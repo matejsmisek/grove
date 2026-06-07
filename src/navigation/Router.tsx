@@ -4,9 +4,9 @@ import { Box, Text } from 'ink';
 
 import { ActivityScreen } from '../screens/ActivityScreen.js';
 import { AddWorktreeScreen } from '../screens/AddWorktreeScreen.js';
+import { ArchivedSessionsScreen } from '../screens/ArchivedSessionsScreen.js';
 import { AsanaSettingsScreen } from '../screens/AsanaSettingsScreen.js';
 import { ChatScreen } from '../screens/ChatScreen.js';
-import { ClaudeSessionsScreen } from '../screens/ClaudeSessionsScreen.js';
 import { ClaudeTerminalSettingsScreen } from '../screens/ClaudeTerminalSettingsScreen.js';
 import { CloseGroveScreen } from '../screens/CloseGroveScreen.js';
 import { CloseMergedWorktreesScreen } from '../screens/CloseMergedWorktreesScreen.js';
@@ -124,9 +124,9 @@ export function Router() {
 					worktreePath={'worktreePath' in current.params ? current.params.worktreePath : undefined}
 				/>
 			);
-		case 'claudeSessions':
+		case 'archivedSessions':
 			return (
-				<ClaudeSessionsScreen
+				<ArchivedSessionsScreen
 					groveId={'groveId' in current.params ? current.params.groveId : ''}
 					worktreePath={'worktreePath' in current.params ? (current.params.worktreePath as string) : ''}
 				/>

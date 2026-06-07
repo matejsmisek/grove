@@ -359,6 +359,41 @@ describe('SessionsService', () => {
 		});
 	});
 
+	describe('getArchivedSessions', () => {
+		it('should return only sessions flagged as archived', () => {
+			service.addSession({
+				sessionId: 'live-1',
+				agentType: 'claude',
+				groveId: 'grove-1',
+				workspacePath: '/home/user/project',
+				worktreePath: null,
+				status: 'active',
+				lastUpdate: '2024-01-01T00:00:00Z',
+				isRunning: true,
+			});
+			service.addSession({
+				sessionId: 'archived-1',
+				agentType: 'claude',
+				groveId: 'grove-1',
+				workspacePath: '/home/user/project2',
+				worktreePath: null,
+				status: 'closed',
+				lastUpdate: '2024-01-01T00:00:00Z',
+				isRunning: false,
+				archived: true,
+			});
+
+			const archived = service.getArchivedSessions();
+
+			expect(archived).toHaveLength(1);
+			expect(archived[0].sessionId).toBe('archived-1');
+		});
+
+		it('should return an empty array when no sessions are archived', () => {
+			expect(service.getArchivedSessions()).toEqual([]);
+		});
+	});
+
 	describe('buildIndex', () => {
 		it('should build index with all lookup types', () => {
 			const session1: AgentSession = {

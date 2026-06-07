@@ -16,7 +16,7 @@ export type Routes = {
 	openIDE: { groveId: string };
 	openClaude: { groveId: string };
 	resumeClaude: { groveId: string; worktreePath?: string };
-	claudeSessions: { groveId: string; worktreePath: string };
+	archivedSessions: { groveId: string; worktreePath: string };
 	settings: { section?: string };
 	workingFolder: Record<string, never>;
 	repositories: Record<string, never>;

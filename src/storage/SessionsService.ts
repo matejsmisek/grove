@@ -15,6 +15,8 @@ export interface ISessionsService {
 	getSessionsByWorkspace(workspacePath: string): AgentSession[];
 	getSession(sessionId: string): AgentSession | null;
 	getAllActiveSessions(): AgentSession[];
+	/** All sessions flagged as archived (terminated or no longer reported live). */
+	getArchivedSessions(): AgentSession[];
 	buildIndex(): SessionsIndex;
 	cleanupStaleSessions(staleThresholdMinutes?: number): number;
 }
@@ -112,6 +114,11 @@ export class SessionsService implements ISessionsService {
 	getAllActiveSessions(): AgentSession[] {
 		const data = this.readSessions();
 		return data.sessions.filter((s) => s.isRunning && s.status !== 'closed');
+	}
+
+	getArchivedSessions(): AgentSession[] {
+		const data = this.readSessions();
+		return data.sessions.filter((s) => s.archived);
 	}
 
 	buildIndex(): SessionsIndex {

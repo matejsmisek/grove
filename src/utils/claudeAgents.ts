@@ -167,6 +167,30 @@ export function agentMatchesWorktree(
 	return false;
 }
 
+/**
+ * Whether a persisted registry session belongs to a worktree.
+ *
+ * Mirrors {@link agentMatchesWorktree} for {@link AgentSession} records: matched by
+ * the worktree's background session id (short id), by an exact `worktreePath`, or
+ * by a `workspacePath` (the cwd it ran in) inside the worktree directory.
+ */
+export function sessionMatchesWorktree(
+	session: AgentSession,
+	worktreeDir: string,
+	bgSessionId?: string
+): boolean {
+	if (bgSessionId && session.sessionId && shortSessionId(session.sessionId) === bgSessionId) {
+		return true;
+	}
+	if (session.worktreePath && path.resolve(session.worktreePath) === path.resolve(worktreeDir)) {
+		return true;
+	}
+	if (session.workspacePath && isWithinDirectory(session.workspacePath, worktreeDir)) {
+		return true;
+	}
+	return false;
+}
+
 /** Outcome of merging the persisted session registry with live `--json` data. */
 export interface ReconcileResult {
 	/** The reconciled registry (existing entries updated, new live ones appended). */
