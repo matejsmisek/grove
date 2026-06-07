@@ -119,13 +119,15 @@ export function registerServices(
 	// TaskService manages background jobs (no dependencies)
 	c.registerSingleton(TaskServiceToken, () => new TaskService());
 
-	// ClaudeSessionService depends on SettingsService and GroveConfigService
+	// ClaudeSessionService depends on SettingsService, GroveConfigService and
+	// SessionsService (the hook-populated registry it reconciles against).
 	c.registerSingleton(
 		ClaudeSessionServiceToken,
 		(cont) =>
 			new ClaudeSessionService(
 				cont.resolve(SettingsServiceToken),
-				cont.resolve(GroveConfigServiceToken)
+				cont.resolve(GroveConfigServiceToken),
+				cont.resolve(SessionsServiceToken)
 			)
 	);
 

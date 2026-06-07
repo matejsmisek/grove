@@ -1,8 +1,9 @@
 import { Volume } from 'memfs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createMockFs } from '../../__tests__/helpers.js';
+import { createFile, createMockFs } from '../../__tests__/helpers.js';
 import type { IGroveConfigService } from '../../storage/GroveConfigService.js';
+import type { ISessionsService } from '../../storage/SessionsService.js';
 import type { ISettingsService } from '../../storage/SettingsService.js';
 import { ClaudeSessionService } from '../ClaudeSessionService.js';
 
@@ -40,6 +41,7 @@ describe('ClaudeSessionService', () => {
 	let service: ClaudeSessionService;
 	let mockSettingsService: ISettingsService;
 	let mockGroveConfigService: IGroveConfigService;
+	let mockSessionsService: ISessionsService;
 
 	beforeEach(() => {
 		// Create fresh in-memory filesystem
@@ -68,7 +70,28 @@ describe('ClaudeSessionService', () => {
 			getIDEConfigForSelection: vi.fn(),
 		};
 
-		service = new ClaudeSessionService(mockSettingsService, mockGroveConfigService);
+		mockSessionsService = {
+			setSessionsPath: vi.fn(),
+			readSessions: vi
+				.fn()
+				.mockReturnValue({ sessions: [], version: '1.0.0', lastUpdated: '2026-01-01T00:00:00Z' }),
+			writeSessions: vi.fn(),
+			addSession: vi.fn(),
+			updateSession: vi.fn(),
+			removeSession: vi.fn(),
+			getSessionsByGrove: vi.fn().mockReturnValue([]),
+			getSessionsByWorkspace: vi.fn().mockReturnValue([]),
+			getSession: vi.fn().mockReturnValue(null),
+			getAllActiveSessions: vi.fn().mockReturnValue([]),
+			buildIndex: vi.fn(),
+			cleanupStaleSessions: vi.fn().mockReturnValue(0),
+		};
+
+		service = new ClaudeSessionService(
+			mockSettingsService,
+			mockGroveConfigService,
+			mockSessionsService
+		);
 	});
 
 	afterEach(() => {
@@ -216,6 +239,134 @@ launch --title "my-worktree-lon" bash`;
 
 			// Empty string is falsy, so placeholders are not replaced (same as undefined)
 			expect(result).toBe('title: ${GROVE_NAME}');
+		});
+	});
+
+	describe('getPromptTemplateForRepo', () => {
+		it('returns undefined when nothing is configured', () => {
+			expect(service.getPromptTemplateForRepo('/repo')).toBeUndefined();
+		});
+
+		it('falls back to the settings template', () => {
+			vi.mocked(mockSettingsService.readSettings).mockReturnValue({
+				workingFolder: '/wf',
+				promptTemplate: 'from settings {prompt}',
+			});
+
+			expect(service.getPromptTemplateForRepo('/repo')).toBe('from settings {prompt}');
+		});
+
+		it('prefers the repo config over settings', () => {
+			vi.mocked(mockSettingsService.readSettings).mockReturnValue({
+				workingFolder: '/wf',
+				promptTemplate: 'from settings',
+			});
+			vi.mocked(mockGroveConfigService.readGroveRepoConfig).mockReturnValue({
+				promptTemplate: 'from repo',
+			});
+
+			expect(service.getPromptTemplateForRepo('/repo')).toBe('from repo');
+		});
+
+		it('prefers the project .grove.json over repo and settings', () => {
+			createFile(vol, '/repo/web/.grove.json', JSON.stringify({ promptTemplate: 'from project' }));
+			vi.mocked(mockSettingsService.readSettings).mockReturnValue({
+				workingFolder: '/wf',
+				promptTemplate: 'from settings',
+			});
+			vi.mocked(mockGroveConfigService.readGroveRepoConfig).mockReturnValue({
+				promptTemplate: 'from repo',
+			});
+
+			expect(service.getPromptTemplateForRepo('/repo', 'web')).toBe('from project');
+		});
+
+		it('ignores whitespace-only templates and falls through', () => {
+			vi.mocked(mockGroveConfigService.readGroveRepoConfig).mockReturnValue({
+				promptTemplate: '   \n  ',
+			});
+			vi.mocked(mockSettingsService.readSettings).mockReturnValue({
+				workingFolder: '/wf',
+				promptTemplate: 'from settings',
+			});
+
+			expect(service.getPromptTemplateForRepo('/repo')).toBe('from settings');
+		});
+	});
+
+	describe('parseBackgroundSessionId', () => {
+		const parse = (output: string): string | null =>
+			(
+				service as unknown as { parseBackgroundSessionId(o: string): string | null }
+			).parseBackgroundSessionId(output);
+
+		it('parses the short id from the backgrounded line', () => {
+			const output = 'backgrounded · 7c5dcf5d · flaky-test-fix\n  claude attach 7c5dcf5d';
+			expect(parse(output)).toBe('7c5dcf5d');
+		});
+
+		it('parses the id even with ANSI color codes', () => {
+			const esc = String.fromCharCode(27);
+			const output = `${esc}[32mbackgrounded${esc}[0m · ${esc}[1mab12cd34${esc}[0m · name`;
+			expect(parse(output)).toBe('ab12cd34');
+		});
+
+		it('falls back to the claude attach hint line', () => {
+			expect(parse('Started.\n  claude attach deadbeef    open in this terminal')).toBe('deadbeef');
+		});
+
+		it('returns null when no id is present', () => {
+			expect(parse('something went wrong')).toBeNull();
+		});
+	});
+
+	describe('buildSessionName', () => {
+		const build = (repo: string, grove?: string, worktree?: string): string =>
+			(
+				service as unknown as {
+					buildSessionName(r: string, g?: string, w?: string): string;
+				}
+			).buildSessionName(repo, grove, worktree);
+
+		it('joins grove and worktree names', () => {
+			expect(build('/repos/app', 'my-grove', 'frontend')).toBe('my-grove/frontend');
+		});
+
+		it('falls back to the repo basename when no worktree name', () => {
+			expect(build('/repos/app', 'my-grove')).toBe('my-grove/app');
+		});
+
+		it('truncates to 60 characters', () => {
+			const long = 'g'.repeat(80);
+			expect(build('/repos/app', long, 'wt').length).toBe(60);
+		});
+	});
+
+	describe('isBackgroundSessionAlive', () => {
+		const originalConfigDir = process.env.CLAUDE_CONFIG_DIR;
+
+		afterEach(() => {
+			if (originalConfigDir === undefined) {
+				delete process.env.CLAUDE_CONFIG_DIR;
+			} else {
+				process.env.CLAUDE_CONFIG_DIR = originalConfigDir;
+			}
+		});
+
+		it('returns true when the session jobs directory exists', () => {
+			process.env.CLAUDE_CONFIG_DIR = '/home/test/.claude';
+			vol.mkdirSync('/home/test/.claude/jobs/abc123', { recursive: true });
+
+			expect(service.isBackgroundSessionAlive('abc123')).toBe(true);
+		});
+
+		it('returns false when the session jobs directory is missing', () => {
+			process.env.CLAUDE_CONFIG_DIR = '/home/test/.claude';
+			expect(service.isBackgroundSessionAlive('missing')).toBe(false);
+		});
+
+		it('returns false for an empty session id', () => {
+			expect(service.isBackgroundSessionAlive('')).toBe(false);
 		});
 	});
 

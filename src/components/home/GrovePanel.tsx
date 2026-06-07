@@ -5,29 +5,28 @@ import { Box, Text } from 'ink';
 import { useService } from '../../di/index.js';
 import { useMergeRequestStatus } from '../../hooks/useMergeRequestStatus.js';
 import { GrovesServiceToken } from '../../services/tokens.js';
-import type { GroveReference } from '../../storage/index.js';
+import type { GroveReference, Worktree } from '../../storage/index.js';
+import { type ClaudeAgentInfo, agentMatchesWorktree } from '../../utils/claudeAgents.js';
 import { formatTimeAgo } from '../../utils/time.js';
+import { AgentSessionIndicator } from '../AgentSessionIndicator.js';
 import { MergeRequestCell } from '../MergeRequestCell.js';
-import { SessionIndicator } from '../SessionIndicator.js';
 
 type GrovePanelProps = {
 	grove: GroveReference;
 	isSelected: boolean;
-	sessionCounts?: {
-		active: number;
-		idle: number;
-		attention: number;
-		closed: number;
-	};
+	/** Live Claude sessions (interactive + background) from `claude agents --json`. */
+	agentSessions?: ClaudeAgentInfo[];
 	width?: number;
 };
 
-export function GrovePanel({ grove, isSelected, sessionCounts, width = 24 }: GrovePanelProps) {
+export function GrovePanel({ grove, isSelected, agentSessions = [], width = 24 }: GrovePanelProps) {
 	const grovesService = useService(GrovesServiceToken);
 
 	// Get grove metadata to count worktrees
 	let worktreeCount = 0;
 	let repoDisplayName = '';
+	// Open (non-closed) worktrees, used to show a session-status icon per worktree.
+	let openWorktrees: Worktree[] = [];
 	// For single-worktree groves, the grove maps 1:1 to a branch, so we surface its MR.
 	let singleRepositoryPath: string | undefined;
 	let singleBranch: string | undefined;
@@ -35,6 +34,7 @@ export function GrovePanel({ grove, isSelected, sessionCounts, width = 24 }: Gro
 		const metadata = grovesService.readGroveMetadata(grove.path);
 		if (metadata) {
 			worktreeCount = metadata.worktrees.length;
+			openWorktrees = metadata.worktrees.filter((w) => !w.closed);
 			// For single worktree groves, get the repo name
 			if (worktreeCount === 1) {
 				const worktree = metadata.worktrees[0];
@@ -57,6 +57,17 @@ export function GrovePanel({ grove, isSelected, sessionCounts, width = 24 }: Gro
 	}
 
 	const mr = useMergeRequestStatus(singleRepositoryPath, singleBranch, worktreeCount === 1);
+
+	// Live sessions per open worktree, keeping only worktrees that actually have
+	// one. `agentSessions` is already reconciled (archived sessions excluded).
+	const worktreeSessions = openWorktrees
+		.map((worktree) => ({
+			worktree,
+			sessions: agentSessions.filter((agent) =>
+				agentMatchesWorktree(agent, worktree.worktreePath, worktree.bgSessionId)
+			),
+		}))
+		.filter((entry) => entry.sessions.length > 0);
 
 	return (
 		<Box
@@ -95,15 +106,12 @@ export function GrovePanel({ grove, isSelected, sessionCounts, width = 24 }: Gro
 				</Box>
 			)}
 
-			{/* Session indicators */}
-			{sessionCounts && (
-				<Box marginTop={1}>
-					<SessionIndicator
-						activeCount={sessionCounts.active}
-						idleCount={sessionCounts.idle}
-						attentionCount={sessionCounts.attention}
-						closedCount={sessionCounts.closed}
-					/>
+			{/* Session indicators — only worktrees with live sessions show an icon */}
+			{worktreeSessions.length > 0 && (
+				<Box marginTop={1} flexDirection="row" gap={1}>
+					{worktreeSessions.map(({ worktree, sessions }) => (
+						<AgentSessionIndicator key={worktree.worktreePath} sessions={sessions} />
+					))}
 				</Box>
 			)}
 		</Box>

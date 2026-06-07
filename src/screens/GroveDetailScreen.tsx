@@ -11,10 +11,10 @@ import {
 import fs from 'fs';
 import path from 'path';
 
+import { AgentSessionIndicator, getAgentStatusMeta } from '../components/AgentSessionIndicator.js';
 import { AsanaReferenceCell } from '../components/AsanaReferenceCell.js';
 import TextInput from '../components/GroveTextInput.js';
 import { MergeRequestCell } from '../components/MergeRequestCell.js';
-import { SessionIndicator } from '../components/SessionIndicator.js';
 import { ClickableTile } from '../components/home/ClickableTile.js';
 import { useService } from '../di/index.js';
 import { useMergeRequestStatus } from '../hooks/useMergeRequestStatus.js';
@@ -34,13 +34,17 @@ import {
 	GroveServiceToken,
 	GrovesServiceToken,
 	PluginRegistryToken,
-	SessionsServiceToken,
 	SettingsServiceToken,
 	WorkspaceServiceToken,
 } from '../services/tokens.js';
 import type { BranchUpstreamStatus, FileChangeStats } from '../services/types.js';
 import { GroveConfigService } from '../storage/index.js';
-import type { AgentSession, Settings, Worktree, WorktreeReference } from '../storage/types.js';
+import type { Settings, Worktree, WorktreeReference } from '../storage/types.js';
+import {
+	type ClaudeAgentInfo,
+	agentMatchesWorktree,
+	shortSessionId,
+} from '../utils/claudeAgents.js';
 import { parseAsanaTaskUrl } from '../utils/index.js';
 import { openUrl, wasLinkRecentlyOpened } from '../utils/links.js';
 
@@ -181,13 +185,6 @@ function TreeGutter({ guides, isLast }: { guides: boolean[]; isLast: boolean }) 
 	);
 }
 
-interface SessionCounts {
-	activeCount: number;
-	idleCount: number;
-	attentionCount: number;
-	closedCount: number;
-}
-
 // Format file change stats for display
 function formatFileStats(stats: FileChangeStats): string {
 	if (stats.total === 0) {
@@ -211,15 +208,19 @@ function formatFileStats(stats: FileChangeStats): string {
 function WorktreePanel({
 	detail,
 	isSelected,
-	sessionCounts,
+	agentSessions,
 	showInitActions,
+	showSessions = true,
 	asanaEnabled = false,
 	onAttachAsana,
 }: {
 	detail: WorktreeDetails;
 	isSelected: boolean;
-	sessionCounts: SessionCounts;
+	/** Live Claude sessions (interactive + background) matched to this worktree. */
+	agentSessions: ClaudeAgentInfo[];
 	showInitActions: boolean;
+	/** Whether to show the inline session indicator (hidden in the detail view, where session panels show status). */
+	showSessions?: boolean;
 	/** Whether the Asana plugin is enabled (controls the reference line / attach affordance). */
 	asanaEnabled?: boolean;
 	/** Called when the unlinked "Attach Asana" affordance is clicked. */
@@ -235,11 +236,7 @@ function WorktreePanel({
 		? `${detail.worktree.repositoryName}.${detail.worktree.projectPath}`
 		: detail.worktree.repositoryName;
 	const hasChanges = !isClosed && detail.fileStats.total > 0;
-	const hasSessions =
-		sessionCounts.activeCount > 0 ||
-		sessionCounts.idleCount > 0 ||
-		sessionCounts.attentionCount > 0 ||
-		sessionCounts.closedCount > 0;
+	const hasSessions = showSessions && agentSessions.length > 0;
 
 	return (
 		<Box
@@ -257,12 +254,7 @@ function WorktreePanel({
 				{isClosed && <Text dimColor> (Closed)</Text>}
 				{!isClosed && hasSessions && (
 					<Box marginLeft={1}>
-						<SessionIndicator
-							activeCount={sessionCounts.activeCount}
-							idleCount={sessionCounts.idleCount}
-							attentionCount={sessionCounts.attentionCount}
-							closedCount={sessionCounts.closedCount}
-						/>
+						<AgentSessionIndicator sessions={agentSessions} detailed />
 					</Box>
 				)}
 			</Box>
@@ -457,7 +449,6 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
 	const grovesService = useService(GrovesServiceToken);
 	const groveService = useService(GroveServiceToken);
-	const sessionsService = useService(SessionsServiceToken);
 	const settingsService = useService(SettingsServiceToken);
 	const workspaceService = useService(WorkspaceServiceToken);
 	const pluginRegistry = useService(PluginRegistryToken);
@@ -472,7 +463,17 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	const [showActions, setShowActions] = useState(false);
 	const [selectedActionIndex, setSelectedActionIndex] = useState(0);
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
-	const [groveSessions, setGroveSessions] = useState<AgentSession[]>([]);
+	// Live Claude sessions (interactive + background) from `claude agents --json`,
+	// refreshed in the background. Drives the per-worktree status icons + panels.
+	const [agentSessions, setAgentSessions] = useState<ClaudeAgentInfo[]>([]);
+	// Claude panel submenu state for the worktree actions view.
+	const [claudeSubmenu, setClaudeSubmenu] = useState<
+		| { mode: 'launch' }
+		| { mode: 'session'; sessionId: string }
+		| { mode: 'archiveConfirm'; sessionId: string }
+		| null
+	>(null);
+	const [submenuIndex, setSubmenuIndex] = useState(0);
 
 	// Get workspace context to display workspace name
 	const workspaceContext = workspaceService.getCurrentContext();
@@ -509,10 +510,6 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					setLoading(false);
 					return;
 				}
-
-				// Load agent sessions for this grove
-				const sessions = sessionsService.getSessionsByGrove(groveId);
-				setGroveSessions(sessions);
 
 				// Fetch details for each worktree in parallel
 				const detailsPromises = metadata.worktrees.map(async (worktree) => {
@@ -587,26 +584,116 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		loadDetails();
 	}, [groveId]);
 
-	// Helper function to get session counts for a worktree
-	const getSessionCounts = (worktreePath: string) => {
-		const worktreeSessions = groveSessions.filter(
-			(session) =>
-				session.worktreePath === worktreePath && (session.isRunning || session.status === 'closed')
-		);
+	// Poll live Claude sessions from `claude agents --json` in the background.
+	// The CLI reports the authoritative status, refreshed every 2 minutes.
+	useEffect(() => {
+		let cancelled = false;
 
-		return {
-			activeCount: worktreeSessions.filter((s) => s.status === 'active').length,
-			idleCount: worktreeSessions.filter((s) => s.status === 'idle').length,
-			attentionCount: worktreeSessions.filter((s) => s.status === 'attention').length,
-			closedCount: worktreeSessions.filter((s) => s.status === 'closed').length,
+		const refreshAgents = async () => {
+			const sessions = await claudeSessionService.listTrackedSessions();
+			if (!cancelled) {
+				setAgentSessions(sessions);
+			}
 		};
+
+		void refreshAgents();
+		const interval = setInterval(() => void refreshAgents(), 2 * 60 * 1000);
+
+		return () => {
+			cancelled = true;
+			clearInterval(interval);
+		};
+	}, [claudeSessionService]);
+
+	// Live Claude sessions (interactive + background) matched to a worktree: by
+	// the background session's short id, or by any session whose cwd is inside
+	// the worktree directory (covers interactive claudes and monorepo subdirs).
+	const getAgentSessionsForWorktree = (worktree: Worktree): ClaudeAgentInfo[] => {
+		// `agentSessions` is already reconciled (archived sessions excluded), so we
+		// only need to match the live ones to this worktree.
+		return agentSessions.filter((agent) =>
+			agentMatchesWorktree(agent, worktree.worktreePath, worktree.bgSessionId)
+		);
 	};
 
 	// Worktree action handlers
-	const handleContinueInClaude = () => {
+	// Persist a worktree's background session id (and reflect it locally so the
+	// session panel appears without a full reload). Shared by the launch actions.
+	const persistBackgroundSession = (worktree: Worktree, sessionId: string, sessionName?: string) => {
+		try {
+			groveService.setWorktreeBackgroundSession(
+				groveId,
+				worktree.worktreePath,
+				sessionId,
+				sessionName
+			);
+		} catch {
+			// Ignore persistence errors; still reflect the session locally
+		}
+		setWorktreeDetails((prev) =>
+			prev.map((d) =>
+				d.worktree.worktreePath === worktree.worktreePath
+					? { ...d, worktree: { ...d.worktree, bgSessionId: sessionId, bgSessionName: sessionName } }
+					: d
+			)
+		);
+	};
+
+	// Standard launch: start a background session (no prompt) and attach right
+	// away, so it's a tracked, re-attachable agent. Persist its session id.
+	const handleOpenInClaude = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
-		const result = claudeSessionService.continueSession(
+		const result = claudeSessionService.launchStandardSession(
+			targetPath,
+			selected.repositoryPath,
+			selected.projectPath,
+			undefined,
+			groveName,
+			selected.name
+		);
+		setShowActions(false);
+
+		if (result.sessionId) {
+			persistBackgroundSession(selected, result.sessionId, result.sessionName);
+		}
+		if (result.success) {
+			setResultMessage(`Opened Claude session in ${selected.repositoryName}`);
+			setTimeout(() => setResultMessage(null), 2000);
+		} else {
+			setError(result.message);
+		}
+	};
+
+	// Instant Claude: edit the prompt template, dispatch a background session via
+	// `claude --bg`, and persist its session id so a tracked session panel appears.
+	const handleInstantClaude = () => {
+		const selected = worktreeDetails[selectedIndex].worktree;
+		const targetPath = getWorktreePath(selected);
+		const result = claudeSessionService.launchInstantSession(
+			targetPath,
+			selected.repositoryPath,
+			selected.projectPath,
+			groveName,
+			selected.name
+		);
+		setShowActions(false);
+
+		if (result.success && result.sessionId) {
+			persistBackgroundSession(selected, result.sessionId, result.sessionName);
+			setResultMessage(`Started Instant Claude in ${selected.repositoryName}`);
+			setTimeout(() => setResultMessage(null), 2000);
+		} else {
+			setError(result.message);
+		}
+	};
+
+	// Attach to a background session (`claude attach <short id>`).
+	const handleAttachSession = (session: ClaudeAgentInfo) => {
+		const selected = worktreeDetails[selectedIndex].worktree;
+		const targetPath = getWorktreePath(selected);
+		const result = claudeSessionService.attachSession(
+			shortSessionId(session.sessionId ?? ''),
 			targetPath,
 			selected.repositoryPath,
 			selected.projectPath,
@@ -616,31 +703,61 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		);
 		setShowActions(false);
 		if (result.success) {
-			setResultMessage(`Continuing Claude session in ${selected.repositoryName}`);
+			setResultMessage(`Attaching to Claude in ${selected.repositoryName}`);
 			setTimeout(() => setResultMessage(null), 2000);
 		} else {
 			setError(result.message);
 		}
 	};
 
-	const handleOpenInClaude = () => {
-		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
-		const targetPath = getWorktreePath(selectedWorktree);
-		const result = claudeSessionService.openSession(
+	// Resume a standard (interactive) session (`claude --resume <session id>`).
+	const handleResumeSession = (session: ClaudeAgentInfo) => {
+		const selected = worktreeDetails[selectedIndex].worktree;
+		const targetPath = getWorktreePath(selected);
+		const settings = settingsService.readSettings();
+		const terminal =
+			settings.selectedClaudeTerminal ?? claudeSessionService.detectTerminal() ?? undefined;
+		if (!terminal) {
+			setShowActions(false);
+			setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
+			return;
+		}
+		const result = claudeSessionService.resumeSession(
+			session.sessionId ?? '',
 			targetPath,
-			selectedWorktree.repositoryPath,
-			selectedWorktree.projectPath,
-			undefined,
+			terminal,
 			groveName,
-			selectedWorktree.name
+			selected.name
 		);
 		setShowActions(false);
 		if (result.success) {
-			setResultMessage(`Opened Claude session in ${selectedWorktree.repositoryName}`);
+			setResultMessage(`Resuming Claude session in ${selected.repositoryName}`);
 			setTimeout(() => setResultMessage(null), 2000);
 		} else {
 			setError(result.message);
 		}
+	};
+
+	// Archive a session so Grove stops tracking/showing it (with confirmation).
+	// Removes it from Claude's agent list (`claude rm`) and flags it archived in
+	// the registry; the live list is then refreshed so it disappears.
+	const handleArchiveSession = (session: ClaudeAgentInfo) => {
+		const sessionId = session.sessionId;
+		if (!sessionId) {
+			return;
+		}
+		claudeSessionService.archiveSession(sessionId);
+		// Reflect locally so the session disappears without waiting for the poll.
+		setAgentSessions((prev) => prev.filter((agent) => agent.sessionId !== sessionId));
+		setResultMessage('Archived Claude session');
+		setTimeout(() => setResultMessage(null), 2000);
+	};
+
+	// Debug: list the Claude sessions tracked to the selected worktree.
+	const handleShowClaudeSessions = () => {
+		const selected = worktreeDetails[selectedIndex].worktree;
+		setShowActions(false);
+		navigate('claudeSessions', { groveId, worktreePath: selected.worktreePath });
 	};
 
 	const handleOpenInTerminal = async () => {
@@ -806,30 +923,12 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	// Worktree action options (dynamically built based on worktree state)
 	const selectedWorktree = worktreeDetails[selectedIndex]?.worktree;
 	const isSelectedWorktreeClosed = selectedWorktree?.closed === true;
-	// Check if there are any past Claude sessions for the selected worktree
-	const hasPastSessions =
-		selectedWorktree &&
-		!isSelectedWorktreeClosed &&
-		groveSessions.some(
-			(s) => s.worktreePath === selectedWorktree.worktreePath && s.agentType === 'claude'
-		);
 
+	// Non-Claude worktree actions. Claude launching/resuming lives in the Claude
+	// panels below the worktree panel (see renderClaudeSection).
 	const worktreeActions = isSelectedWorktreeClosed
 		? []
 		: [
-				// Conditionally add "Continue in Claude" if there are past sessions
-				...(hasPastSessions
-					? [
-							{
-								label: 'Continue in Claude',
-								action: handleContinueInClaude,
-							},
-						]
-					: []),
-				{
-					label: 'Open in Claude',
-					action: handleOpenInClaude,
-				},
 				{
 					label: 'Open in Terminal',
 					action: handleOpenInTerminal,
@@ -852,10 +951,110 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 						]
 					: []),
 				{
+					label: 'Show Claude Sessions',
+					action: handleShowClaudeSessions,
+				},
+				{
 					label: 'Close Worktree',
 					action: handleCloseWorktree,
 				},
 			];
+
+	// Claude sessions tracked to the worktree whose actions are shown.
+	const actionsSessions = selectedWorktree ? getAgentSessionsForWorktree(selectedWorktree) : [];
+	// The actions list is: [Launch Claude, ...one row per session, ...worktreeActions].
+	const claudeRowCount = isSelectedWorktreeClosed ? 0 : 1 + actionsSessions.length;
+	const totalActionItems = claudeRowCount + worktreeActions.length;
+
+	// Options shown in the active Claude submenu (launch / per-session / archive confirm).
+	const getClaudeSubmenuOptions = (): { label: string; run: () => void }[] => {
+		if (!claudeSubmenu) {
+			return [];
+		}
+		if (claudeSubmenu.mode === 'launch') {
+			return [
+				{
+					label: 'Launch background claude',
+					run: () => {
+						setClaudeSubmenu(null);
+						handleInstantClaude();
+					},
+				},
+				{
+					label: 'Launch standard claude',
+					run: () => {
+						setClaudeSubmenu(null);
+						handleOpenInClaude();
+					},
+				},
+			];
+		}
+		const session = actionsSessions.find((s) => s.sessionId === claudeSubmenu.sessionId);
+		if (!session) {
+			return [];
+		}
+		if (claudeSubmenu.mode === 'session') {
+			const isBackground = session.kind === 'background';
+			return [
+				isBackground
+					? {
+							label: 'Attach',
+							run: () => {
+								setClaudeSubmenu(null);
+								handleAttachSession(session);
+							},
+						}
+					: {
+							label: 'Resume',
+							run: () => {
+								setClaudeSubmenu(null);
+								handleResumeSession(session);
+							},
+						},
+				{
+					label: 'Archive',
+					run: () => {
+						setClaudeSubmenu({ mode: 'archiveConfirm', sessionId: session.sessionId ?? '' });
+						setSubmenuIndex(0);
+					},
+				},
+			];
+		}
+		// archiveConfirm
+		return [
+			{
+				label: 'Yes, archive (removes from grove tracking)',
+				run: () => {
+					setClaudeSubmenu(null);
+					handleArchiveSession(session);
+				},
+			},
+			{
+				label: 'Cancel',
+				run: () => {
+					setClaudeSubmenu({ mode: 'session', sessionId: session.sessionId ?? '' });
+					setSubmenuIndex(0);
+				},
+			},
+		];
+	};
+
+	// Activate an item in the combined actions list (Claude rows + worktreeActions).
+	// Claude rows are ordered [...one row per session, Launch Claude].
+	const activateActionItem = (index: number) => {
+		if (claudeRowCount > 0 && index >= 0 && index < actionsSessions.length) {
+			const session = actionsSessions[index];
+			setClaudeSubmenu({ mode: 'session', sessionId: session.sessionId ?? '' });
+			setSubmenuIndex(0);
+			return;
+		}
+		if (claudeRowCount > 0 && index === actionsSessions.length) {
+			setClaudeSubmenu({ mode: 'launch' });
+			setSubmenuIndex(0);
+			return;
+		}
+		worktreeActions[index - claudeRowCount]?.action();
+	};
 
 	// Find the next non-closed worktree index in a given direction (wraps around)
 	const findNextOpenIndex = (current: number, direction: 1 | -1): number => {
@@ -901,12 +1100,14 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		if (!isSingleWorktreeMode) {
 			setShowActions(true);
 			setSelectedActionIndex(0);
+			setClaudeSubmenu(null);
 		}
 	};
 
-	// Mouse: releasing on an action item runs it (like Enter on a selected action).
+	// Mouse: releasing on an action-list item runs it. `index` is local to the
+	// worktreeActions list, which sits after the Claude rows in the combined list.
 	const handleActionActivate = (index: number) => {
-		setSelectedActionIndex(index);
+		setSelectedActionIndex(claudeRowCount + index);
 		worktreeActions[index]?.action();
 	};
 
@@ -927,6 +1128,23 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					setShowInitLog(false);
 					setInitLogContent('');
 				}
+			} else if (claudeSubmenu) {
+				// Claude submenu navigation (launch / per-session / archive confirm)
+				const options = getClaudeSubmenuOptions();
+				if (key.escape) {
+					if (claudeSubmenu.mode === 'archiveConfirm') {
+						setClaudeSubmenu({ mode: 'session', sessionId: claudeSubmenu.sessionId });
+					} else {
+						setClaudeSubmenu(null);
+					}
+					setSubmenuIndex(0);
+				} else if (key.upArrow && options.length > 0) {
+					setSubmenuIndex((prev) => (prev > 0 ? prev - 1 : options.length - 1));
+				} else if (key.downArrow && options.length > 0) {
+					setSubmenuIndex((prev) => (prev < options.length - 1 ? prev + 1 : 0));
+				} else if (key.return && options.length > 0) {
+					options[Math.min(submenuIndex, options.length - 1)].run();
+				}
 			} else if (showActions || isSingleWorktreeMode) {
 				// Actions menu navigation (including single-worktree shortcut mode)
 				if (key.escape) {
@@ -938,12 +1156,35 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 						// Single worktree or main screen: go back to home
 						goBack();
 					}
-				} else if (key.upArrow && worktreeActions.length > 0) {
-					setSelectedActionIndex((prev) => (prev > 0 ? prev - 1 : worktreeActions.length - 1));
-				} else if (key.downArrow && worktreeActions.length > 0) {
-					setSelectedActionIndex((prev) => (prev < worktreeActions.length - 1 ? prev + 1 : 0));
-				} else if (key.return && worktreeActions.length > 0) {
-					worktreeActions[selectedActionIndex].action();
+				} else if (
+					(key.leftArrow || key.rightArrow) &&
+					claudeRowCount > 1 &&
+					selectedActionIndex < claudeRowCount
+				) {
+					// The Claude panels sit side by side, so left/right cycle between them.
+					const dir = key.rightArrow ? 1 : -1;
+					setSelectedActionIndex((prev) => (prev + dir + claudeRowCount) % claudeRowCount);
+				} else if (key.upArrow && totalActionItems > 0) {
+					// Up/down move between the Claude panel block and the menu below it;
+					// the panels (left/right) count as a single row here.
+					setSelectedActionIndex((prev) => {
+						if (claudeRowCount > 0 && prev < claudeRowCount) {
+							return totalActionItems - 1;
+						}
+						if (claudeRowCount > 0 && prev === claudeRowCount) {
+							return 0;
+						}
+						return prev > 0 ? prev - 1 : totalActionItems - 1;
+					});
+				} else if (key.downArrow && totalActionItems > 0) {
+					setSelectedActionIndex((prev) => {
+						if (claudeRowCount > 0 && prev < claudeRowCount) {
+							return claudeRowCount;
+						}
+						return prev < totalActionItems - 1 ? prev + 1 : 0;
+					});
+				} else if (key.return && totalActionItems > 0) {
+					activateActionItem(Math.min(selectedActionIndex, totalActionItems - 1));
 				} else if (input === 'C' && isSingleWorktreeMode) {
 					// Close all merged worktrees (Shift+C)
 					const hasMerged = worktreeDetails.some(
@@ -980,6 +1221,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 				) {
 					setShowActions(true);
 					setSelectedActionIndex(0);
+					setClaudeSubmenu(null);
 				} else if (input === 'C') {
 					// Close all merged worktrees (Shift+C)
 					const hasMerged = worktreeDetails.some(
@@ -1003,6 +1245,119 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		},
 		{ isActive: !resultMessage }
 	);
+
+	// Renders the Claude section shown in the worktree actions/detail view: the
+	// active submenu, or the "Launch Claude" panel followed by one panel per
+	// tracked session.
+	const renderClaudeSection = () => {
+		if (isSelectedWorktreeClosed) {
+			return null;
+		}
+
+		if (claudeSubmenu) {
+			const options = getClaudeSubmenuOptions();
+			const title =
+				claudeSubmenu.mode === 'launch'
+					? 'Launch Claude'
+					: claudeSubmenu.mode === 'archiveConfirm'
+						? 'Archive this session?'
+						: 'Session actions';
+			return (
+				<Box flexDirection="column" marginBottom={1}>
+					<Box marginBottom={1}>
+						<Text bold color="green">
+							{title}
+						</Text>
+					</Box>
+					{claudeSubmenu.mode === 'archiveConfirm' && (
+						<Box marginBottom={1}>
+							<Text dimColor>Removes it from grove tracking (the session itself keeps running).</Text>
+						</Box>
+					)}
+					{options.map((opt, i) => (
+						<Text key={opt.label} color={submenuIndex === i ? 'cyan' : undefined}>
+							{submenuIndex === i ? '❯ ' : '  '}
+							{opt.label}
+						</Text>
+					))}
+					<Box marginTop={1}>
+						<Text dimColor>↑↓ Navigate • Enter Select • ESC Back</Text>
+					</Box>
+				</Box>
+			);
+		}
+
+		const launchIndex = actionsSessions.length;
+		const launchSelected = selectedActionIndex === launchIndex;
+		const panelWidth = 28;
+
+		return (
+			<Box flexDirection="row" flexWrap="wrap" marginBottom={1}>
+				{/* One panel per tracked session (rows 0..N-1) */}
+				{actionsSessions.map((session, i) => {
+					const isSel = selectedActionIndex === i;
+					const meta = getAgentStatusMeta(session.status);
+					const status = session.status ?? 'unknown';
+					const statusText =
+						session.waitingFor && (status === 'waiting' || status === 'blocked')
+							? `${status} — ${session.waitingFor}`
+							: status;
+					const typeLabel = session.kind === 'background' ? 'Background' : 'Standard';
+					return (
+						<ClickableTile
+							key={session.sessionId ?? i}
+							onPress={() => setSelectedActionIndex(i)}
+							onRelease={() => activateActionItem(i)}
+						>
+							<Box
+								borderStyle={isSel ? 'round' : 'single'}
+								borderColor={isSel ? 'cyan' : 'gray'}
+								paddingX={1}
+								marginRight={1}
+								marginBottom={1}
+								width={panelWidth}
+								flexDirection="column"
+							>
+								<Text bold color={isSel ? 'cyan' : undefined} wrap="truncate-end">
+									{session.name || shortSessionId(session.sessionId ?? '')}
+								</Text>
+								<Box>
+									<Text dimColor>Status: </Text>
+									<Text color={meta.color} wrap="truncate-end">
+										{meta.icon} {statusText}
+									</Text>
+								</Box>
+								<Text dimColor>Type: {typeLabel}</Text>
+							</Box>
+						</ClickableTile>
+					);
+				})}
+
+				{/* Launch Claude panel (last row), sized to match the session panels */}
+				<ClickableTile
+					onPress={() => setSelectedActionIndex(launchIndex)}
+					onRelease={() => activateActionItem(launchIndex)}
+				>
+					<Box
+						borderStyle={launchSelected ? 'round' : 'single'}
+						borderColor={launchSelected ? 'cyan' : 'gray'}
+						paddingX={1}
+						marginRight={1}
+						marginBottom={1}
+						width={panelWidth}
+						flexDirection="column"
+						justifyContent="center"
+					>
+						<Text bold color={launchSelected ? 'cyan' : undefined}>
+							＋ Launch Claude
+						</Text>
+						<Text dimColor>Background or</Text>
+						<Text dimColor>standard session</Text>
+					</Box>
+				</ClickableTile>
+			</Box>
+		);
+	};
 
 	if (loading) {
 		return (
@@ -1138,21 +1493,27 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 							<WorktreePanel
 								detail={worktreeDetails[selectedIndex]}
 								isSelected={true}
-								sessionCounts={getSessionCounts(worktreeDetails[selectedIndex].worktree.worktreePath)}
+								agentSessions={getAgentSessionsForWorktree(worktreeDetails[selectedIndex].worktree)}
 								showInitActions={true}
+								showSessions={false}
 								asanaEnabled={asanaEnabled}
 								onAttachAsana={() => startAttachAsana(worktreeDetails[selectedIndex].worktree.worktreePath)}
 							/>
 						</Box>
 					)}
 
-					{/* Actions */}
-					<WorktreeActionList
-						actions={worktreeActions}
-						selectedIndex={selectedActionIndex}
-						onSelect={setSelectedActionIndex}
-						onActivate={handleActionActivate}
-					/>
+					{/* Claude: launch panel + tracked sessions (or active submenu) */}
+					{renderClaudeSection()}
+
+					{/* Other actions */}
+					{!claudeSubmenu && (
+						<WorktreeActionList
+							actions={worktreeActions}
+							selectedIndex={selectedActionIndex - claudeRowCount}
+							onSelect={(i) => setSelectedActionIndex(claudeRowCount + i)}
+							onActivate={handleActionActivate}
+						/>
+					)}
 
 					{/* Help text */}
 					<Box marginTop={1}>
@@ -1205,7 +1566,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 									return null;
 								}
 
-								const sessionCounts = getSessionCounts(detail.worktree.worktreePath);
+								const worktreeAgentSessions = getAgentSessionsForWorktree(detail.worktree);
 
 								// Keep forks visually attached to their parent: no gap before a row that is a
 								// descendant (depth > 0). A gap is added before the next top-level worktree.
@@ -1244,8 +1605,9 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 											<WorktreePanel
 												detail={detail}
 												isSelected={isSelected}
-												sessionCounts={sessionCounts}
+												agentSessions={worktreeAgentSessions}
 												showInitActions={isSingleWorktreeMode}
+												showSessions={!isSingleWorktreeMode}
 												asanaEnabled={asanaEnabled}
 												onAttachAsana={() => startAttachAsana(detail.worktree.worktreePath)}
 											/>
@@ -1261,16 +1623,29 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 						<>
 							<Box marginBottom={1}>
 								<Text bold underline>
-									Actions
+									Claude
 								</Text>
 							</Box>
 
-							<WorktreeActionList
-								actions={worktreeActions}
-								selectedIndex={selectedActionIndex}
-								onSelect={setSelectedActionIndex}
-								onActivate={handleActionActivate}
-							/>
+							{/* Claude: launch panel + tracked sessions (or active submenu) */}
+							{renderClaudeSection()}
+
+							{!claudeSubmenu && (
+								<>
+									<Box marginBottom={1}>
+										<Text bold underline>
+											Actions
+										</Text>
+									</Box>
+
+									<WorktreeActionList
+										actions={worktreeActions}
+										selectedIndex={selectedActionIndex - claudeRowCount}
+										onSelect={(i) => setSelectedActionIndex(claudeRowCount + i)}
+										onActivate={handleActionActivate}
+									/>
+								</>
+							)}
 						</>
 					)}
 

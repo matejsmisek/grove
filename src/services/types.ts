@@ -94,6 +94,10 @@ export interface CloseWorktreeResult {
 export interface ClaudeSessionResult {
 	success: boolean;
 	message: string;
+	/** Short ID of the background session started (set by launchInstantSession). */
+	sessionId?: string;
+	/** Display name given to the background session via --name. */
+	sessionName?: string;
 }
 
 /**

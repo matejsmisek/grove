@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { Box, Text, useApp, useInput } from 'ink';
 
@@ -9,10 +9,11 @@ import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { getContextDisplayName } from '../services/WorkspaceService.js';
 import {
+	ClaudeSessionServiceToken,
 	GrovesServiceToken,
-	SessionTrackingServiceToken,
 	WorkspaceServiceToken,
 } from '../services/tokens.js';
+import type { ClaudeAgentInfo } from '../utils/claudeAgents.js';
 
 interface HomeScreenProps {
 	/** Grove to pre-select on mount (e.g. when returning from its detail screen). */
@@ -38,56 +39,31 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 	});
 	const [showMenu, setShowMenu] = useState(false);
 	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
-	// DISABLED: Session fetching temporarily disabled
-	const [_isUpdatingSessions, _setIsUpdatingSessions] = useState(false);
-	const [sessionRefreshTick, _setSessionRefreshTick] = useState(0);
+	const [agentSessions, setAgentSessions] = useState<ClaudeAgentInfo[]>([]);
 	const [columnCount, setColumnCount] = useState(4); // Default to 4, will be updated by GroveGrid
 
-	// Get session tracking service
-	const sessionTrackingService = useService(SessionTrackingServiceToken);
+	const claudeSessionService = useService(ClaudeSessionServiceToken);
 
-	// Background session polling - updates every 10 seconds
-	// DISABLED: Session fetching temporarily disabled
-	// useEffect(() => {
-	// 	let isMounted = true;
-	//
-	// 	async function updateSessions() {
-	// 		setIsUpdatingSessions(true);
-	// 		try {
-	// 			const updateResult = await sessionTrackingService.updateAllSessions();
-	// 			const cleanedUp = await sessionTrackingService.cleanupStale();
-	//
-	// 			// Only trigger re-render if something actually changed
-	// 			const hasChanges =
-	// 				updateResult.added > 0 ||
-	// 				updateResult.updated > 0 ||
-	// 				updateResult.removed > 0 ||
-	// 				cleanedUp > 0;
-	//
-	// 			if (isMounted && hasChanges) {
-	// 				// Trigger re-render to update session indicators
-	// 				setSessionRefreshTick((tick) => tick + 1);
-	// 			}
-	// 		} catch {
-	// 			// Silent fail - don't block UI
-	// 		} finally {
-	// 			if (isMounted) {
-	// 				setIsUpdatingSessions(false);
-	// 			}
-	// 		}
-	// 	}
-	//
-	// 	// Initial update
-	// 	updateSessions();
-	//
-	// 	// Poll every 10 seconds
-	// 	const interval = setInterval(updateSessions, 10000);
-	//
-	// 	return () => {
-	// 		isMounted = false;
-	// 		clearInterval(interval);
-	// 	};
-	// }, [sessionTrackingService]);
+	// Poll live Claude sessions (interactive + background) from `claude agents --json`
+	// every 2 minutes to drive the per-worktree status icons on each grove tile.
+	useEffect(() => {
+		let cancelled = false;
+
+		const refreshAgents = async () => {
+			const sessions = await claudeSessionService.listTrackedSessions();
+			if (!cancelled) {
+				setAgentSessions(sessions);
+			}
+		};
+
+		void refreshAgents();
+		const interval = setInterval(() => void refreshAgents(), 2 * 60 * 1000);
+
+		return () => {
+			cancelled = true;
+			clearInterval(interval);
+		};
+	}, [claudeSessionService]);
 
 	// Get workspace context to display workspace name
 	const workspaceService = useService(WorkspaceServiceToken);
@@ -210,8 +186,7 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 						<GroveGrid
 							groves={groves}
 							selectedIndex={selectedGroveIndex}
-							sessionTrackingService={sessionTrackingService}
-							refreshTick={sessionRefreshTick}
+							agentSessions={agentSessions}
 							onColumnsChange={setColumnCount}
 							onSelectItem={setSelectedGroveIndex}
 							onActivateItem={activateItem}

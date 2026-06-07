@@ -35,6 +35,10 @@ export function SettingsScreen({ section }: SettingsScreenProps) {
 			action: () => navigate('claudeTerminalSettings', {}),
 		},
 		{
+			label: 'Claude Prompt Template',
+			action: () => navigate('promptTemplateSettings', {}),
+		},
+		{
 			label: 'LLM Settings (OpenRouter)',
 			action: () => navigate('llmSettings', {}),
 		},

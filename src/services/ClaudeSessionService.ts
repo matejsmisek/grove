@@ -1,11 +1,21 @@
-import { execSync, spawn } from 'child_process';
+import { execSync, spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 import type { IGroveConfigService } from '../storage/GroveConfigService.js';
+import type { ISessionsService } from '../storage/SessionsService.js';
 import type { ISettingsService } from '../storage/SettingsService.js';
 import type { ClaudeTerminalType } from '../storage/types.js';
+import {
+	type ClaudeAgentInfo,
+	listClaudeAgentSessions,
+	reconcileSessions,
+	shortSessionId,
+} from '../utils/claudeAgents.js';
+import { hasExternalEditor, openExternalEditor } from '../utils/externalEditor.js';
+import { preparePromptTemplate, stripPlaceholder } from '../utils/promptTemplate.js';
 import type { ClaudeSessionResult } from './types.js';
 
 /**
@@ -27,6 +37,64 @@ export interface IClaudeSessionService {
 		repositoryPath: string,
 		projectPath?: string
 	): string;
+	/**
+	 * Resolve the configured prompt template for a repository/project.
+	 * Priority: project-level .grove.json > repo-level config > settings.
+	 * Returns undefined when no (non-empty) template is configured.
+	 */
+	getPromptTemplateForRepo(repositoryPath: string, projectPath?: string): string | undefined;
+	/**
+	 * Launch an "Instant Claude" background session via `claude --bg`, prefilling
+	 * the prompt from the configured template (edited in $EDITOR). The result
+	 * includes the dispatched session's short ID for later attaching.
+	 */
+	launchInstantSession(
+		workingDir: string,
+		repositoryPath: string,
+		projectPath?: string,
+		groveName?: string,
+		worktreeName?: string
+	): ClaudeSessionResult;
+	/**
+	 * Launch a standard Claude session as a background session (`claude --bg`, no
+	 * prompt) and attach to it immediately, so every regular launch is a tracked,
+	 * re-attachable agent. The result carries the session id for persistence.
+	 */
+	launchStandardSession(
+		workingDir: string,
+		repositoryPath: string,
+		projectPath?: string,
+		terminalType?: ClaudeTerminalType,
+		groveName?: string,
+		worktreeName?: string
+	): ClaudeSessionResult;
+	/** Attach to a running background session via `claude attach <id>` in a terminal */
+	attachSession(
+		sessionId: string,
+		workingDir: string,
+		repositoryPath: string,
+		projectPath?: string,
+		terminalType?: ClaudeTerminalType,
+		groveName?: string,
+		worktreeName?: string
+	): ClaudeSessionResult;
+	/** Whether a background session still exists (its `~/.claude/jobs/<id>` dir is present) */
+	isBackgroundSessionAlive(sessionId: string): boolean;
+	/** List all live Claude sessions (interactive + background) via `claude agents --json` */
+	listAgentSessions(): Promise<ClaudeAgentInfo[]>;
+	/**
+	 * List the Claude sessions Grove should show: the live `claude agents --json`
+	 * sessions, reconciled against the persisted registry (written by hooks) and
+	 * with archived sessions excluded. Reconciling also archives registry entries
+	 * that are no longer reported live.
+	 */
+	listTrackedSessions(): Promise<ClaudeAgentInfo[]>;
+	/**
+	 * Archive a session: remove it from Claude's agent list (`claude rm <id>`) and
+	 * mark it archived in the registry so Grove stops showing it. The registry
+	 * entry is kept (archived sessions are stored, just hidden).
+	 */
+	archiveSession(sessionId: string): void;
 	/** Apply template by replacing placeholders */
 	applyTemplate(
 		template: string,
@@ -70,7 +138,8 @@ export interface IClaudeSessionService {
 export class ClaudeSessionService implements IClaudeSessionService {
 	constructor(
 		private readonly settingsService: ISettingsService,
-		private readonly groveConfigService: IGroveConfigService
+		private readonly groveConfigService: IGroveConfigService,
+		private readonly sessionsService: ISessionsService
 	) {}
 
 	/**
@@ -184,6 +253,431 @@ launch --title "cmd" bash
 
 		// Fall back to settings or default
 		return this.getEffectiveTemplate(terminalType);
+	}
+
+	/**
+	 * Resolve the configured prompt template for a repository/project.
+	 * Priority: project-level .grove.json > repo-level config (.grove.json /
+	 * .grove.local.json) > settings (workspace-inherited from global).
+	 * Returns undefined when no non-empty template is configured.
+	 */
+	getPromptTemplateForRepo(repositoryPath: string, projectPath?: string): string | undefined {
+		// Project-level .grove.json takes precedence (monorepos)
+		if (projectPath) {
+			const projectConfigPath = path.join(repositoryPath, projectPath, '.grove.json');
+			if (fs.existsSync(projectConfigPath)) {
+				try {
+					const projectConfig = JSON.parse(fs.readFileSync(projectConfigPath, 'utf-8'));
+					if (typeof projectConfig.promptTemplate === 'string' && projectConfig.promptTemplate.trim()) {
+						return projectConfig.promptTemplate;
+					}
+				} catch {
+					// Ignore JSON parse errors
+				}
+			}
+		}
+
+		// Repository-level config (.grove.json merged with .grove.local.json)
+		const repoConfig = this.groveConfigService.readGroveRepoConfig(repositoryPath);
+		if (typeof repoConfig.promptTemplate === 'string' && repoConfig.promptTemplate.trim()) {
+			return repoConfig.promptTemplate;
+		}
+
+		// Fall back to settings (workspace/global)
+		const settings = this.settingsService.readSettings();
+		if (typeof settings.promptTemplate === 'string' && settings.promptTemplate.trim()) {
+			return settings.promptTemplate;
+		}
+
+		return undefined;
+	}
+
+	/**
+	 * Resolve the prompt text for an "Instant Claude" launch.
+	 *
+	 * Resolves the configured prompt template, opens it in the user's $EDITOR
+	 * (with the `{prompt}` placeholder removed and the caret positioned there) so
+	 * it can be edited, and returns the resulting text. When no template is
+	 * configured the editor opens empty so the user can type a prompt.
+	 *
+	 * Returns null when the user cancels the editor or leaves the prompt empty.
+	 */
+	private resolvePromptText(repositoryPath: string, projectPath?: string): string | null {
+		const template = this.getPromptTemplateForRepo(repositoryPath, projectPath) ?? '';
+		const prepared = preparePromptTemplate(template);
+
+		if (hasExternalEditor()) {
+			const edited = openExternalEditor(prepared.content, {
+				extension: '.md',
+				prefix: 'grove-prompt-',
+				cursor: prepared.cursor,
+			});
+			// Editor cancelled/failed
+			if (edited === null) {
+				return null;
+			}
+			const text = stripPlaceholder(edited).trim();
+			return text || null;
+		}
+
+		// No editor available: fall back to the template text directly
+		const text = prepared.content.trim();
+		return text || null;
+	}
+
+	/**
+	 * Build a display name for a background session from grove/worktree names.
+	 */
+	private buildSessionName(
+		repositoryPath: string,
+		groveName?: string,
+		worktreeName?: string
+	): string {
+		const parts: string[] = [];
+		if (groveName) {
+			parts.push(groveName);
+		}
+		if (worktreeName) {
+			parts.push(worktreeName);
+		} else {
+			parts.push(path.basename(repositoryPath));
+		}
+		return (parts.join('/') || 'grove-session').slice(0, 60);
+	}
+
+	/**
+	 * Parse the short session ID printed by `claude --bg` from its output.
+	 * Looks for the "backgrounded · <id> · <name>" line, falling back to the
+	 * "claude attach <id>" hint line.
+	 */
+	private parseBackgroundSessionId(output: string): string | null {
+		// Strip ANSI color codes (ESC[...m). Built dynamically to avoid a literal
+		// control character in the source.
+		const ansiPattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+		const clean = output.replace(ansiPattern, '');
+
+		// "backgrounded · <id> · <name>" — match the first token after the label,
+		// tolerating whatever separator the CLI uses.
+		const backgrounded = clean.match(/backgrounded[^A-Za-z0-9]+([A-Za-z0-9_-]+)/);
+		if (backgrounded) {
+			return backgrounded[1];
+		}
+
+		// Fallback: "claude attach <id>" hint line
+		const attach = clean.match(/claude\s+attach\s+([A-Za-z0-9_-]+)/);
+		if (attach) {
+			return attach[1];
+		}
+
+		return null;
+	}
+
+	/**
+	 * Directory under which background session state is stored
+	 * (`$CLAUDE_CONFIG_DIR` or `~/.claude`).
+	 */
+	private claudeConfigDir(): string {
+		return process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+	}
+
+	/**
+	 * Whether a background session still exists. A background session's short ID
+	 * is the name of its directory under `~/.claude/jobs/<id>`, so checking for
+	 * that directory is a cheap existence test.
+	 */
+	isBackgroundSessionAlive(sessionId: string): boolean {
+		if (!sessionId) {
+			return false;
+		}
+		try {
+			return fs.existsSync(path.join(this.claudeConfigDir(), 'jobs', sessionId));
+		} catch {
+			return false;
+		}
+	}
+
+	/**
+	 * List all live Claude sessions (interactive and background) by invoking
+	 * `claude agents --json`. Delegates to the shared util; never throws.
+	 */
+	listAgentSessions(): Promise<ClaudeAgentInfo[]> {
+		return listClaudeAgentSessions();
+	}
+
+	/**
+	 * List the sessions Grove should display. Reads the live sessions from
+	 * `claude agents --json`, reconciles them against the persisted registry
+	 * (archiving entries no longer reported live, registering newly-seen ones),
+	 * and returns the live sessions with archived ones filtered out.
+	 */
+	async listTrackedSessions(): Promise<ClaudeAgentInfo[]> {
+		const live = await this.listAgentSessions();
+		let archivedIds: Set<string>;
+		try {
+			const data = this.sessionsService.readSessions();
+			const { sessions, changed } = reconcileSessions(data.sessions, live, new Date().toISOString());
+			if (changed) {
+				this.sessionsService.writeSessions({ ...data, sessions });
+			}
+			archivedIds = new Set(sessions.filter((s) => s.archived).map((s) => s.sessionId));
+		} catch {
+			// If the registry can't be read/written, fall back to the live list.
+			archivedIds = new Set();
+		}
+		return live.filter((agent) => !(agent.sessionId && archivedIds.has(agent.sessionId)));
+	}
+
+	/**
+	 * Archive a session: best-effort `claude rm <id>` to drop it from the agent
+	 * list, then flag it archived in the registry so it disappears from the UI
+	 * immediately (the entry is kept, just hidden).
+	 */
+	archiveSession(sessionId: string): void {
+		this.claudeRemoveAgent(sessionId);
+		try {
+			const existing = this.sessionsService.getSession(sessionId);
+			if (existing) {
+				this.sessionsService.updateSession(sessionId, {
+					archived: true,
+					isRunning: false,
+					status: 'closed',
+				});
+			} else {
+				this.sessionsService.addSession({
+					sessionId,
+					agentType: 'claude',
+					groveId: null,
+					workspacePath: '',
+					worktreePath: null,
+					status: 'closed',
+					isRunning: false,
+					archived: true,
+					lastUpdate: new Date().toISOString(),
+				});
+			}
+		} catch {
+			// Registry persistence is best-effort; the agent was still removed.
+		}
+	}
+
+	/** Remove a session from Claude's agent list via `claude rm <id>` (best-effort). */
+	private claudeRemoveAgent(sessionId: string): void {
+		try {
+			spawnSync('claude', ['rm', shortSessionId(sessionId)], {
+				stdio: 'ignore',
+				timeout: 20000,
+			});
+		} catch {
+			// Ignore — the registry archive below still hides the session.
+		}
+	}
+
+	/**
+	 * Launch an "Instant Claude" background session: resolve and edit the prompt
+	 * template, then dispatch `claude --bg --name <name> "<prompt>"` in the
+	 * working directory. `--bg` dispatches the session and returns immediately,
+	 * printing the session's short ID, which is parsed and returned so the caller
+	 * can persist it and later attach with `attachSession`.
+	 */
+	launchInstantSession(
+		workingDir: string,
+		repositoryPath: string,
+		projectPath?: string,
+		groveName?: string,
+		worktreeName?: string
+	): ClaudeSessionResult {
+		if (!this.commandExists('claude')) {
+			return {
+				success: false,
+				message: 'Claude CLI not found. Please install Claude CLI first.',
+			};
+		}
+
+		const prompt = this.resolvePromptText(repositoryPath, projectPath);
+		if (!prompt) {
+			return {
+				success: false,
+				message: 'No prompt provided for Instant Claude.',
+			};
+		}
+
+		const name = this.buildSessionName(repositoryPath, groveName, worktreeName);
+		const dispatched = this.dispatchBackgroundSession(workingDir, name, prompt);
+		if ('errorMessage' in dispatched) {
+			return { success: false, message: dispatched.errorMessage };
+		}
+
+		return {
+			success: true,
+			message: `Started background Claude session (${dispatched.sessionId})`,
+			sessionId: dispatched.sessionId,
+			sessionName: name,
+		};
+	}
+
+	/**
+	 * Launch a "standard" Claude session as a background session (`claude --bg`,
+	 * no prompt) and immediately attach to it in a terminal. This makes every
+	 * regular launch a tracked, re-attachable agent. Returns the session id so the
+	 * caller can persist it on the worktree. If the attach step fails, the session
+	 * id is still returned (the background session was created and is tracked).
+	 */
+	launchStandardSession(
+		workingDir: string,
+		repositoryPath: string,
+		projectPath?: string,
+		terminalType?: ClaudeTerminalType,
+		groveName?: string,
+		worktreeName?: string
+	): ClaudeSessionResult {
+		if (!this.commandExists('claude')) {
+			return {
+				success: false,
+				message: 'Claude CLI not found. Please install Claude CLI first.',
+			};
+		}
+
+		const name = this.buildSessionName(repositoryPath, groveName, worktreeName);
+		const dispatched = this.dispatchBackgroundSession(workingDir, name);
+		if ('errorMessage' in dispatched) {
+			return { success: false, message: dispatched.errorMessage };
+		}
+
+		const sessionId = dispatched.sessionId;
+		const attach = this.attachSession(
+			shortSessionId(sessionId),
+			workingDir,
+			repositoryPath,
+			projectPath,
+			terminalType,
+			groveName,
+			worktreeName
+		);
+
+		return {
+			success: attach.success,
+			message: attach.success
+				? attach.message
+				: `Started background session (${sessionId}) but failed to attach: ${attach.message}`,
+			sessionId,
+			sessionName: name,
+		};
+	}
+
+	/**
+	 * Dispatch a background Claude session via `claude --bg --name <name> [prompt]`.
+	 * `--bg` returns immediately, printing the session's short ID, which is parsed
+	 * and returned. Omitting the prompt launches a plain background session.
+	 */
+	private dispatchBackgroundSession(
+		workingDir: string,
+		name: string,
+		prompt?: string
+	): { sessionId: string } | { errorMessage: string } {
+		const args = ['--bg', '--name', name];
+		if (prompt) {
+			args.push(prompt);
+		}
+
+		try {
+			const result = spawnSync('claude', args, {
+				cwd: workingDir,
+				encoding: 'utf-8',
+			});
+
+			if (result.error) {
+				return { errorMessage: `Failed to launch background session: ${result.error.message}` };
+			}
+
+			const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+			const sessionId = this.parseBackgroundSessionId(output);
+
+			if (!sessionId) {
+				return {
+					errorMessage: `Started Claude but could not determine the session ID. Output: ${output.trim().slice(0, 200)}`,
+				};
+			}
+
+			return { sessionId };
+		} catch (error) {
+			return {
+				errorMessage: `Failed to launch background session: ${error instanceof Error ? error.message : String(error)}`,
+			};
+		}
+	}
+
+	/**
+	 * Attach to a running background Claude session in a terminal, launching
+	 * `claude attach <sessionId>` via the repository's session template.
+	 */
+	attachSession(
+		sessionId: string,
+		workingDir: string,
+		repositoryPath: string,
+		projectPath?: string,
+		terminalType?: ClaudeTerminalType,
+		groveName?: string,
+		worktreeName?: string
+	): ClaudeSessionResult {
+		// Determine which terminal to use (same logic as openSession)
+		let terminal: ClaudeTerminalType | undefined = terminalType;
+		if (!terminal) {
+			const settings = this.settingsService.readSettings();
+			if (settings.selectedClaudeTerminal) {
+				terminal = settings.selectedClaudeTerminal;
+			} else {
+				const detected = this.detectTerminal();
+				terminal = detected ?? undefined;
+			}
+		}
+
+		if (!terminal) {
+			return {
+				success: false,
+				message: 'No supported terminal found. This feature requires KDE Konsole or Kitty.',
+			};
+		}
+
+		if (!this.commandExists(terminal)) {
+			return {
+				success: false,
+				message: `Selected terminal '${terminal}' is not available on this system.`,
+			};
+		}
+
+		if (!this.commandExists('claude')) {
+			return {
+				success: false,
+				message: 'Claude CLI not found. Please install Claude CLI first.',
+			};
+		}
+
+		try {
+			this.ensureTmpDir();
+
+			const template = this.getTemplateForRepo(terminal, repositoryPath, projectPath);
+			const sessionContent = this.applyTemplate(
+				template,
+				workingDir,
+				`claude attach ${sessionId}`,
+				groveName,
+				worktreeName
+			);
+
+			const tmpSessionId = crypto.randomBytes(8).toString('hex');
+			const tmpDir = this.getTmpDir();
+
+			if (terminal === 'konsole') {
+				return this.launchKonsole(sessionContent, tmpDir, tmpSessionId);
+			} else {
+				return this.launchKitty(sessionContent, tmpDir, tmpSessionId);
+			}
+		} catch (error) {
+			return {
+				success: false,
+				message: `Failed to attach to Claude session: ${error instanceof Error ? error.message : String(error)}`,
+			};
+		}
 	}
 
 	/**
@@ -304,7 +798,9 @@ launch --title "cmd" bash
 			// Get the appropriate template (always uses repo-specific lookup)
 			const template = this.getTemplateForRepo(terminal, repositoryPath, projectPath);
 
-			// Apply template with working directory, grove name, and worktree name
+			// Apply template with working directory, grove name, and worktree name.
+			// "Open Claude" launches plain `claude` (no prefilled prompt); the prompt
+			// template is used by "Instant Claude" instead (launchInstantSession).
 			const sessionContent = this.applyTemplate(
 				template,
 				workingDir,

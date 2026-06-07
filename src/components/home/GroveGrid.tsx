@@ -2,8 +2,8 @@ import React from 'react';
 
 import { Box, useStdout } from 'ink';
 
-import type { ISessionTrackingService } from '../../services/SessionTrackingService.js';
 import type { GroveReference } from '../../storage/index.js';
+import type { ClaudeAgentInfo } from '../../utils/claudeAgents.js';
 import { wasLinkRecentlyOpened } from '../../utils/links.js';
 import { ClickableTile } from './ClickableTile.js';
 import { CreateGrovePanel } from './CreateGrovePanel.js';
@@ -12,9 +12,8 @@ import { GrovePanel } from './GrovePanel.js';
 type GroveGridProps = {
 	groves: GroveReference[];
 	selectedIndex: number;
-	sessionTrackingService: ISessionTrackingService;
-	/** Used to trigger re-render when sessions are updated */
-	refreshTick?: number;
+	/** Live Claude sessions (interactive + background) from `claude agents --json`. */
+	agentSessions: ClaudeAgentInfo[];
 	/** Callback to notify parent of column count changes */
 	onColumnsChange?: (columns: number) => void;
 	/** Called with the flat item index on mouse-down (selects the tile) */
@@ -26,8 +25,7 @@ type GroveGridProps = {
 export function GroveGrid({
 	groves,
 	selectedIndex,
-	sessionTrackingService,
-	refreshTick: _refreshTick,
+	agentSessions,
 	onColumnsChange,
 	onSelectItem,
 	onActivateItem,
@@ -85,9 +83,6 @@ export function GroveGrid({
 						// Remaining items are groves (offset by 1)
 						const grove = groves[itemIndex - 1];
 						if (grove) {
-							// Get session counts for this grove
-							const sessionCounts = sessionTrackingService.getGroveSessionCounts(grove.id);
-
 							items.push(
 								<ClickableTile
 									key={grove.id}
@@ -107,7 +102,7 @@ export function GroveGrid({
 									<GrovePanel
 										grove={grove}
 										isSelected={isSelected}
-										sessionCounts={sessionCounts}
+										agentSessions={agentSessions}
 										width={MIN_PANEL_WIDTH}
 									/>
 								</ClickableTile>

@@ -112,6 +112,16 @@ export interface Settings {
 	 */
 	claudeSessionTemplates?: ClaudeSessionTemplates;
 	/**
+	 * Prompt template used by the "Instant Claude" action to prefill the prompt
+	 * for a background session (`claude --bg`). Opened in $EDITOR before
+	 * dispatching so the user can edit it.
+	 *
+	 * The literal placeholder `{prompt}` marks where the editor caret should be
+	 * placed (and is removed before launching). If omitted, the editor opens
+	 * empty so the user can type a prompt.
+	 */
+	promptTemplate?: string;
+	/**
 	 * Whether LLM-powered features (grove name generation, etc.) are enabled.
 	 * When disabled, the LLM is treated as unconfigured even if an API key is
 	 * set. Defaults to enabled (true) when unset.
@@ -278,6 +288,15 @@ export interface Worktree {
 	 */
 	reference?: WorktreeReference;
 	/**
+	 * Short ID of a background Claude session (`claude --bg`) launched for this
+	 * worktree via "Instant Claude". Used to attach back with `claude attach <id>`.
+	 */
+	bgSessionId?: string;
+	/**
+	 * Display name given to the background Claude session via `--name`.
+	 */
+	bgSessionName?: string;
+	/**
 	 * Whether this worktree has been closed (removed from disk but kept in metadata)
 	 */
 	closed?: boolean;
@@ -440,6 +459,14 @@ export interface GroveRepoConfig {
 	 * When set, these templates will be used instead of global templates from settings.
 	 */
 	claudeSessionTemplates?: ClaudeSessionTemplates;
+	/**
+	 * Prompt template used by the "Instant Claude" action to prefill the prompt
+	 * for a background session (`claude --bg`) started from this repository/
+	 * project. Overrides the global/workspace `promptTemplate` setting. The
+	 * literal placeholder `{prompt}` marks where the editor caret should be
+	 * placed (and is removed before launching).
+	 */
+	promptTemplate?: string;
 }
 
 /**
@@ -590,6 +617,13 @@ export interface AgentSession {
 	lastUpdate: string;
 	/** Whether the process is currently running */
 	isRunning: boolean;
+	/**
+	 * Whether Grove considers this session archived. A session becomes archived
+	 * either when the user archives it from the grove, or when it is no longer
+	 * reported by `claude agents --json`. Archived sessions are kept in the
+	 * registry but hidden from the UI.
+	 */
+	archived?: boolean;
 	/** Additional agent-specific metadata */
 	metadata?: {
 		/** Git branch */

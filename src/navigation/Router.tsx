@@ -6,6 +6,7 @@ import { ActivityScreen } from '../screens/ActivityScreen.js';
 import { AddWorktreeScreen } from '../screens/AddWorktreeScreen.js';
 import { AsanaSettingsScreen } from '../screens/AsanaSettingsScreen.js';
 import { ChatScreen } from '../screens/ChatScreen.js';
+import { ClaudeSessionsScreen } from '../screens/ClaudeSessionsScreen.js';
 import { ClaudeTerminalSettingsScreen } from '../screens/ClaudeTerminalSettingsScreen.js';
 import { CloseGroveScreen } from '../screens/CloseGroveScreen.js';
 import { CloseMergedWorktreesScreen } from '../screens/CloseMergedWorktreesScreen.js';
@@ -22,6 +23,7 @@ import { OpenClaudeScreen } from '../screens/OpenClaudeScreen.js';
 import { OpenIDEScreen } from '../screens/OpenIDEScreen.js';
 import { OpenTerminalScreen } from '../screens/OpenTerminalScreen.js';
 import { PluginSettingsScreen } from '../screens/PluginSettingsScreen.js';
+import { PromptTemplateSettingsScreen } from '../screens/PromptTemplateSettingsScreen.js';
 import { RepositoriesScreen } from '../screens/RepositoriesScreen.js';
 import { ResumeClaudeScreen } from '../screens/ResumeClaudeScreen.js';
 import { SettingsScreen } from '../screens/SettingsScreen.js';
@@ -122,10 +124,19 @@ export function Router() {
 					worktreePath={'worktreePath' in current.params ? current.params.worktreePath : undefined}
 				/>
 			);
+		case 'claudeSessions':
+			return (
+				<ClaudeSessionsScreen
+					groveId={'groveId' in current.params ? current.params.groveId : ''}
+					worktreePath={'worktreePath' in current.params ? (current.params.worktreePath as string) : ''}
+				/>
+			);
 		case 'ideSettings':
 			return <IDESettingsScreen />;
 		case 'claudeTerminalSettings':
 			return <ClaudeTerminalSettingsScreen />;
+		case 'promptTemplateSettings':
+			return <PromptTemplateSettingsScreen />;
 		case 'llmSettings':
 			return <LLMSettingsScreen />;
 		case 'settings':

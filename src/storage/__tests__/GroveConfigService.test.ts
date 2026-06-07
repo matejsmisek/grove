@@ -66,6 +66,32 @@ describe('GroveConfigService', () => {
 			expect(config.fileCopyPatterns).toEqual(['*.md']);
 		});
 
+		it('should read promptTemplate from .grove.json', () => {
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ promptTemplate: 'Work on {prompt} please' }, null, 2)
+			);
+
+			const config = service.readGroveRepoConfig(repoPath);
+
+			expect(config.promptTemplate).toBe('Work on {prompt} please');
+		});
+
+		it('should let .grove.local.json override promptTemplate', () => {
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ promptTemplate: 'shared {prompt}' }, null, 2)
+			);
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.local.json'),
+				JSON.stringify({ promptTemplate: 'local {prompt}' }, null, 2)
+			);
+
+			const config = service.readGroveRepoConfig(repoPath);
+
+			expect(config.promptTemplate).toBe('local {prompt}');
+		});
+
 		it('should merge .grove.local.json over .grove.json', () => {
 			const groveConfig: GroveRepoConfig = {
 				branchNameTemplate: 'custom/${GROVE_NAME}',

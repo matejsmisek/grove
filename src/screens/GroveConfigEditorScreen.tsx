@@ -16,6 +16,7 @@ import type {
 	Repository,
 } from '../storage/types.js';
 import { openExternalEditor } from '../utils/externalEditor.js';
+import { PROMPT_PLACEHOLDER } from '../utils/promptTemplate.js';
 
 // Valid template variables
 const BRANCH_TEMPLATE_VARIABLES = ['GROVE_NAME'] as const;
@@ -58,12 +59,13 @@ type ConfigFieldKey =
 	| 'fileCopyPatterns'
 	| 'initActions'
 	| 'ide'
-	| 'claudeSessionTemplates';
+	| 'claudeSessionTemplates'
+	| 'promptTemplate';
 
 interface ConfigField {
 	key: ConfigFieldKey;
 	label: string;
-	type: 'string' | 'stringArray' | 'ide' | 'claudeTemplates';
+	type: 'string' | 'stringArray' | 'ide' | 'claudeTemplates' | 'promptTemplate';
 	hint?: string;
 }
 
@@ -97,6 +99,12 @@ const CONFIG_FIELDS: ConfigField[] = [
 		label: 'Claude Session Templates',
 		type: 'claudeTemplates',
 		hint: 'Custom terminal templates for Claude sessions',
+	},
+	{
+		key: 'promptTemplate',
+		label: 'Claude Prompt Template',
+		type: 'promptTemplate',
+		hint: `Prefills Claude's prompt on launch. Use ${PROMPT_PLACEHOLDER} for the caret position.`,
 	},
 ];
 
@@ -328,6 +336,11 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					return keys.length > 0 ? `[${keys.join(', ')}]` : '(empty)';
 				}
 				return '(not set)';
+			case 'promptTemplate': {
+				const firstLine = String(value).split('\n')[0];
+				if (!firstLine) return '(empty)';
+				return firstLine.length > 40 ? `${firstLine.slice(0, 40)}…` : firstLine;
+			}
 			default:
 				return String(value);
 		}
@@ -564,6 +577,37 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 				setEditingField(null); // Don't set editingField for Claude template selection
 				setViewMode('selectClaudeTerminal');
 				break;
+			case 'promptTemplate': {
+				// Edit the freeform prompt template directly in the external editor.
+				// No comment header / line filtering: the template is freeform text
+				// that may legitimately contain '#', and the '{prompt}' placeholder
+				// is kept (it is only stripped at launch time).
+				const current = typeof config.promptTemplate === 'string' ? config.promptTemplate : '';
+				const edited = openExternalEditor(current || `${PROMPT_PLACEHOLDER}\n`, {
+					extension: '.md',
+					prefix: 'grove-config-prompt-',
+				});
+
+				setEditingField(null);
+				setViewMode('editConfig');
+
+				if (edited === null) {
+					break;
+				}
+
+				const cleaned = edited.trim();
+				const newConfig: GroveRepoConfig = { ...config };
+				if (cleaned) {
+					newConfig.promptTemplate = cleaned;
+				} else {
+					delete newConfig.promptTemplate;
+				}
+				setConfig(newConfig);
+				saveConfig(newConfig);
+				setSavedMessage(cleaned ? 'Prompt template saved' : 'Prompt template cleared');
+				setTimeout(() => setSavedMessage(null), 2000);
+				break;
+			}
 		}
 	};
 

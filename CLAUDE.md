@@ -115,6 +115,7 @@ Repositories can include a `.grove.json` file to customize grove creation:
 	"fileCopyPatterns": [".env.example", "config/*.json"],
 	"ide": "@phpstorm",
 	"initActions": ["npm install", "cp .env.example .env"],
+	"promptTemplate": "Working on this task:\n\n{prompt}\n\nFollow the repo conventions.",
 	"claudeSessionTemplates": {
 		"konsole": "title: Claude ;; workdir: ${WORKING_DIR} ;; command: ${AGENT_COMMAND}",
 		"kitty": "layout tall\ncd ${WORKING_DIR}\nlaunch --title \"claude\" ${AGENT_COMMAND}"
@@ -124,10 +125,40 @@ Repositories can include a `.grove.json` file to customize grove creation:
 
 **InitActions**: Execute sequentially in worktree directory after creation. Stop on first failure. Output logged to `grove-init-{worktreeName}.log`.
 
+**promptTemplate**: Used by the **Instant Claude** worktree action. The template opens in `$EDITOR`, then the edited text is dispatched as a background Claude session via `claude --bg --name <name> "<prompt>"`; the session's short ID is saved on the worktree so the action flips to **Attach to Running Claude** (`claude attach <id>`). The literal `{prompt}` placeholder marks where the editor caret is placed and is removed before launch. Resolution priority: project `.grove.json` > repo `.grove.json` / `.grove.local.json` > global/workspace settings (`promptTemplate`). The plain **Open in Claude** action ignores this template and launches Claude via the session template only.
+
 **Template Variables**:
 
 - `${WORKING_DIR}`: Replaced with the working directory path
 - `${AGENT_COMMAND}`: Replaced with the agent launch command. When opening a new session, this is `claude`. When resuming a session, this is `claude --resume <session_id>`.
+
+## Claude Session Tracking
+
+Grove tracks Claude sessions by merging two sources:
+
+1. **`claude agents --json`** (live) — the authoritative source for a session's
+   **status** (`idle` / `busy` / `waiting` / …) and liveness. Polled every 2 minutes
+   by the UI via `ClaudeSessionService.listTrackedSessions()`. Status is rendered
+   as-is (see `AgentSessionIndicator`); Grove derives no status of its own.
+2. **`~/.grove/sessions.json`** (registry) — written by Claude **hooks**
+   (`SessionStart` / `Stop` / `Notification` / `SessionEnd`, handled in
+   `src/commands/sessions.ts` → `SessionsService`). Its role is mainly to record
+   that a session **exists** and persist its archived state.
+
+**Reconciliation** (`reconcileSessions` in `src/utils/claudeAgents.ts`, called from
+`listTrackedSessions`) merges them on each refresh:
+
+- A live session missing from the registry is added (so Grove knows it exists even
+  if the hook never fired).
+- A registry session **no longer reported by `--json`** is considered **archived**.
+- Archived sessions are kept in `sessions.json` but **hidden from the UI** (a future
+  feature may surface them).
+
+**Archiving from a grove** (`ClaudeSessionService.archiveSession`) runs
+`claude rm <id>` to drop the session from Claude's agent list, then flags it
+`archived` in the registry so it disappears from Grove immediately. Per-worktree
+launch tracking still lives on the `Worktree` (`bgSessionId` / `bgSessionName`,
+used to match and attach background sessions).
 
 ## Development Workflow
 

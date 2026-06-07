@@ -57,6 +57,17 @@ export interface IGroveService {
 		worktreePath: string,
 		reference: WorktreeReference
 	): GroveMetadata;
+	/**
+	 * Record (or clear) the background Claude session launched for a worktree,
+	 * persisting it to grove.json. Pass `undefined` for sessionId to clear it.
+	 * @returns The updated grove metadata
+	 */
+	setWorktreeBackgroundSession(
+		groveId: string,
+		worktreePath: string,
+		sessionId: string | undefined,
+		sessionName?: string
+	): GroveMetadata;
 	/** Close a grove - removes worktrees and deletes folder */
 	closeGrove(groveId: string): Promise<CloseGroveResult>;
 	/** Close a single worktree within a grove */
@@ -884,6 +895,50 @@ Completed at: ${new Date().toISOString()}
 		}
 
 		worktree.reference = reference;
+		metadata.updatedAt = new Date().toISOString();
+
+		this.grovesService.writeGroveMetadata(groveRef.path, metadata);
+		this.grovesService.updateGroveInIndex(groveId, { updatedAt: metadata.updatedAt });
+
+		return metadata;
+	}
+
+	/**
+	 * Record (or clear) the background Claude session launched for a worktree.
+	 * @param groveId - ID of the grove containing the worktree
+	 * @param worktreePath - Path of the worktree to update
+	 * @param sessionId - Short session ID to store, or undefined to clear it
+	 * @param sessionName - Optional display name given to the session
+	 * @returns The updated grove metadata
+	 */
+	setWorktreeBackgroundSession(
+		groveId: string,
+		worktreePath: string,
+		sessionId: string | undefined,
+		sessionName?: string
+	): GroveMetadata {
+		const groveRef = this.grovesService.getGroveById(groveId);
+		if (!groveRef) {
+			throw new Error('Grove not found');
+		}
+
+		const metadata = this.grovesService.readGroveMetadata(groveRef.path);
+		if (!metadata) {
+			throw new Error('Grove metadata not found');
+		}
+
+		const worktree = metadata.worktrees.find((w) => w.worktreePath === worktreePath);
+		if (!worktree) {
+			throw new Error('Worktree not found in grove');
+		}
+
+		if (sessionId) {
+			worktree.bgSessionId = sessionId;
+			worktree.bgSessionName = sessionName;
+		} else {
+			delete worktree.bgSessionId;
+			delete worktree.bgSessionName;
+		}
 		metadata.updatedAt = new Date().toISOString();
 
 		this.grovesService.writeGroveMetadata(groveRef.path, metadata);
