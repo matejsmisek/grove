@@ -43,6 +43,38 @@ export function getAgentStatusMeta(status?: string): StatusMeta {
 }
 
 /**
+ * Drive the grove-style loader animation: while `active`, cycles through
+ * LOADER_FRAMES and returns the current frame; otherwise stays on the first.
+ */
+export function useAgentLoaderFrame(active: boolean): string {
+	const [frameIndex, setFrameIndex] = useState(0);
+
+	useEffect(() => {
+		if (!active) {
+			return;
+		}
+		const interval = setInterval(() => {
+			setFrameIndex((prev) => (prev + 1) % LOADER_FRAMES.length);
+		}, 100);
+		return () => clearInterval(interval);
+	}, [active]);
+
+	return LOADER_FRAMES[frameIndex];
+}
+
+/**
+ * A single Claude session status icon, animated for in-progress (busy) states.
+ * Usable standalone (e.g. inside the session panels) where the list-style
+ * AgentSessionIndicator isn't appropriate.
+ */
+export function AgentStatusIcon({ status }: { status?: string }) {
+	const meta = getAgentStatusMeta(status);
+	const frame = useAgentLoaderFrame(meta.animate ?? false);
+	const icon = meta.animate ? frame : meta.icon;
+	return <Text color={meta.color}>{icon}</Text>;
+}
+
+/**
  * The status label to show next to the icon in detailed mode, or null when the
  * icon alone is enough. Busy/completed states show only the icon; every other
  * state shows its name, and 'waiting' additionally shows what it is waiting for.
@@ -79,18 +111,8 @@ export function AgentSessionIndicator({
 	sessions: ClaudeAgentInfo[];
 	detailed?: boolean;
 }) {
-	const [frameIndex, setFrameIndex] = useState(0);
 	const hasAnimated = sessions.some((s) => getAgentStatusMeta(s.status).animate);
-
-	useEffect(() => {
-		if (!hasAnimated) {
-			return;
-		}
-		const interval = setInterval(() => {
-			setFrameIndex((prev) => (prev + 1) % LOADER_FRAMES.length);
-		}, 100);
-		return () => clearInterval(interval);
-	}, [hasAnimated]);
+	const frame = useAgentLoaderFrame(hasAnimated);
 
 	if (sessions.length === 0) {
 		return null;
@@ -100,7 +122,7 @@ export function AgentSessionIndicator({
 		<Box gap={1}>
 			{sessions.map((session, index) => {
 				const meta = getAgentStatusMeta(session.status);
-				const icon = meta.animate ? LOADER_FRAMES[frameIndex] : meta.icon;
+				const icon = meta.animate ? frame : meta.icon;
 				const label = detailed ? getAgentStatusLabel(session) : null;
 				return (
 					<Box key={session.sessionId ?? index} flexShrink={0}>

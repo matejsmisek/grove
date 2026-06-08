@@ -11,7 +11,11 @@ import {
 import fs from 'fs';
 import path from 'path';
 
-import { AgentSessionIndicator, getAgentStatusMeta } from '../components/AgentSessionIndicator.js';
+import {
+	AgentSessionIndicator,
+	AgentStatusIcon,
+	getAgentStatusMeta,
+} from '../components/AgentSessionIndicator.js';
 import { AsanaReferenceCell } from '../components/AsanaReferenceCell.js';
 import TextInput from '../components/GroveTextInput.js';
 import { MergeRequestCell } from '../components/MergeRequestCell.js';
@@ -1414,8 +1418,10 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 								</Text>
 								<Box>
 									<Text dimColor>Status: </Text>
+									<AgentStatusIcon status={session.status} />
 									<Text color={meta.color} wrap="truncate-end">
-										{meta.icon} {statusText}
+										{' '}
+										{statusText}
 									</Text>
 								</Box>
 								<Text dimColor wrap="truncate-end">
