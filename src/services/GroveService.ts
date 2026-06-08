@@ -14,6 +14,7 @@ import type {
 	Worktree,
 	WorktreeReference,
 } from '../storage/types.js';
+import { getDirenvAllowWarning, wrapSpawnWithDirenv } from '../utils/direnv.js';
 import { generateGroveIdentifier, normalizeGroveName, normalizeName } from '../utils/index.js';
 import type { IContextService } from './ContextService.js';
 import type { IFileService } from './FileService.js';
@@ -172,6 +173,16 @@ ${'='.repeat(80)}
 			onLog(`[${worktreeName}] Starting initActions (${actions.length} commands)...`);
 		}
 
+		// Warn once if the directory uses direnv but its .envrc is not yet allowed:
+		// init actions will run WITHOUT that environment until `direnv allow` is run.
+		const direnvWarning = getDirenvAllowWarning(workingDir);
+		if (direnvWarning) {
+			fs.appendFileSync(logFilePath, `⚠ ${direnvWarning}\n\n`);
+			if (onLog) {
+				onLog(`[${worktreeName}] ⚠ ${direnvWarning}`);
+			}
+		}
+
 		let successfulActions = 0;
 		let errorMessage: string | undefined;
 
@@ -272,7 +283,10 @@ Completed at: ${new Date().toISOString()}
 		cwd: string
 	): Promise<{ success: boolean; stdout: string; stderr: string; exitCode: number }> {
 		return new Promise((resolve) => {
-			const childProcess = spawn('bash', ['-c', command], {
+			// Wrap with `direnv exec` when the worktree uses direnv so init actions
+			// run with the same environment an interactive shell would load.
+			const { command: spawnCommand, args } = wrapSpawnWithDirenv(cwd, 'bash', ['-c', command]);
+			const childProcess = spawn(spawnCommand, args, {
 				cwd,
 				stdio: ['ignore', 'pipe', 'pipe'],
 			});

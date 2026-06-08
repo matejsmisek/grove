@@ -132,6 +132,39 @@ Repositories can include a `.grove.json` file to customize grove creation:
 - `${WORKING_DIR}`: Replaced with the working directory path
 - `${AGENT_COMMAND}`: Replaced with the agent launch command. When opening a new session, this is `claude`. When resuming a session, this is `claude --resume <session_id>`.
 
+## direnv Integration
+
+Some repositories rely on [direnv](https://direnv.net/) to load their environment
+from an `.envrc` (which may live in a parent directory, not the worktree itself).
+Grove wraps the commands it launches with `direnv exec <dir> …` so they inherit the
+same environment an interactive shell would load. Helpers live in
+`src/utils/direnv.ts`:
+
+- `isDirenvAvailable()` — memoized `which direnv` check.
+- `getDirenvDirStatus(dir)` / `dirNeedsDirenv(dir)` — runs `direnv status` with
+  `cwd = dir` and parses the text output (`Found RC path` / `Found RC allowed`).
+  Detection is delegated to direnv itself (rather than hand-walking the tree) so
+  Grove never diverges from what `direnv exec` actually resolves, including parent
+  `.envrc` files and the user's whitelist config. The text parser is used because
+  `direnv status --json` only exists in direnv ≥ 2.33.
+- `wrapSpawnWithDirenv(dir, command, args)` — argv form for `spawn`/`spawnSync`
+  (handles paths with spaces); used for background sessions (`claude --bg`) and
+  InitActions (`bash -c`).
+- `prefixCommandWithDirenv(dir, command)` — string form for the konsole/kitty
+  session templates, where `${AGENT_COMMAND}` is substituted into a file the
+  terminal parses.
+- `getDirenvAllowWarning(dir)` — returns a user-facing warning when an
+  `.envrc`/`.env` is found but **not allowed** (so its environment won't load).
+  A whitelisted path reports `allowed = true`, so this never warns for paths under
+  the user's `whitelist.prefix`. The warning is surfaced in Claude session launch
+  result messages and streamed into the InitActions log.
+
+Wrapping is always safe: when direnv isn't installed or the directory has no
+`.envrc`, the original command runs unchanged; when an `.envrc` is found but not
+yet allowed (and not whitelisted), `direnv exec` warns and runs the command
+without the environment rather than failing — and Grove surfaces a "run
+`direnv allow`" hint to the user.
+
 ## Claude Session Tracking
 
 Grove tracks Claude sessions by merging two sources:

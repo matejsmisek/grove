@@ -13,6 +13,11 @@ import {
 	listClaudeAgentSessions,
 	shortSessionId,
 } from '../utils/claudeAgents.js';
+import {
+	getDirenvAllowWarning,
+	prefixCommandWithDirenv,
+	wrapSpawnWithDirenv,
+} from '../utils/direnv.js';
 import { hasExternalEditor, openExternalEditor } from '../utils/externalEditor.js';
 import {
 	fillPromptTemplate,
@@ -525,7 +530,10 @@ launch --title "cmd" bash
 
 		return {
 			success: true,
-			message: `Started background Claude session (${dispatched.sessionId})`,
+			message: this.appendWarning(
+				`Started background Claude session (${dispatched.sessionId})`,
+				dispatched.warning
+			),
 			sessionId: dispatched.sessionId,
 			sessionName: name,
 		};
@@ -568,7 +576,10 @@ launch --title "cmd" bash
 
 		return {
 			success: true,
-			message: `Started background Claude session (${dispatched.sessionId})`,
+			message: this.appendWarning(
+				`Started background Claude session (${dispatched.sessionId})`,
+				dispatched.warning
+			),
 			sessionId: dispatched.sessionId,
 			sessionName: name,
 		};
@@ -615,9 +626,14 @@ launch --title "cmd" bash
 
 		return {
 			success: attach.success,
+			// On success the attach result already carries any direnv warning (added
+			// by the terminal launcher); only the failure branch needs it appended.
 			message: attach.success
 				? attach.message
-				: `Started background session (${sessionId}) but failed to attach: ${attach.message}`,
+				: this.appendWarning(
+						`Started background session (${sessionId}) but failed to attach: ${attach.message}`,
+						dispatched.warning
+					),
 			sessionId,
 			sessionName: name,
 		};
@@ -632,14 +648,18 @@ launch --title "cmd" bash
 		workingDir: string,
 		name: string,
 		prompt?: string
-	): { sessionId: string } | { errorMessage: string } {
-		const args = ['--bg', '--name', name];
+	): { sessionId: string; warning?: string } | { errorMessage: string } {
+		const claudeArgs = ['--bg', '--name', name];
 		if (prompt) {
-			args.push(prompt);
+			claudeArgs.push(prompt);
 		}
 
+		// Wrap with `direnv exec` when the worktree uses direnv so the background
+		// session inherits the same environment an interactive shell would load.
+		const { command, args } = wrapSpawnWithDirenv(workingDir, 'claude', claudeArgs);
+
 		try {
-			const result = spawnSync('claude', args, {
+			const result = spawnSync(command, args, {
 				cwd: workingDir,
 				encoding: 'utf-8',
 			});
@@ -657,7 +677,7 @@ launch --title "cmd" bash
 				};
 			}
 
-			return { sessionId };
+			return { sessionId, warning: getDirenvAllowWarning(workingDir) };
 		} catch (error) {
 			return {
 				errorMessage: `Failed to launch background session: ${error instanceof Error ? error.message : String(error)}`,
@@ -718,7 +738,7 @@ launch --title "cmd" bash
 			const sessionContent = this.applyTemplate(
 				template,
 				workingDir,
-				`claude attach ${sessionId}`,
+				prefixCommandWithDirenv(workingDir, `claude attach ${sessionId}`),
 				groveName,
 				worktreeName
 			);
@@ -726,10 +746,11 @@ launch --title "cmd" bash
 			const tmpSessionId = crypto.randomBytes(8).toString('hex');
 			const tmpDir = this.getTmpDir();
 
+			const direnvWarning = getDirenvAllowWarning(workingDir);
 			if (terminal === 'konsole') {
-				return this.launchKonsole(sessionContent, tmpDir, tmpSessionId);
+				return this.launchKonsole(sessionContent, tmpDir, tmpSessionId, direnvWarning);
 			} else {
-				return this.launchKitty(sessionContent, tmpDir, tmpSessionId);
+				return this.launchKitty(sessionContent, tmpDir, tmpSessionId, direnvWarning);
 			}
 		} catch (error) {
 			return {
@@ -737,6 +758,11 @@ launch --title "cmd" bash
 				message: `Failed to attach to Claude session: ${error instanceof Error ? error.message : String(error)}`,
 			};
 		}
+	}
+
+	/** Append a direnv (or other) warning to a result message when present. */
+	private appendWarning(message: string, warning?: string): string {
+		return warning ? `${message}\n⚠ ${warning}` : message;
 	}
 
 	/**
@@ -863,7 +889,7 @@ launch --title "cmd" bash
 			const sessionContent = this.applyTemplate(
 				template,
 				workingDir,
-				'claude',
+				prefixCommandWithDirenv(workingDir, 'claude'),
 				groveName,
 				worktreeName
 			);
@@ -872,10 +898,11 @@ launch --title "cmd" bash
 			const sessionId = crypto.randomBytes(8).toString('hex');
 			const tmpDir = this.getTmpDir();
 
+			const direnvWarning = getDirenvAllowWarning(workingDir);
 			if (terminal === 'konsole') {
-				return this.launchKonsole(sessionContent, tmpDir, sessionId);
+				return this.launchKonsole(sessionContent, tmpDir, sessionId, direnvWarning);
 			} else {
-				return this.launchKitty(sessionContent, tmpDir, sessionId);
+				return this.launchKitty(sessionContent, tmpDir, sessionId, direnvWarning);
 			}
 		} catch (error) {
 			return {
@@ -891,7 +918,8 @@ launch --title "cmd" bash
 	private launchKonsole(
 		sessionContent: string,
 		tmpDir: string,
-		sessionId: string
+		sessionId: string,
+		warning?: string
 	): ClaudeSessionResult {
 		const tabsFile = path.join(tmpDir, `konsole-tabs-${sessionId}.txt`);
 
@@ -923,7 +951,7 @@ launch --title "cmd" bash
 
 		return {
 			success: true,
-			message: 'Opened Claude session',
+			message: this.appendWarning('Opened Claude session', warning),
 		};
 	}
 
@@ -933,7 +961,8 @@ launch --title "cmd" bash
 	private launchKitty(
 		sessionContent: string,
 		tmpDir: string,
-		sessionId: string
+		sessionId: string,
+		warning?: string
 	): ClaudeSessionResult {
 		const sessionFile = path.join(tmpDir, `kitty-session-${sessionId}.conf`);
 
@@ -965,7 +994,7 @@ launch --title "cmd" bash
 
 		return {
 			success: true,
-			message: 'Opened Claude session',
+			message: this.appendWarning('Opened Claude session', warning),
 		};
 	}
 
@@ -1020,7 +1049,7 @@ launch --title "cmd" bash
 			const sessionContent = this.applyTemplate(
 				template,
 				workingDir,
-				'claude --continue',
+				prefixCommandWithDirenv(workingDir, 'claude --continue'),
 				groveName,
 				worktreeName
 			);
@@ -1028,10 +1057,11 @@ launch --title "cmd" bash
 			const sessionId = crypto.randomBytes(8).toString('hex');
 			const tmpDir = this.getTmpDir();
 
+			const direnvWarning = getDirenvAllowWarning(workingDir);
 			if (terminal === 'konsole') {
-				return this.launchKonsole(sessionContent, tmpDir, sessionId);
+				return this.launchKonsole(sessionContent, tmpDir, sessionId, direnvWarning);
 			} else {
-				return this.launchKitty(sessionContent, tmpDir, sessionId);
+				return this.launchKitty(sessionContent, tmpDir, sessionId, direnvWarning);
 			}
 		} catch (error) {
 			return {
@@ -1074,7 +1104,7 @@ launch --title "cmd" bash
 			const template = this.getEffectiveTemplate(terminalType);
 
 			// Build the agent command with --resume flag
-			const agentCommand = `claude --resume ${sessionId}`;
+			const agentCommand = prefixCommandWithDirenv(workingDir, `claude --resume ${sessionId}`);
 
 			// Apply template with working directory, resume command, grove name, and worktree name
 			const sessionContent = this.applyTemplate(
@@ -1089,10 +1119,11 @@ launch --title "cmd" bash
 			const tmpSessionId = crypto.randomBytes(8).toString('hex');
 			const tmpDir = this.getTmpDir();
 
+			const direnvWarning = getDirenvAllowWarning(workingDir);
 			if (terminalType === 'konsole') {
-				return this.launchKonsole(sessionContent, tmpDir, tmpSessionId);
+				return this.launchKonsole(sessionContent, tmpDir, tmpSessionId, direnvWarning);
 			} else {
-				return this.launchKitty(sessionContent, tmpDir, tmpSessionId);
+				return this.launchKitty(sessionContent, tmpDir, tmpSessionId, direnvWarning);
 			}
 		} catch (error) {
 			return {
