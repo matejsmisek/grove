@@ -5,7 +5,8 @@
 import { AdapterRegistry, ClaudeAdapter } from '../agents/index.js';
 import type { IMutableContainer } from '../di/index.js';
 import { Container, getContainer } from '../di/index.js';
-import { AsanaPlugin } from '../plugins/asana/index.js';
+import { ASANA_PLUGIN_ID, AsanaPlugin } from '../plugins/asana/index.js';
+import type { AsanaPluginSettings } from '../plugins/asana/index.js';
 import { GitLabPlugin } from '../plugins/gitlab/index.js';
 import { PluginRegistry } from '../plugins/index.js';
 import {
@@ -166,9 +167,18 @@ export function registerServices(
 	c.registerSingleton(PluginRegistryToken, (cont) => {
 		const pluginRegistry = new PluginRegistry(cont.resolve(SettingsServiceToken));
 		// Register available plugins
-		pluginRegistry.register(new AsanaPlugin());
+		const asanaPlugin = new AsanaPlugin();
+		pluginRegistry.register(asanaPlugin);
 		pluginRegistry.register(new GitLabPlugin());
 		// Future: Add more plugins here
+
+		// Hydrate plugins with their persisted, plugin-specific settings so in-memory
+		// instances reflect what the user configured (e.g. the Asana prompt template).
+		const asanaConfig = pluginRegistry.getPluginConfig(ASANA_PLUGIN_ID);
+		if (asanaConfig?.settings) {
+			asanaPlugin.configure(asanaConfig.settings as AsanaPluginSettings);
+		}
+
 		return pluginRegistry;
 	});
 }

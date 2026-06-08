@@ -6,6 +6,11 @@ import {
 	AsanaPlugin,
 	AsanaTokenValidationError,
 } from '../AsanaPlugin.js';
+import {
+	ASANA_TEMPLATE_VARIABLES,
+	buildAsanaTemplateEditorHeader,
+	stripAsanaTemplateComments,
+} from '../template.js';
 import type { AsanaApiResponse, AsanaUser } from '../types.js';
 
 // Mock fetch globally
@@ -262,7 +267,7 @@ describe('AsanaPlugin', () => {
 				url: 'https://app.asana.com/0/999/123',
 			});
 			expect(mockFetch).toHaveBeenCalledWith(
-				'https://app.asana.com/api/1.0/tasks/123?opt_fields=name,permalink_url,notes',
+				'https://app.asana.com/api/1.0/tasks/123?opt_fields=name,permalink_url,notes,assignee.name',
 				{
 					method: 'GET',
 					headers: {
@@ -325,6 +330,110 @@ describe('AsanaPlugin', () => {
 
 			await expect(plugin.getTask('123')).rejects.toThrow(AsanaApiRequestError);
 			await expect(plugin.getTask('123')).rejects.toThrow('Failed to connect to Asana API');
+		});
+
+		it('returns the assignee name when present', async () => {
+			process.env[ASANA_TOKEN_ENV_VAR] = 'valid-token';
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					data: {
+						gid: '123',
+						name: 'Fix the login bug',
+						permalink_url: 'https://app.asana.com/0/999/123',
+						assignee: { gid: '42', name: 'Ada Lovelace' },
+					},
+				}),
+			});
+
+			const task = await plugin.getTask('123');
+
+			expect(task.assignee).toBe('Ada Lovelace');
+		});
+
+		it('leaves the assignee undefined when the task is unassigned', async () => {
+			process.env[ASANA_TOKEN_ENV_VAR] = 'valid-token';
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: { gid: '123', name: 'Unassigned', assignee: null } }),
+			});
+
+			const task = await plugin.getTask('123');
+
+			expect(task.assignee).toBeUndefined();
+		});
+	});
+
+	describe('instant Claude template', () => {
+		const task = {
+			gid: '123',
+			name: 'Fix the login bug',
+			url: 'https://app.asana.com/0/999/123',
+			notes: 'Steps to reproduce',
+			assignee: 'Ada Lovelace',
+		};
+
+		it('renders the default template when none is configured', () => {
+			expect(plugin.buildInstantClaudePrompt(task)).toBe(
+				'Task Name: Fix the login bug\n<description>Steps to reproduce</description>'
+			);
+		});
+
+		it('renders a configured custom template with all variables', () => {
+			plugin.configure({
+				instantClaudeTemplate:
+					'{task_name} ({task_gid})\nAssignee: {task_assignee}\nURL: {task_url}\n{task_description}',
+			});
+
+			expect(plugin.buildInstantClaudePrompt(task)).toBe(
+				'Fix the login bug (123)\nAssignee: Ada Lovelace\nURL: https://app.asana.com/0/999/123\nSteps to reproduce'
+			);
+		});
+
+		it('falls back to the default when the configured template is blank', () => {
+			plugin.configure({ instantClaudeTemplate: '   ' });
+
+			expect(plugin.buildInstantClaudePrompt(task)).toBe(
+				'Task Name: Fix the login bug\n<description>Steps to reproduce</description>'
+			);
+		});
+
+		it('substitutes empty strings for missing task fields', () => {
+			plugin.configure({ instantClaudeTemplate: 'A:{task_assignee}|D:{task_description}' });
+
+			expect(plugin.buildInstantClaudePrompt({ gid: '1', name: 'n', url: 'u' })).toBe('A:|D:');
+		});
+	});
+
+	describe('template editor comments', () => {
+		it('documents every variable as a comment line in the header', () => {
+			const header = buildAsanaTemplateEditorHeader();
+
+			for (const { token } of ASANA_TEMPLATE_VARIABLES) {
+				expect(header).toContain(`#   ${token}`);
+			}
+			// Every header line is a comment or blank.
+			for (const line of header.split('\n')) {
+				expect(line === '' || line.startsWith('#')).toBe(true);
+			}
+		});
+
+		it('round-trips: stripping the header restores the original body', () => {
+			const body = 'Task Name: {task_name}\n<description>{task_description}</description>';
+			const edited = buildAsanaTemplateEditorHeader() + body;
+
+			expect(stripAsanaTemplateComments(edited)).toBe(body);
+		});
+
+		it('preserves markdown headings in the template body', () => {
+			const body = '# Heading\nDo {task_name}';
+			const edited = buildAsanaTemplateEditorHeader() + body;
+
+			expect(stripAsanaTemplateComments(edited)).toBe(body);
+		});
+
+		it('returns empty string when only the comment header remains', () => {
+			expect(stripAsanaTemplateComments(buildAsanaTemplateEditorHeader()).trim()).toBe('');
 		});
 	});
 

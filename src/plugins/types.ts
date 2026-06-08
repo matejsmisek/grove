@@ -2,6 +2,7 @@
  * Plugin System Types
  * Defines the interface for Grove plugins
  */
+import type { PluginConfig } from '../storage/types.js';
 
 /**
  * Plugin identifier - unique string identifier for each plugin
@@ -97,4 +98,14 @@ export interface IPluginRegistry {
 	 * Check if a plugin is enabled
 	 */
 	isEnabled(pluginId: PluginId): boolean;
+
+	/**
+	 * Get a plugin's persisted configuration (enabled flag + plugin-specific settings)
+	 */
+	getPluginConfig(pluginId: PluginId): PluginConfig | undefined;
+
+	/**
+	 * Merge and persist plugin-specific settings
+	 */
+	updatePluginSettings(pluginId: PluginId, pluginSettings: Record<string, unknown>): void;
 }

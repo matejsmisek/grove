@@ -4,9 +4,17 @@ import { Box, Text, useInput } from 'ink';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { ASANA_PLUGIN_ID, ASANA_TOKEN_ENV_VAR, AsanaPlugin } from '../plugins/asana/index.js';
+import {
+	ASANA_PLUGIN_ID,
+	ASANA_TOKEN_ENV_VAR,
+	AsanaPlugin,
+	DEFAULT_ASANA_INSTANT_CLAUDE_TEMPLATE,
+	buildAsanaTemplateEditorHeader,
+	stripAsanaTemplateComments,
+} from '../plugins/asana/index.js';
 import type { AsanaUser } from '../plugins/asana/index.js';
 import { PluginRegistryToken } from '../services/tokens.js';
+import { hasExternalEditor, openExternalEditor } from '../utils/externalEditor.js';
 
 type ConnectionStatus =
 	| { state: 'no-token' }
@@ -25,9 +33,48 @@ export function AsanaSettingsScreen() {
 	const [isToggling, setIsToggling] = useState(false);
 	const [toggleError, setToggleError] = useState<string | null>(null);
 	const [status, setStatus] = useState<ConnectionStatus>({ state: 'checking' });
+	const [template, setTemplate] = useState<string | undefined>(
+		() => plugin?.getSettings().instantClaudeTemplate
+	);
+	const [templateMessage, setTemplateMessage] = useState<string | null>(null);
 
 	const token = plugin?.getAccessToken();
 	const tokenFromEnv = !!process.env[ASANA_TOKEN_ENV_VAR];
+	const editorAvailable = hasExternalEditor();
+
+	// Persist the instant-Claude template both to settings (durable) and to the live
+	// plugin instance (so the next launch picks it up without a restart).
+	const persistTemplate = (value: string | undefined) => {
+		pluginRegistry.updatePluginSettings(ASANA_PLUGIN_ID, { instantClaudeTemplate: value });
+		plugin?.configure({ instantClaudeTemplate: value });
+		setTemplate(value);
+	};
+
+	const handleEditTemplate = () => {
+		const body = template && template.trim() ? template : DEFAULT_ASANA_INSTANT_CLAUDE_TEMPLATE;
+		const edited = openExternalEditor(buildAsanaTemplateEditorHeader() + body, {
+			extension: '.md',
+			prefix: 'grove-asana-template-',
+		});
+		if (edited === null) {
+			return;
+		}
+		const cleaned = stripAsanaTemplateComments(edited).trim();
+		if (cleaned) {
+			persistTemplate(cleaned);
+			setTemplateMessage('Template saved');
+		} else {
+			persistTemplate(undefined);
+			setTemplateMessage('Template reset to default');
+		}
+		setTimeout(() => setTemplateMessage(null), 2000);
+	};
+
+	const handleResetTemplate = () => {
+		persistTemplate(undefined);
+		setTemplateMessage('Template reset to default');
+		setTimeout(() => setTemplateMessage(null), 2000);
+	};
 
 	useEffect(() => {
 		let cancelled = false;
@@ -68,6 +115,10 @@ export function AsanaSettingsScreen() {
 
 		if (key.escape && canGoBack) {
 			goBack();
+		} else if (input === 'e' && editorAvailable) {
+			handleEditTemplate();
+		} else if (input === 'r') {
+			handleResetTemplate();
 		} else if (key.return || input === ' ') {
 			setIsToggling(true);
 			setToggleError(null);
@@ -86,6 +137,10 @@ export function AsanaSettingsScreen() {
 			}
 		}
 	});
+
+	const isCustomTemplate = !!(template && template.trim());
+	const effectiveTemplate = isCustomTemplate ? template! : DEFAULT_ASANA_INSTANT_CLAUDE_TEMPLATE;
+	const templatePreviewLines = effectiveTemplate.split('\n').slice(0, 8);
 
 	// Mask the token for display
 	const maskToken = (value: string): string => {
@@ -163,7 +218,41 @@ export function AsanaSettingsScreen() {
 				</Box>
 			)}
 
-			<Box marginTop={2} flexDirection="column">
+			<Box marginTop={1} flexDirection="column">
+				<Text bold>Instant Claude template</Text>
+				<Box flexDirection="column" marginTop={1} marginBottom={1}>
+					<Text dimColor>
+						Seeds the prompt for the &quot;Launch instant Claude from Asana&quot; worktree action,
+						rendered from the linked task before it opens in your editor.
+					</Text>
+					<Text dimColor>The available variables are documented as comments when you edit it.</Text>
+				</Box>
+
+				{templateMessage && (
+					<Box marginBottom={1}>
+						<Text color="green">{templateMessage}</Text>
+					</Box>
+				)}
+
+				<Box flexDirection="column" marginBottom={1}>
+					<Text>
+						Current: {isCustomTemplate ? <Text color="cyan">custom</Text> : <Text dimColor>default</Text>}
+					</Text>
+					<Box flexDirection="column" borderStyle="single" paddingX={1}>
+						{templatePreviewLines.map((line, index) => (
+							<Text key={index}>{line || ' '}</Text>
+						))}
+					</Box>
+				</Box>
+
+				{!editorAvailable && (
+					<Box marginBottom={1}>
+						<Text color="yellow">No editor found. Set the $EDITOR environment variable to edit.</Text>
+					</Box>
+				)}
+			</Box>
+
+			<Box marginTop={1} flexDirection="column">
 				<Text dimColor>
 					Create a Personal Access Token at https://app.asana.com/0/my-apps and set it via{' '}
 					<Text color="cyan">{ASANA_TOKEN_ENV_VAR}</Text>.
@@ -171,6 +260,12 @@ export function AsanaSettingsScreen() {
 				<Text dimColor>
 					Press <Text color="cyan">Enter</Text> or <Text color="cyan">Space</Text> to toggle
 				</Text>
+				{editorAvailable && (
+					<Text dimColor>
+						Press <Text color="cyan">e</Text> to edit template, <Text color="cyan">r</Text> to reset to
+						default
+					</Text>
+				)}
 				{canGoBack && (
 					<Text dimColor>
 						Press <Text color="cyan">ESC</Text> to go back

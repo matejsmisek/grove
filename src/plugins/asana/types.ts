@@ -13,6 +13,13 @@ export interface AsanaPluginSettings {
 	defaultWorkspaceId?: string;
 	/** Default project ID to use */
 	defaultProjectId?: string;
+	/**
+	 * Template used to seed the prompt for the "Launch instant Claude from Asana"
+	 * worktree action. Supports the variables listed in {@link ASANA_TEMPLATE_VARIABLES}
+	 * (e.g. `{task_name}`, `{task_description}`). Falls back to
+	 * {@link DEFAULT_ASANA_INSTANT_CLAUDE_TEMPLATE} when unset.
+	 */
+	instantClaudeTemplate?: string;
 }
 
 /**
@@ -42,6 +49,8 @@ export interface AsanaTask {
 	url: string;
 	/** Plain-text task description (the Asana `notes` field) */
 	notes?: string;
+	/** Display name of the task's assignee, when assigned */
+	assignee?: string;
 }
 
 /**

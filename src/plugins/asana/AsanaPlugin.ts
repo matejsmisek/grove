@@ -3,6 +3,7 @@
  * Integrates Grove with Asana task management
  */
 import type { IPlugin, PluginMetadata } from '../types.js';
+import { DEFAULT_ASANA_INSTANT_CLAUDE_TEMPLATE, renderAsanaTemplate } from './template.js';
 import type {
 	AsanaApiError,
 	AsanaApiResponse,
@@ -19,6 +20,7 @@ interface RawAsanaTask {
 	name: string;
 	permalink_url?: string;
 	notes?: string;
+	assignee?: { gid: string; name: string } | null;
 }
 
 /**
@@ -236,7 +238,7 @@ export class AsanaPlugin implements IPlugin {
 		let response: Response;
 		try {
 			response = await fetch(
-				`${ASANA_API_BASE_URL}/tasks/${encodeURIComponent(taskGid)}?opt_fields=name,permalink_url,notes`,
+				`${ASANA_API_BASE_URL}/tasks/${encodeURIComponent(taskGid)}?opt_fields=name,permalink_url,notes,assignee.name`,
 				{
 					method: 'GET',
 					headers: {
@@ -281,7 +283,25 @@ export class AsanaPlugin implements IPlugin {
 			// permalink_url is only present when requested; fall back to a canonical URL.
 			url: raw.permalink_url ?? `https://app.asana.com/0/0/${raw.gid}`,
 			notes: raw.notes,
+			assignee: raw.assignee?.name,
 		};
+	}
+
+	/**
+	 * Resolve the configured "Instant Claude from Asana" template, falling back to
+	 * {@link DEFAULT_ASANA_INSTANT_CLAUDE_TEMPLATE} when none is set.
+	 */
+	getInstantClaudeTemplate(): string {
+		const configured = this.settings.instantClaudeTemplate;
+		return configured && configured.trim() ? configured : DEFAULT_ASANA_INSTANT_CLAUDE_TEMPLATE;
+	}
+
+	/**
+	 * Build the prompt body for an "Instant Claude from Asana" launch by rendering
+	 * the configured template against the given task.
+	 */
+	buildInstantClaudePrompt(task: AsanaTask): string {
+		return renderAsanaTemplate(this.getInstantClaudeTemplate(), task);
 	}
 
 	/**

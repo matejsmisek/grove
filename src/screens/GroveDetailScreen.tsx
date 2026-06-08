@@ -741,7 +741,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		asanaPlugin
 			.getTask(reference.id)
 			.then((task) => {
-				const promptBody = `Task Name: ${task.name}\n<description>${task.notes ?? ''}</description>`;
+				const promptBody = asanaPlugin.buildInstantClaudePrompt(task);
 				beginLaunch(`Opening prompt editor for ${selected.repositoryName}…`, () => {
 					const result = claudeSessionService.launchInstantSessionFromReference(
 						targetPath,
