@@ -98,7 +98,7 @@ export async function listClaudeAgentSessions(): Promise<ClaudeAgentInfo[]> {
 		};
 
 		try {
-			const proc = spawn('claude', ['agents', '--json'], {
+			const proc = spawn('claude', ['agents', '--json', '--all'], {
 				stdio: ['ignore', 'pipe', 'ignore'],
 			});
 
