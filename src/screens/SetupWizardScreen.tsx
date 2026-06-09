@@ -4,6 +4,7 @@ import { Box, Text, useInput } from 'ink';
 
 import path from 'path';
 
+import { DirenvWhitelistPrompt } from '../components/DirenvWhitelistPrompt.js';
 import TextInput from '../components/GroveTextInput.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
@@ -41,8 +42,10 @@ export function SetupWizardScreen() {
 
 	const [step, setStep] = useState<WizardStep>('folder');
 
-	// Step 1: groves folder
+	// Step 1: groves folder. The folder step has two phases: entering the path,
+	// then (when direnv is installed) offering to trust the folder in direnv.
 	const [workingFolder, setWorkingFolder] = useState(getDefaultGrovesFolder);
+	const [folderPhase, setFolderPhase] = useState<'input' | 'direnv'>('input');
 
 	// Step 2: terminal
 	const [terminals, setTerminals] = useState<TerminalConfig[] | null>(null);
@@ -96,7 +99,25 @@ export function SetupWizardScreen() {
 		}
 	};
 
+	// Submitting the folder path moves into the direnv sub-phase; the prompt
+	// advances to the next step itself once resolved (or immediately when there
+	// is nothing to offer).
+	const handleFolderSubmit = () => {
+		setFolderPhase('direnv');
+	};
+
+	const handleDirenvComplete = () => {
+		setFolderPhase('input');
+		goToNextStep();
+	};
+
 	useInput((_input, key) => {
+		// During the direnv sub-phase the prompt owns all keys (incl. Escape, which
+		// means "skip whitelist" there rather than "skip the wizard").
+		if (step === 'folder' && folderPhase === 'direnv') {
+			return;
+		}
+
 		// ESC skips the wizard from any step, saving current selections.
 		if (key.escape) {
 			finish();
@@ -146,7 +167,7 @@ export function SetupWizardScreen() {
 				</Text>
 			</Box>
 
-			{step === 'folder' && (
+			{step === 'folder' && folderPhase === 'input' && (
 				<Box flexDirection="column">
 					<Box marginBottom={1}>
 						<Text bold color="yellow">
@@ -163,11 +184,15 @@ export function SetupWizardScreen() {
 						<TextInput
 							value={workingFolder}
 							onChange={setWorkingFolder}
-							onSubmit={goToNextStep}
+							onSubmit={handleFolderSubmit}
 							placeholder="Enter groves folder path..."
 						/>
 					</Box>
 				</Box>
+			)}
+
+			{step === 'folder' && folderPhase === 'direnv' && (
+				<DirenvWhitelistPrompt folder={workingFolder} onComplete={handleDirenvComplete} />
 			)}
 
 			{step === 'terminal' && (
@@ -233,21 +258,23 @@ export function SetupWizardScreen() {
 				</Box>
 			)}
 
-			<Box marginTop={2} flexDirection="column">
-				{step === 'folder' ? (
+			{!(step === 'folder' && folderPhase === 'direnv') && (
+				<Box marginTop={2} flexDirection="column">
+					{step === 'folder' ? (
+						<Text dimColor>
+							Press <Text color="cyan">Enter</Text> to continue
+						</Text>
+					) : (
+						<Text dimColor>
+							<Text color="cyan">Up/Down</Text> Select - <Text color="cyan">Enter</Text>{' '}
+							{step === 'ide' ? 'Finish' : 'Continue'} - <Text color="cyan">Left</Text> Back
+						</Text>
+					)}
 					<Text dimColor>
-						Press <Text color="cyan">Enter</Text> to continue
+						Press <Text color="cyan">ESC</Text> to skip setup with these defaults
 					</Text>
-				) : (
-					<Text dimColor>
-						<Text color="cyan">Up/Down</Text> Select - <Text color="cyan">Enter</Text>{' '}
-						{step === 'ide' ? 'Finish' : 'Continue'} - <Text color="cyan">Left</Text> Back
-					</Text>
-				)}
-				<Text dimColor>
-					Press <Text color="cyan">ESC</Text> to skip setup with these defaults
-				</Text>
-			</Box>
+				</Box>
+			)}
 		</Box>
 	);
 }

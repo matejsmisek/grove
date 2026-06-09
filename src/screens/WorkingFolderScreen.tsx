@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
+import { DirenvWhitelistPrompt } from '../components/DirenvWhitelistPrompt.js';
 import TextInput from '../components/GroveTextInput.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
@@ -13,20 +14,24 @@ export function WorkingFolderScreen() {
 	const [settings] = useState(() => settingsService.readSettings());
 	const [value, setValue] = useState(settings.workingFolder);
 	const [isSaved, setIsSaved] = useState(false);
+	// While the direnv prompt is shown, it owns keyboard input (incl. Escape).
+	const [phase, setPhase] = useState<'editing' | 'direnv'>('editing');
 
-	useInput((_input, key) => {
-		if (key.escape && canGoBack) {
-			goBack();
-		}
-	});
+	useInput(
+		(_input, key) => {
+			if (key.escape && canGoBack) {
+				goBack();
+			}
+		},
+		{ isActive: phase === 'editing' }
+	);
 
 	const handleSubmit = () => {
 		settingsService.updateSettings({ workingFolder: value });
 		setIsSaved(true);
-		// Show saved message briefly then go back
-		setTimeout(() => {
-			goBack();
-		}, 500);
+		// Offer the new folder to direnv before leaving; the prompt returns
+		// immediately (via onComplete) when direnv is unavailable or already trusts it.
+		setPhase('direnv');
 	};
 
 	return (
@@ -48,39 +53,52 @@ export function WorkingFolderScreen() {
 					</Text>
 				</Box>
 
-				<Box marginBottom={1}>
-					<Text dimColor>Edit path:</Text>
-				</Box>
+				{phase === 'editing' ? (
+					<>
+						<Box marginBottom={1}>
+							<Text dimColor>Edit path:</Text>
+						</Box>
 
-				<Box borderStyle="single" borderColor="blue" paddingX={1} marginBottom={1}>
-					<Text color="blue" bold>
-						→{' '}
-					</Text>
-					<TextInput
-						value={value}
-						onChange={setValue}
-						onSubmit={handleSubmit}
-						placeholder="Enter working folder path..."
-					/>
-				</Box>
-
-				{isSaved && (
-					<Box marginTop={1}>
-						<Text color="green">✓ Saved successfully!</Text>
-					</Box>
+						<Box borderStyle="single" borderColor="blue" paddingX={1} marginBottom={1}>
+							<Text color="blue" bold>
+								→{' '}
+							</Text>
+							<TextInput
+								value={value}
+								onChange={setValue}
+								onSubmit={handleSubmit}
+								placeholder="Enter working folder path..."
+							/>
+						</Box>
+					</>
+				) : (
+					<>
+						{isSaved && (
+							<Box marginBottom={1}>
+								<Text color="green">✓ Saved successfully!</Text>
+							</Box>
+						)}
+						<DirenvWhitelistPrompt
+							folder={value}
+							previousFolder={settings.workingFolder}
+							onComplete={goBack}
+						/>
+					</>
 				)}
 			</Box>
 
-			<Box marginTop={2} flexDirection="column">
-				<Text dimColor>
-					Press <Text color="cyan">Enter</Text> to save
-				</Text>
-				{canGoBack && (
+			{phase === 'editing' && (
+				<Box marginTop={2} flexDirection="column">
 					<Text dimColor>
-						Press <Text color="cyan">ESC</Text> to cancel
+						Press <Text color="cyan">Enter</Text> to save
 					</Text>
-				)}
-			</Box>
+					{canGoBack && (
+						<Text dimColor>
+							Press <Text color="cyan">ESC</Text> to cancel
+						</Text>
+					)}
+				</Box>
+			)}
 		</Box>
 	);
 }

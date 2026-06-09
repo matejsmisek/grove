@@ -12,6 +12,7 @@ import { CloseGroveScreen } from '../screens/CloseGroveScreen.js';
 import { CloseMergedWorktreesScreen } from '../screens/CloseMergedWorktreesScreen.js';
 import { CloseWorktreeScreen } from '../screens/CloseWorktreeScreen.js';
 import { CreateGroveScreen } from '../screens/CreateGroveScreen.js';
+import { DirenvTrustScreen } from '../screens/DirenvTrustScreen.js';
 import { GitLabSettingsScreen } from '../screens/GitLabSettingsScreen.js';
 import { GroveConfigEditorScreen } from '../screens/GroveConfigEditorScreen.js';
 import { GroveDetailScreen } from '../screens/GroveDetailScreen.js';
@@ -58,6 +59,8 @@ export function Router() {
 			);
 		case 'setupWizard':
 			return <SetupWizardScreen />;
+		case 'direnvTrust':
+			return <DirenvTrustScreen />;
 		case 'chat':
 			return <ChatScreen />;
 		case 'activity':

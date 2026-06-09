@@ -20,6 +20,7 @@ import { App } from './components/App.js';
 import { FatalConfigError } from './components/FatalConfigError.js';
 import { getContainer } from './di/index.js';
 import { detectMonorepo } from './git/index.js';
+import type { Routes } from './navigation/types.js';
 import {
 	RepositoryServiceToken,
 	SessionsServiceToken,
@@ -29,6 +30,7 @@ import {
 	initializeServices,
 } from './services/index.js';
 import { AgentType, SettingsService } from './storage/index.js';
+import { shouldOfferDirenvWhitelist } from './utils/direnvWhitelist.js';
 import {
 	GROVE_GLOBAL_DIR_ENV,
 	GlobalGroveDirError,
@@ -438,9 +440,23 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 	// Choose the initial screen:
 	// - global (no workspace, no git repo): the workspace/repo switcher
 	// - first run in a context that needs setup: the setup wizard
+	// - repo/workspace mode where the auto-derived groves folder isn't yet
+	//   trusted by direnv: a one-time trust prompt (the wizard never runs here)
 	// - otherwise: the normal home screen for the current context
-	const initialScreen =
-		workspaceContext.type === 'global' ? 'globalHome' : isFirstRun ? 'setupWizard' : 'home';
+	let initialScreen: keyof Routes;
+	if (workspaceContext.type === 'global') {
+		initialScreen = 'globalHome';
+	} else if (isFirstRun) {
+		initialScreen = 'setupWizard';
+	} else {
+		const settings = settingsService.readSettings();
+		initialScreen = shouldOfferDirenvWhitelist(
+			settings.workingFolder,
+			settings.direnvWhitelistPromptedFolder
+		)
+			? 'direnvTrust'
+			: 'home';
+	}
 	// Start the interactive UI
 	render(<App initialScreen={initialScreen} />);
 }

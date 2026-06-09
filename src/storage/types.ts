@@ -162,6 +162,14 @@ export interface Settings {
 	 * ~/.grove/settings.json. Defaults to true (on) when unset.
 	 */
 	mouseControlEnabled?: boolean;
+	/**
+	 * The groves folder for which the user has already been offered the direnv
+	 * whitelist trust prompt. Stored per-context so the prompt is shown at most
+	 * once per folder (until the folder changes) — without it, declining would
+	 * re-prompt on every launch in repo/workspace mode where the groves folder is
+	 * derived automatically and the setup wizard never runs.
+	 */
+	direnvWhitelistPromptedFolder?: string;
 }
 
 export interface StorageConfig {

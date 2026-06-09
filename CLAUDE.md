@@ -165,6 +165,39 @@ yet allowed (and not whitelisted), `direnv exec` warns and runs the command
 without the environment rather than failing — and Grove surfaces a "run
 `direnv allow`" hint to the user.
 
+### Whitelisting the groves folder
+
+To avoid a per-worktree `direnv allow`, Grove can add the groves folder to direnv's
+`[whitelist].prefix` so every worktree created beneath it is trusted automatically.
+Helpers live in `src/utils/direnvWhitelist.ts`:
+
+- `getDirenvConfigPath()` — `$XDG_CONFIG_HOME/direnv/direnv.toml`, else
+  `~/.config/direnv/direnv.toml`.
+- `readDirenvWhitelistPrefixes()` / `isPathInDirenvWhitelist(dir)` — read the current
+  prefixes and test whether a directory is already covered (exact match or a parent
+  prefix).
+- `addDirenvWhitelistPrefix(add, remove?)` — rewrites only the `[whitelist].prefix`
+  array (preserving comments, other sections, and `exact` entries), optionally
+  dropping a previous prefix when the groves folder changes. Creates the config file
+  when missing; idempotent on a path that is already present.
+
+- `shouldOfferDirenvWhitelist(folder, alreadyPromptedFolder?)` — gate used at
+  startup: true only when direnv is installed, `folder` is non-empty and not
+  already whitelisted, and it differs from `alreadyPromptedFolder`.
+
+The `DirenvWhitelistPrompt` component (`src/components/`) offers this during the
+**setup wizard** (after choosing the groves folder) and in the **Working Folder**
+settings screen (after saving a new path). It renders nothing and resolves
+immediately when direnv is not installed or the folder is already whitelisted.
+
+In **repo/workspace mode** the setup wizard never runs and the groves folder is
+derived from the context, so the trust check happens at startup instead: when
+`shouldOfferDirenvWhitelist` returns true, `index.tsx` routes the initial screen to
+`DirenvTrustScreen` (a one-time gate before `home`). That screen records the folder
+it asked about in `Settings.direnvWhitelistPromptedFolder` (per-context) so a
+decline is not re-prompted on the next launch — accepting whitelists the folder,
+which suppresses the prompt on its own.
+
 ## Claude Session Tracking
 
 Grove tracks Claude sessions by merging two sources:

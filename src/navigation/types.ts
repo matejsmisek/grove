@@ -3,6 +3,7 @@ export type Routes = {
 	home: { selectedGroveId?: string };
 	globalHome: { selectedLocationPath?: string };
 	setupWizard: Record<string, never>;
+	direnvTrust: Record<string, never>;
 	chat: Record<string, never>;
 	activity: Record<string, never>;
 	createGrove: Record<string, never>;
