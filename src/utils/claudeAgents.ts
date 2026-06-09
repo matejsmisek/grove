@@ -23,7 +23,11 @@ export interface ClaudeAgentInfo {
 	sessionId?: string;
 	/** Display name (set via `--name` or auto-generated) */
 	name?: string;
-	/** Authoritative status, e.g. 'idle' | 'busy' | 'waiting' | 'completed' | 'failed' | 'stopped' */
+	/**
+	 * Authoritative status, e.g. 'idle' | 'busy' | 'waiting' | 'completed' | 'failed' | 'stopped'.
+	 * When the CLI omits `status`, {@link parseClaudeAgentsJson} backfills it from
+	 * `state` (e.g. `done` -> `completed`).
+	 */
 	status?: string;
 	/** When status is 'waiting', what the session is blocked on */
 	waitingFor?: string;
@@ -64,6 +68,17 @@ export function lastActionAt(agent: ClaudeAgentInfo): number | undefined {
 const COMMAND_TIMEOUT_MS = 20000;
 
 /**
+ * Translation from the CLI's `state` field to a Grove `status` value, used only
+ * when `status` is omitted. `state` uses a different vocabulary than `status`
+ * (e.g. an in-progress session reports `state: "working"` but always carries an
+ * explicit `status`), so when `status` is missing the state is typically `done`,
+ * which maps to the `completed` status. Unmapped states pass through unchanged.
+ */
+const STATE_TO_STATUS: Record<string, string> = {
+	done: 'completed',
+};
+
+/**
  * Parse the stdout of `claude agents --json` into a list of sessions.
  * Returns an empty array for empty or non-JSON output (e.g. older CLI versions
  * that print a subagent list instead of opening agent view).
@@ -75,7 +90,19 @@ export function parseClaudeAgentsJson(stdout: string): ClaudeAgentInfo[] {
 	}
 	try {
 		const parsed = JSON.parse(trimmed);
-		return Array.isArray(parsed) ? (parsed as ClaudeAgentInfo[]) : [];
+		if (!Array.isArray(parsed)) {
+			return [];
+		}
+		return (parsed as ClaudeAgentInfo[]).map((agent) => {
+			// When the CLI omits `status`, derive it from `state` (translating
+			// known values, e.g. `done` -> `completed`) so consumers always see a
+			// `status`. An unmapped state passes through as-is.
+			if (agent.status == null && typeof agent.state === 'string') {
+				const state = agent.state.toLowerCase();
+				return { ...agent, status: STATE_TO_STATUS[state] ?? agent.state };
+			}
+			return agent;
+		});
 	} catch {
 		return [];
 	}

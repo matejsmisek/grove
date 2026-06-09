@@ -37,6 +37,24 @@ describe('claudeAgents', () => {
 		it('returns [] when JSON is not an array', () => {
 			expect(parseClaudeAgentsJson('{"sessionId":"x"}')).toEqual([]);
 		});
+
+		it('maps `state: done` to `status: completed` when `status` is missing', () => {
+			const stdout = JSON.stringify([{ sessionId: 'id-1', state: 'done' }]);
+
+			expect(parseClaudeAgentsJson(stdout)[0].status).toBe('completed');
+		});
+
+		it('falls back to an unmapped `state` verbatim when `status` is missing', () => {
+			const stdout = JSON.stringify([{ sessionId: 'id-1', state: 'idle' }]);
+
+			expect(parseClaudeAgentsJson(stdout)[0].status).toBe('idle');
+		});
+
+		it('keeps `status` when present even if `state` is also reported', () => {
+			const stdout = JSON.stringify([{ sessionId: 'id-1', status: 'working', state: 'done' }]);
+
+			expect(parseClaudeAgentsJson(stdout)[0].status).toBe('working');
+		});
 	});
 
 	describe('lastActionAt', () => {
