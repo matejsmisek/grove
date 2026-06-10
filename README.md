@@ -1,58 +1,47 @@
-# Grove
+# HyperGrove
 
-**AI-powered Git worktree management CLI with an interactive terminal UI**
+**Yet another git worktree management CLI with an interactive terminal UI**
 
-Grove is a modern command-line tool that makes managing Git worktrees effortless. Built with React and Ink, it provides an intuitive, interactive interface for creating and managing collections of worktrees (called "groves"), with support for monorepos, custom configurations, and seamless IDE integration.
+## What it solves
 
-## Features
+Creating worktree with git for claude is easy, but its also easy to get lost in them.
+Especially if run several parallel worktrees at the same time. Switching folders, tracking claude sessions,
+opening IDE in the right worktree folders. All that can get complicated real fast.
 
-- **Interactive Terminal UI** - Navigate with keyboard shortcuts in a beautiful CLI interface
-- **Grove Management** - Create and manage collections of git worktrees across multiple repositories
-- **Monorepo Support** - Select specific project folders within monorepos for grove creation
-- **AI Agent Session Tracking** - Monitor active Claude Code sessions across your groves with live animated indicators
-- **Smart IDE Integration** - Auto-detect and launch the right IDE (VS Code, JetBrains IDEs, Vim) for each project
-- **JetBrains Auto-Detection** - Automatically selects the appropriate JetBrains IDE based on project files
-- **Custom Configuration** - Per-repository `.grove.json` for branch naming, file copying, IDE preferences, init actions, and Claude session templates
-- **Init Actions** - Automatically run bash commands (install dependencies, build, etc.) after worktree creation with live log streaming
-- **Claude Integration** - Launch Claude CLI sessions with configurable terminal selection (Konsole, Kitty)
-- **Claude Terminal Selection** - Choose your preferred terminal and customize session templates
-- **Session Templates** - Customize Claude session files globally or per-repository with `${WORKING_DIR}` placeholder
-- **Terminal Launcher** - Open terminal windows directly in your grove worktrees
-- **Git Status Tracking** - See uncommitted changes and unpushed commits at a glance
+Hypergrove takes it to the next level. The main principle is that you create "groves" which is a group of
+several worktrees. You can add more worktrees into the grove later, close already completed one and see
+all the work in one place. Think of a grove as "user story" task representation and each worktree the actual
+dev implementation. Some stories need just one task, some need dozen. All of that is grouped into one grove.
+
+### Unique features
+
+- Shortcuts to open terminal or IDE in the worktree folder
+- Start and track Claude sessions per worktree in the UI
+- Monorepo support to open IDE right in the repository subfolder
+- Setup config file in your project repository to tell grove what files to copy to worktree (like gitignored files) or what bash actions to run after creation (npm install)
+- Create terminal template to tell grove exactly how you want your terminal or claude window to launch
+  - Tabs, terminal windows with npm run dev, claude parameters, all that set within the template
 
 ## Installation
 
 Install Grove globally via npm:
 
 ```bash
-npm install -g grove
+npm install -g hypergrove
 ```
 
 ## Usage
 
 ### Quick Start
 
-1. **Launch Grove**:
+**Launch Grove**:
 
-   ```bash
-   grove
-   ```
+```bash
+cd your-repository
+grove
+```
 
-2. **Register a repository**:
-
-   ```bash
-   cd /path/to/your/repo
-   grove --register
-   ```
-
-3. **Create a grove** - Use the interactive UI to create a new grove with worktrees for your registered repositories
-
-### Commands
-
-- `grove` - Launch the interactive UI
-- `grove --register` - Register the current directory as a repository
-- `grove --setup-hooks --agent <agent>` - Configure AI agent hooks for session tracking (e.g., `--agent claude`)
-- `grove --verify-hooks --agent <agent>` - Verify which hooks are configured for an AI agent
+Each grove will then be creating within your repo under .grove folder
 
 ### Interactive UI Navigation
 
@@ -61,122 +50,8 @@ Once in the interactive UI:
 - **Arrow keys** - Navigate between items
 - **Enter** - Select/confirm
 - **Escape** - Go back/cancel
-- **Tab** - Switch focus between panels
-- **q** - Quit (when applicable)
 
-### Workflow Example
-
-1. Register your repositories:
-
-   ```bash
-   cd ~/projects/my-app
-   grove --register
-
-   cd ~/projects/my-api
-   grove --register
-   ```
-
-2. Launch Grove and create a new grove for a feature:
-
-   ```bash
-   grove
-   # Select "Create Grove"
-   # Name it "feature-auth"
-   # Select repositories/projects to include
-   ```
-
-3. Grove creates worktrees in `~/grove-worktrees/feature-auth/`:
-
-   ```
-   ~/grove-worktrees/feature-auth/
-   ├── my-app/     (worktree on branch feature-auth)
-   └── my-api/     (worktree on branch feature-auth)
-   ```
-
-4. Open in your IDE, terminal, or Claude for development
-
-5. When done, close the grove to clean up worktrees
-
-## AI Agent Session Tracking
-
-Grove can monitor active AI agent sessions (like Claude Code) running in your groves and display their status with live animated indicators.
-
-### Setup
-
-Configure Grove to track Claude Code sessions:
-
-```bash
-grove --setup-hooks --agent claude
-```
-
-This automatically adds hooks to `~/.claude/settings.json` that notify Grove when:
-
-- A Claude session starts
-- Claude finishes responding (becomes idle)
-- Claude needs your attention (permissions, timeouts)
-- A session ends
-
-**What gets configured:**
-
-- Creates a backup of your Claude settings (`~/.claude/settings.json.backup`)
-- Adds non-invasive hooks that run silently in the background
-- Only adds hooks if they don't already exist (safe to run multiple times)
-
-### Verification
-
-Check if hooks are properly configured:
-
-```bash
-grove --verify-hooks --agent claude
-```
-
-This shows which hooks are active and which are missing.
-
-### How It Works
-
-1. **Automatic Detection** - When you open Grove's home screen, it automatically scans for active Claude sessions
-2. **Session Mapping** - Sessions are mapped to their corresponding groves based on working directory
-3. **Live Indicators** - Each grove displays session counts with animated indicators:
-   - `✻ 2` - Active sessions (animated loader with Grove-style frames: `·` `✻` `✽` `✶` `✳` `✢`)
-   - `· 1` - Idle sessions (waiting for input)
-   - `⚠ 1` - Sessions needing attention
-4. **Background Updates** - Status updates happen in the background without blocking the UI
-
-### Session Status Indicators
-
-| Indicator | Status             | Description                                 |
-| --------- | ------------------ | ------------------------------------------- |
-| `✻ 2`     | Active (animated)  | Claude is actively processing or working    |
-| `· 1`     | Idle               | Session running, waiting for input          |
-| `⚠ 1`    | Needs Attention    | Claude needs user action (permission, etc.) |
-| `✓ 1`     | Closed             | Session closed, ready for a new prompt      |
-| (none)    | No active sessions | No Claude sessions running in this grove    |
-
-### Data Storage
-
-Session data is stored in `~/.grove/sessions.json` and includes:
-
-- Session ID and agent type (claude, gemini, codex, etc.)
-- Grove and workspace mappings
-- Current status and running state
-- Metadata (branch, timestamps, etc.)
-
-Sessions are automatically cleaned up after 60 minutes of inactivity.
-
-### Privacy & Performance
-
-- **Non-invasive** - Hooks run silently and don't interfere with Claude's operation
-- **Lightweight** - Session detection happens in the background
-- **Local-only** - All data stored locally in `~/.grove/`
-- **Minimal overhead** - No impact on Claude Code performance
-
-### Future Agent Support
-
-Grove's session tracking is designed to be extensible. Future support planned for:
-
-- **Gemini Code** - Google's AI coding assistant
-- **Codex** - OpenAI's coding assistant
-- **Custom agents** - Extensible adapter system for any AI agent
+Or use your mouse to click on panels and items
 
 ## Configuration
 
@@ -391,62 +266,6 @@ Project-level settings override root settings, so:
 - **Optional**: Konsole or Kitty terminal for Claude integration
 - **Optional**: Claude Code for AI session tracking
 
-## Development
-
-Want to contribute to Grove? Here's how to set up your development environment:
-
-### Prerequisites
-
-- Node.js >= 18.0.0
-- npm
-
-### Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/matejsmisek/grove.git
-cd grove
-
-# Install dependencies
-npm install
-
-# Build the project
-npm run build
-
-# Link for local testing
-npm link
-```
-
-### Available Scripts
-
-- `npm run build` - Build the TypeScript project
-- `npm run dev` - Build in watch mode for development
-- `npm run lint` - Check for linting errors
-- `npm run lint:fix` - Auto-fix linting issues
-- `npm run format` - Format code with Prettier
-- `npm run typecheck` - Type-check without emitting files
-
-### Technology Stack
-
-- **TypeScript** - Type-safe JavaScript with strict mode
-- **React** - UI component library
-- **Ink** - React renderer for CLI applications
-- **ESLint** - Code linting with typescript-eslint
-- **Prettier** - Code formatting
-
-### Project Structure
-
-The project follows a modular architecture with dependency injection:
-
-- `src/components/` - React UI components
-- `src/screens/` - Full-page screen components
-- `src/services/` - Business logic services
-- `src/storage/` - Persistence layer
-- `src/navigation/` - Routing system
-- `src/di/` - Dependency injection container
-
-For detailed documentation, see [CLAUDE.md](https://github.com/matejsmisek/grove/blob/main/CLAUDE.md).
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
@@ -469,5 +288,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/matejsmisek/grove/issues)
-- **Documentation**: See [CLAUDE.md](https://github.com/matejsmisek/grove/blob/main/CLAUDE.md) for comprehensive development documentation
+- **Issues**: [GitHub Issues](https://github.com/matejsmisek/hypergrove/issues)
