@@ -336,6 +336,10 @@ launch --title "my-worktree-lon" bash`;
 			expect(build('/repos/app', 'my-grove')).toBe('my-grove/app');
 		});
 
+		it('uses the name once when grove and worktree names are identical', () => {
+			expect(build('/repos/app', 'my-grove', 'my-grove')).toBe('my-grove');
+		});
+
 		it('truncates to 60 characters', () => {
 			const long = 'g'.repeat(80);
 			expect(build('/repos/app', long, 'wt').length).toBe(60);

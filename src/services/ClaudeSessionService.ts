@@ -370,10 +370,11 @@ launch --title "cmd" bash
 		if (groveName) {
 			parts.push(groveName);
 		}
-		if (worktreeName) {
-			parts.push(worktreeName);
-		} else {
-			parts.push(path.basename(repositoryPath));
+		const leaf = worktreeName || path.basename(repositoryPath);
+		// Avoid duplicating the name (e.g. "name/name") when the grove and
+		// worktree names are identical.
+		if (leaf !== groveName) {
+			parts.push(leaf);
 		}
 		return (parts.join('/') || 'grove-session').slice(0, 60);
 	}
