@@ -396,6 +396,8 @@ function WorktreeActionList({
 interface GroveDetailScreenProps {
 	groveId: string;
 	focusWorktreeName?: string;
+	/** When focusing a worktree on (re)mount, restore this action-list cursor (else 0). */
+	focusActionIndex?: number;
 }
 
 /**
@@ -469,7 +471,11 @@ type UIMode =
 	| { type: 'asanaAttach'; worktreePath: string; input: string; error: string; busy: boolean }
 	| { type: 'initLog'; content: string };
 
-export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScreenProps) {
+export function GroveDetailScreen({
+	groveId,
+	focusWorktreeName,
+	focusActionIndex,
+}: GroveDetailScreenProps) {
 	const { goBack, navigate, replace } = useNavigation();
 	const gitService = useService(GitServiceToken);
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
@@ -523,13 +529,18 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	};
 
 	// Before navigating to a worktree sub-screen (fork / close / archived sessions), stamp the
-	// selected worktree into this screen's own history entry. The navigation layer pushes the
-	// just-replaced entry to history, so goBack() restores the worktree's detail (focus opens its
-	// actions) instead of the bare list. Single-worktree mode opens its inline detail regardless.
+	// selected worktree AND the current action-list cursor into this screen's own history entry.
+	// The navigation layer pushes the just-replaced entry to history, so goBack() restores the
+	// worktree's detail (focus opens its actions) with the same action row still selected instead
+	// of the bare list. Single-worktree mode opens its inline detail regardless.
 	const focusSelectedOnReturn = () => {
 		const selected = worktreeDetails[selectedIndex]?.worktree;
 		if (selected) {
-			replace('groveDetail', { groveId, focusWorktreeName: selected.name });
+			replace('groveDetail', {
+				groveId,
+				focusWorktreeName: selected.name,
+				focusActionIndex: selectedActionIndex,
+			});
 		}
 	};
 
@@ -601,7 +612,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					if (focusIndex !== -1) {
 						setSelectedIndex(focusIndex);
 						setUIMode({ type: 'actions' });
-						setSelectedActionIndex(0);
+						setSelectedActionIndex(focusActionIndex ?? 0);
 					} else {
 						// Fallback: select first non-closed worktree
 						const firstOpenIndex = details.findIndex((d) => !d.worktree.closed);
@@ -618,6 +629,10 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					// Single-worktree groves show their actions inline from the start.
 					if (details.length === 1) {
 						setUIMode({ type: 'actions' });
+						// Restore the action cursor when returning from a sub-screen.
+						if (focusActionIndex !== undefined) {
+							setSelectedActionIndex(focusActionIndex);
+						}
 					}
 				}
 				setLoading(false);

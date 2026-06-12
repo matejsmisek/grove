@@ -61,6 +61,7 @@ export function Router() {
 				<GroveDetailScreen
 					groveId={current.params.groveId}
 					focusWorktreeName={current.params.focusWorktreeName}
+					focusActionIndex={current.params.focusActionIndex}
 				/>
 			);
 		case 'closeGrove':

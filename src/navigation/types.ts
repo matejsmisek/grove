@@ -7,7 +7,7 @@ export type Routes = {
 	chat: Record<string, never>;
 	activity: Record<string, never>;
 	createGrove: Record<string, never>;
-	groveDetail: { groveId: string; focusWorktreeName?: string };
+	groveDetail: { groveId: string; focusWorktreeName?: string; focusActionIndex?: number };
 	closeGrove: { groveId: string };
 	closeWorktree: { groveId: string; worktreePath: string };
 	closeMergedWorktrees: { groveId: string };
