@@ -620,12 +620,19 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 
 	// Poll live Claude sessions from `claude agents --json` in the background.
 	// The CLI reports the authoritative status, refreshed every 30 seconds.
+	//
+	// A monotonic request id guards against out-of-order resolution: a slow in-flight
+	// request must not overwrite the result of a newer one. `claudeSessionService` is a
+	// DI singleton, so it's intentionally omitted from the deps — including it would
+	// needlessly re-arm the interval.
 	useEffect(() => {
 		let cancelled = false;
+		let latest = 0;
 
 		const refreshAgents = async () => {
+			const id = ++latest;
 			const sessions = await claudeSessionService.listTrackedSessions();
-			if (!cancelled) {
+			if (!cancelled && id === latest) {
 				setAgentSessions(sessions);
 			}
 		};
@@ -637,7 +644,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 			cancelled = true;
 			clearInterval(interval);
 		};
-	}, [claudeSessionService]);
+	}, []);
 
 	// Run a pending launch once its loading screen has been committed/painted.
 	// `setTimeout` yields to the event loop so Ink flushes the message to the
