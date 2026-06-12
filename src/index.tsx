@@ -12,6 +12,7 @@ import {
 	initWorkspace,
 	listGroves,
 	openClaude,
+	parseArgs,
 	registerRepository,
 	setupAgentHooks,
 	verifyAgentHooks,
@@ -122,11 +123,10 @@ if (!isFirstRun && !settings.terminal) {
 	}
 }
 
-// Parse command-line arguments
-const args = process.argv.slice(2);
+// Parse command-line arguments into a command, then dispatch.
+const command = parseArgs(process.argv.slice(2));
 
-// Handle --help / -h flag
-if (args.includes('--help') || args.includes('-h')) {
+if (command.cmd === 'help') {
 	const version = '1.0.0';
 	console.log(`Grove v${version} - Git worktree management CLI`);
 	console.log('');
@@ -166,174 +166,80 @@ if (args.includes('--help') || args.includes('-h')) {
 	console.log('');
 	console.log('Run grove without arguments to launch the interactive terminal UI.');
 	process.exit(0);
-}
+} else if (command.cmd === 'error') {
+	command.lines.forEach((line) => console.error(line));
+	process.exit(1);
+} else if (command.cmd === 'workspace-init') {
+	const result = await initWorkspace();
 
-// Handle workspace commands
-if (args[0] === 'workspace' && args[1] === 'init') {
-	(async () => {
-		const result = await initWorkspace();
-
-		if (result.success) {
-			console.log('✓', result.message);
-			if (result.workspacePath) {
-				console.log('  Workspace path:', result.workspacePath);
-			}
-			if (result.grovesFolder) {
-				console.log('  Groves folder:', result.grovesFolder);
-			}
-			process.exit(0);
-		} else {
-			console.error('✗', result.message);
-			process.exit(1);
+	if (result.success) {
+		console.log('✓', result.message);
+		if (result.workspacePath) {
+			console.log('  Workspace path:', result.workspacePath);
 		}
-	})();
-} else if (args[0] === 'create') {
-	// Handle create command: grove create <name> [repository]
-	// Name can have spaces - all args between 'create' and last non-repo arg are joined as the name
-	// If --empty flag is present, creates grove without worktrees
-	// Last argument is the repository (unless --empty is used)
-	(async () => {
-		const createArgs = args.slice(1);
-		const isEmpty = createArgs.includes('--empty');
-		const filteredArgs = createArgs.filter((a) => a !== '--empty');
-
-		if (filteredArgs.length < 1) {
-			console.error('✗ Usage: grove create <name> [repository]');
-			console.error('  grove create <name> --empty');
-			console.error('  repository format: reponame or reponame.projectfolder');
-			process.exit(1);
+		if (result.grovesFolder) {
+			console.log('  Groves folder:', result.grovesFolder);
 		}
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		process.exit(1);
+	}
+} else if (command.cmd === 'create') {
+	const result = await createGrove(command.name, command.repository);
 
-		let name: string;
-		let repository: string | undefined;
-
-		if (isEmpty) {
-			// All remaining args form the name
-			name = filteredArgs.join(' ');
-		} else if (filteredArgs.length < 2) {
-			console.error('✗ Usage: grove create <name> <repository>');
-			console.error('  grove create <name> --empty');
-			console.error('  repository format: reponame or reponame.projectfolder');
-			process.exit(1);
-		} else {
-			repository = filteredArgs[filteredArgs.length - 1];
-			name = filteredArgs.slice(0, -1).join(' ');
+	if (result.success) {
+		console.log('✓', result.message);
+		if (result.grovePath) {
+			console.log('  Path:', result.grovePath);
 		}
-
-		const result = await createGrove(name, repository);
-
-		if (result.success) {
-			console.log('✓', result.message);
-			if (result.grovePath) {
-				console.log('  Path:', result.grovePath);
-			}
-			if (result.groveId) {
-				console.log('  ID:', result.groveId);
-			}
-			process.exit(0);
-		} else {
-			console.error('✗', result.message);
-			process.exit(1);
+		if (result.groveId) {
+			console.log('  ID:', result.groveId);
 		}
-	})();
-} else if (args[0] === 'add-worktree') {
-	// Handle add-worktree command:
-	//   grove add-worktree <grove-id> <name> <repository>
-	//   grove add-worktree <grove-id> <name> --fork <worktree-id>
-	// Adds a worktree to an existing grove. With --fork, the new worktree uses the same
-	// repository/project as the named worktree and branches off its branch.
-	(async () => {
-		const addArgs = args.slice(1);
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		process.exit(1);
+	}
+} else if (command.cmd === 'add-worktree') {
+	const result = await addWorktree(
+		command.groveId,
+		command.name,
+		command.repository,
+		command.forkFromWorktreeId
+	);
 
-		// Extract the optional --fork <worktree-id> flag.
-		const forkIndex = addArgs.indexOf('--fork');
-		let forkFromWorktreeId: string | undefined;
-		let positional = addArgs;
-		if (forkIndex !== -1) {
-			forkFromWorktreeId = addArgs[forkIndex + 1];
-			if (!forkFromWorktreeId) {
-				console.error('✗ --fork requires a worktree id');
-				process.exit(1);
-			}
-			positional = addArgs.filter((_, i) => i !== forkIndex && i !== forkIndex + 1);
+	if (result.success) {
+		console.log('✓', result.message);
+		if (result.worktreeId) {
+			console.log('  ID:', result.worktreeId);
 		}
-
-		const groveId = positional[0];
-
-		let result;
-		if (forkFromWorktreeId) {
-			// Fork mode: repository is optional. When at least a name and a repository are present
-			// (>= 2 tokens after the grove id), the last token is treated as the repository; it must
-			// resolve to the source worktree's repository (a different project is allowed for
-			// monorepos). With only a name, the source worktree's repository/project are reused.
-			const rest = positional.slice(1);
-			let worktreeName: string;
-			let repository: string | undefined;
-			if (rest.length >= 2) {
-				repository = rest[rest.length - 1];
-				worktreeName = rest.slice(0, -1).join(' ');
-			} else {
-				worktreeName = rest.join(' ');
-			}
-
-			if (!groveId || !worktreeName) {
-				console.error(
-					'✗ Usage: grove add-worktree <grove-id> <name> --fork <worktree-id> [repository]'
-				);
-				process.exit(1);
-			}
-			result = await addWorktree(groveId, worktreeName, repository, forkFromWorktreeId);
-		} else {
-			if (positional.length < 3) {
-				console.error('✗ Usage: grove add-worktree <grove-id> <name> <repository>');
-				console.error('  grove add-worktree <grove-id> <name> --fork <worktree-id>');
-				console.error('  repository format: reponame or reponame.projectfolder');
-				process.exit(1);
-			}
-
-			const repository = positional[positional.length - 1];
-			const worktreeName = positional.slice(1, -1).join(' ');
-			result = await addWorktree(groveId, worktreeName, repository);
+		if (result.worktreeName) {
+			console.log('  Name:', result.worktreeName);
 		}
-
-		if (result.success) {
-			console.log('✓', result.message);
-			if (result.worktreeId) {
-				console.log('  ID:', result.worktreeId);
-			}
-			if (result.worktreeName) {
-				console.log('  Name:', result.worktreeName);
-			}
-			if (result.worktreePath) {
-				console.log('  Folder:', result.worktreePath);
-			}
-			process.exit(0);
-		} else {
-			console.error('✗', result.message);
-			process.exit(1);
+		if (result.worktreePath) {
+			console.log('  Folder:', result.worktreePath);
 		}
-	})();
-} else if (args[0] === 'claude') {
-	// Handle claude command: grove claude [grove-id]
-	const groveId = args[1]; // Optional grove ID
-	void (async () => {
-		const result = await openClaude(groveId);
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		process.exit(1);
+	}
+} else if (command.cmd === 'claude') {
+	const result = await openClaude(command.groveId);
 
-		if (result.success) {
-			console.log('✓', result.message);
-			process.exit(0);
-		} else {
-			console.error('✗', result.message);
-			process.exit(1);
-		}
-	})();
-} else if (args[0] === 'list') {
-	// Handle list command: grove list [--json]
-	const jsonOutput = args.includes('--json');
+	if (result.success) {
+		console.log('✓', result.message);
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		process.exit(1);
+	}
+} else if (command.cmd === 'list') {
 	const result = listGroves();
 
 	if (result.success) {
-		if (jsonOutput) {
+		if (command.json) {
 			console.log(JSON.stringify(result.groves, null, 2));
 		} else {
 			console.log(formatGrovesText(result));
@@ -343,14 +249,10 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 		console.error('✗', result.message);
 		process.exit(1);
 	}
-} else if (args[0] === 'status') {
-	// Handle status command: grove status [--json]
-	// Detects the grove worktree containing the current directory and prints
-	// the grove ID, worktree ID, and repository (repo.project for monorepos).
-	const jsonOutput = args.includes('--json');
+} else if (command.cmd === 'status') {
 	const result = groveStatus();
 
-	if (jsonOutput) {
+	if (command.json) {
 		console.log(JSON.stringify(result, null, 2));
 		process.exit(result.success ? 0 : 1);
 	}
@@ -370,8 +272,7 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 		console.error('✗', result.message);
 		process.exit(1);
 	}
-} else if (args.includes('--register')) {
-	// Handle --register flag
+} else if (command.cmd === 'register') {
 	const result = await registerRepository();
 
 	if (result.success) {
@@ -384,59 +285,48 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 		console.error('✗', result.message);
 		process.exit(1);
 	}
-} else if (args.includes('session-hook')) {
-	// Handle unified session-hook command (reads JSON from stdin)
-	(async () => {
-		const agentType = (getArgValue('--agent-type') || 'claude') as AgentType;
-		const sessionsService = container.resolve(SessionsServiceToken);
-		const result = await handleSessionHook(sessionsService, agentType);
+} else if (command.cmd === 'session-hook') {
+	// Reads JSON from stdin; silent success so hooks don't clutter output.
+	const sessionsService = container.resolve(SessionsServiceToken);
+	const result = await handleSessionHook(sessionsService, command.agentType as AgentType);
 
-		if (result.success) {
-			// Silent success for hooks - don't clutter output
-			process.exit(0);
-		} else {
-			console.error('✗', result.message);
-			process.exit(1);
-		}
-	})();
-} else if (args.includes('--setup-hooks')) {
-	// Handle setup-hooks command
-	(async () => {
-		const agentType = (getArgValue('--agent') || 'claude') as AgentType;
-		const result = await setupAgentHooks(agentType);
+	if (result.success) {
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		process.exit(1);
+	}
+} else if (command.cmd === 'setup-hooks') {
+	const result = await setupAgentHooks(command.agentType as AgentType);
 
-		if (result.success) {
-			console.log('✓', result.message);
-			if (result.details && result.details.length > 0) {
-				result.details.forEach((detail) => console.log('  ', detail));
-			}
-			process.exit(0);
-		} else {
-			console.error('✗', result.message);
-			if (result.details && result.details.length > 0) {
-				result.details.forEach((detail) => console.error('  ', detail));
-			}
-			process.exit(1);
+	if (result.success) {
+		console.log('✓', result.message);
+		if (result.details && result.details.length > 0) {
+			result.details.forEach((detail) => console.log('  ', detail));
 		}
-	})();
-} else if (args.includes('--verify-hooks')) {
-	// Handle verify-hooks command
-	(async () => {
-		const agentType = (getArgValue('--agent') || 'claude') as AgentType;
-		const result = await verifyAgentHooks(agentType);
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		if (result.details && result.details.length > 0) {
+			result.details.forEach((detail) => console.error('  ', detail));
+		}
+		process.exit(1);
+	}
+} else if (command.cmd === 'verify-hooks') {
+	const result = await verifyAgentHooks(command.agentType as AgentType);
 
-		console.log(`Agent: ${agentType}`);
-		console.log(`Configured: ${result.configured ? 'Yes' : 'No'}`);
-		if (result.hooks.length > 0) {
-			console.log(`Active hooks: ${result.hooks.join(', ')}`);
-		}
-		if (result.missing.length > 0) {
-			console.log(`Missing hooks: ${result.missing.join(', ')}`);
-		}
+	console.log(`Agent: ${command.agentType}`);
+	console.log(`Configured: ${result.configured ? 'Yes' : 'No'}`);
+	if (result.hooks.length > 0) {
+		console.log(`Active hooks: ${result.hooks.join(', ')}`);
+	}
+	if (result.missing.length > 0) {
+		console.log(`Missing hooks: ${result.missing.join(', ')}`);
+	}
 
-		process.exit(result.configured ? 0 : 1);
-	})();
+	process.exit(result.configured ? 0 : 1);
 } else {
+	// command.cmd === 'ui'
 	// Clear terminal to give app full height
 	console.clear();
 	// Choose the initial screen:
@@ -461,16 +351,4 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 	}
 	// Start the interactive UI
 	render(<App initialScreen={initialScreen} />);
-}
-
-/**
- * Helper function to get argument value
- */
-function getArgValue(flag: string): string {
-	const index = args.indexOf(flag);
-	if (index === -1 || index === args.length - 1) {
-		console.error(`Missing value for ${flag}`);
-		process.exit(1);
-	}
-	return args[index + 1];
 }
