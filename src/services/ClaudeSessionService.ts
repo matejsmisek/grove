@@ -244,33 +244,15 @@ launch --title "cmd" bash
 		repositoryPath: string,
 		projectPath?: string
 	): string {
-		// If monorepo, check project-level config first (highest priority)
-		if (projectPath) {
-			const projectConfigPath = path.join(repositoryPath, projectPath, '.grove.json');
-			if (fs.existsSync(projectConfigPath)) {
-				try {
-					const projectConfigContent = fs.readFileSync(projectConfigPath, 'utf-8');
-					const projectConfig = JSON.parse(projectConfigContent);
-					if (
-						projectConfig.claudeSessionTemplates &&
-						projectConfig.claudeSessionTemplates[terminalType]
-					) {
-						return projectConfig.claudeSessionTemplates[terminalType].content;
-					}
-				} catch {
-					// Ignore JSON parse errors
-				}
-			}
-		}
-
-		// Check repository-level config
-		const repoConfig = this.groveConfigService.readGroveRepoConfig(repositoryPath);
-		const repoTemplates = repoConfig.claudeSessionTemplates;
-		if (repoTemplates) {
-			const repoTemplate = repoTemplates[terminalType];
-			if (repoTemplate) {
-				return repoTemplate.content;
-			}
+		// Config precedence (project-level .grove.json > repo-level config) is
+		// owned by GroveConfigService; only the settings/default fallback is local.
+		const configured = this.groveConfigService.getClaudeSessionTemplate(
+			terminalType,
+			repositoryPath,
+			projectPath
+		);
+		if (configured !== undefined) {
+			return configured;
 		}
 
 		// Fall back to settings or default
@@ -284,25 +266,11 @@ launch --title "cmd" bash
 	 * Returns undefined when no non-empty template is configured.
 	 */
 	getPromptTemplateForRepo(repositoryPath: string, projectPath?: string): string | undefined {
-		// Project-level .grove.json takes precedence (monorepos)
-		if (projectPath) {
-			const projectConfigPath = path.join(repositoryPath, projectPath, '.grove.json');
-			if (fs.existsSync(projectConfigPath)) {
-				try {
-					const projectConfig = JSON.parse(fs.readFileSync(projectConfigPath, 'utf-8'));
-					if (typeof projectConfig.promptTemplate === 'string' && projectConfig.promptTemplate.trim()) {
-						return projectConfig.promptTemplate;
-					}
-				} catch {
-					// Ignore JSON parse errors
-				}
-			}
-		}
-
-		// Repository-level config (.grove.json merged with .grove.local.json)
-		const repoConfig = this.groveConfigService.readGroveRepoConfig(repositoryPath);
-		if (typeof repoConfig.promptTemplate === 'string' && repoConfig.promptTemplate.trim()) {
-			return repoConfig.promptTemplate;
+		// Config precedence (project-level .grove.json > repo-level config) is
+		// owned by GroveConfigService; only the settings fallback is local.
+		const configured = this.groveConfigService.getPromptTemplate(repositoryPath, projectPath);
+		if (configured !== undefined) {
+			return configured;
 		}
 
 		// Fall back to settings (workspace/global)

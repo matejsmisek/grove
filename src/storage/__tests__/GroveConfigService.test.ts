@@ -537,4 +537,185 @@ describe('GroveConfigService', () => {
 			expect(result).toEqual({ ideType: 'phpstorm' });
 		});
 	});
+
+	describe('getClaudeSessionTemplate', () => {
+		const writeProjectConfig = (projectPath: string, config: GroveRepoConfig) => {
+			const dir = path.join(repoPath, projectPath);
+			vol.mkdirSync(dir, { recursive: true });
+			vol.writeFileSync(path.join(dir, '.grove.json'), JSON.stringify(config, null, 2));
+		};
+
+		it('returns undefined when no template is configured', () => {
+			expect(service.getClaudeSessionTemplate('konsole', repoPath)).toBeUndefined();
+		});
+
+		it('returns the repo-level template content', () => {
+			const config: GroveRepoConfig = {
+				claudeSessionTemplates: { konsole: { content: 'repo konsole' } },
+			};
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(config, null, 2));
+
+			expect(service.getClaudeSessionTemplate('konsole', repoPath)).toBe('repo konsole');
+		});
+
+		it('returns undefined for a terminal not configured at repo level', () => {
+			const config: GroveRepoConfig = {
+				claudeSessionTemplates: { konsole: { content: 'repo konsole' } },
+			};
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(config, null, 2));
+
+			expect(service.getClaudeSessionTemplate('kitty', repoPath)).toBeUndefined();
+		});
+
+		it('merges repo .grove.local.json over .grove.json', () => {
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ claudeSessionTemplates: { kitty: { content: 'base kitty' } } }, null, 2)
+			);
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.local.json'),
+				JSON.stringify({ claudeSessionTemplates: { kitty: { content: 'local kitty' } } }, null, 2)
+			);
+
+			expect(service.getClaudeSessionTemplate('kitty', repoPath)).toBe('local kitty');
+		});
+
+		it('prefers the project-level .grove.json over repo config', () => {
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ claudeSessionTemplates: { konsole: { content: 'repo konsole' } } }, null, 2)
+			);
+			writeProjectConfig('web', {
+				claudeSessionTemplates: { konsole: { content: 'project konsole' } },
+			});
+
+			expect(service.getClaudeSessionTemplate('konsole', repoPath, 'web')).toBe('project konsole');
+		});
+
+		it('falls back to repo config when the project does not configure that terminal', () => {
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ claudeSessionTemplates: { konsole: { content: 'repo konsole' } } }, null, 2)
+			);
+			writeProjectConfig('web', {
+				claudeSessionTemplates: { kitty: { content: 'project kitty' } },
+			});
+
+			expect(service.getClaudeSessionTemplate('konsole', repoPath, 'web')).toBe('repo konsole');
+		});
+
+		it('ignores the project-level .grove.local.json (only .grove.json participates)', () => {
+			const dir = path.join(repoPath, 'web');
+			vol.mkdirSync(dir, { recursive: true });
+			vol.writeFileSync(
+				path.join(dir, '.grove.local.json'),
+				JSON.stringify({ claudeSessionTemplates: { konsole: { content: 'project local' } } }, null, 2)
+			);
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ claudeSessionTemplates: { konsole: { content: 'repo konsole' } } }, null, 2)
+			);
+
+			expect(service.getClaudeSessionTemplate('konsole', repoPath, 'web')).toBe('repo konsole');
+		});
+
+		it('returns an empty-string template as configured (not undefined)', () => {
+			const config: GroveRepoConfig = {
+				claudeSessionTemplates: { konsole: { content: '' } },
+			};
+			vol.writeFileSync(path.join(repoPath, '.grove.json'), JSON.stringify(config, null, 2));
+
+			expect(service.getClaudeSessionTemplate('konsole', repoPath)).toBe('');
+		});
+
+		it('ignores malformed project JSON and falls back to repo config', () => {
+			const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+			const dir = path.join(repoPath, 'web');
+			vol.mkdirSync(dir, { recursive: true });
+			vol.writeFileSync(path.join(dir, '.grove.json'), '{ not valid json');
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ claudeSessionTemplates: { konsole: { content: 'repo konsole' } } }, null, 2)
+			);
+
+			expect(service.getClaudeSessionTemplate('konsole', repoPath, 'web')).toBe('repo konsole');
+
+			consoleErrorSpy.mockRestore();
+		});
+	});
+
+	describe('getPromptTemplate', () => {
+		const writeProjectConfig = (projectPath: string, config: GroveRepoConfig) => {
+			const dir = path.join(repoPath, projectPath);
+			vol.mkdirSync(dir, { recursive: true });
+			vol.writeFileSync(path.join(dir, '.grove.json'), JSON.stringify(config, null, 2));
+		};
+
+		it('returns undefined when no template is configured', () => {
+			expect(service.getPromptTemplate(repoPath)).toBeUndefined();
+		});
+
+		it('returns the repo-level prompt template', () => {
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ promptTemplate: 'from repo {prompt}' }, null, 2)
+			);
+
+			expect(service.getPromptTemplate(repoPath)).toBe('from repo {prompt}');
+		});
+
+		it('prefers the project-level .grove.json over repo config', () => {
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ promptTemplate: 'from repo' }, null, 2)
+			);
+			writeProjectConfig('web', { promptTemplate: 'from project' });
+
+			expect(service.getPromptTemplate(repoPath, 'web')).toBe('from project');
+		});
+
+		it('falls back to repo config when project has no prompt template', () => {
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ promptTemplate: 'from repo' }, null, 2)
+			);
+			writeProjectConfig('web', { branchNameTemplate: 'x/${GROVE_NAME}' });
+
+			expect(service.getPromptTemplate(repoPath, 'web')).toBe('from repo');
+		});
+
+		it('ignores a whitespace-only project template and falls through to repo', () => {
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ promptTemplate: 'from repo' }, null, 2)
+			);
+			writeProjectConfig('web', { promptTemplate: '   \n  ' });
+
+			expect(service.getPromptTemplate(repoPath, 'web')).toBe('from repo');
+		});
+
+		it('ignores a whitespace-only repo template', () => {
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ promptTemplate: '  \t ' }, null, 2)
+			);
+
+			expect(service.getPromptTemplate(repoPath)).toBeUndefined();
+		});
+
+		it('ignores malformed project JSON and falls back to repo config', () => {
+			const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+			const dir = path.join(repoPath, 'web');
+			vol.mkdirSync(dir, { recursive: true });
+			vol.writeFileSync(path.join(dir, '.grove.json'), 'not json at all');
+			vol.writeFileSync(
+				path.join(repoPath, '.grove.json'),
+				JSON.stringify({ promptTemplate: 'from repo' }, null, 2)
+			);
+
+			expect(service.getPromptTemplate(repoPath, 'web')).toBe('from repo');
+
+			consoleErrorSpy.mockRestore();
+		});
+	});
 });

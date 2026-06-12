@@ -1,7 +1,7 @@
 import { Volume } from 'memfs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createFile, createMockFs } from '../../__tests__/helpers.js';
+import { createMockFs } from '../../__tests__/helpers.js';
 import type { IGroveConfigService } from '../../storage/GroveConfigService.js';
 import type { ISessionsService } from '../../storage/SessionsService.js';
 import type { ISettingsService } from '../../storage/SettingsService.js';
@@ -61,6 +61,8 @@ describe('ClaudeSessionService', () => {
 		mockGroveConfigService = {
 			readGroveRepoConfig: vi.fn().mockReturnValue({}),
 			readMergedConfig: vi.fn(),
+			getClaudeSessionTemplate: vi.fn().mockReturnValue(undefined),
+			getPromptTemplate: vi.fn().mockReturnValue(undefined),
 			validateBranchNameTemplate: vi.fn(),
 			applyBranchNameTemplate: vi.fn(),
 			getBranchNameForRepo: vi.fn(),
@@ -243,11 +245,34 @@ launch --title "my-worktree-lon" bash`;
 	});
 
 	describe('getPromptTemplateForRepo', () => {
-		it('returns undefined when nothing is configured', () => {
+		// Config precedence (project > repo) now lives in GroveConfigService and
+		// is exercised there; these tests cover the delegation and the local
+		// settings fallback that remains in ClaudeSessionService.
+		it('returns undefined when neither config nor settings provide a template', () => {
+			vi.mocked(mockGroveConfigService.getPromptTemplate).mockReturnValue(undefined);
+
 			expect(service.getPromptTemplateForRepo('/repo')).toBeUndefined();
 		});
 
-		it('falls back to the settings template', () => {
+		it('returns the template resolved by GroveConfigService, ahead of settings', () => {
+			vi.mocked(mockGroveConfigService.getPromptTemplate).mockReturnValue('from config');
+			vi.mocked(mockSettingsService.readSettings).mockReturnValue({
+				workingFolder: '/wf',
+				promptTemplate: 'from settings',
+			});
+
+			expect(service.getPromptTemplateForRepo('/repo')).toBe('from config');
+		});
+
+		it('passes the project path through to GroveConfigService', () => {
+			vi.mocked(mockGroveConfigService.getPromptTemplate).mockReturnValue('from project');
+
+			expect(service.getPromptTemplateForRepo('/repo', 'web')).toBe('from project');
+			expect(mockGroveConfigService.getPromptTemplate).toHaveBeenCalledWith('/repo', 'web');
+		});
+
+		it('falls back to the settings template when config has none', () => {
+			vi.mocked(mockGroveConfigService.getPromptTemplate).mockReturnValue(undefined);
 			vi.mocked(mockSettingsService.readSettings).mockReturnValue({
 				workingFolder: '/wf',
 				promptTemplate: 'from settings {prompt}',
@@ -256,41 +281,14 @@ launch --title "my-worktree-lon" bash`;
 			expect(service.getPromptTemplateForRepo('/repo')).toBe('from settings {prompt}');
 		});
 
-		it('prefers the repo config over settings', () => {
+		it('ignores a whitespace-only settings template', () => {
+			vi.mocked(mockGroveConfigService.getPromptTemplate).mockReturnValue(undefined);
 			vi.mocked(mockSettingsService.readSettings).mockReturnValue({
 				workingFolder: '/wf',
-				promptTemplate: 'from settings',
-			});
-			vi.mocked(mockGroveConfigService.readGroveRepoConfig).mockReturnValue({
-				promptTemplate: 'from repo',
-			});
-
-			expect(service.getPromptTemplateForRepo('/repo')).toBe('from repo');
-		});
-
-		it('prefers the project .grove.json over repo and settings', () => {
-			createFile(vol, '/repo/web/.grove.json', JSON.stringify({ promptTemplate: 'from project' }));
-			vi.mocked(mockSettingsService.readSettings).mockReturnValue({
-				workingFolder: '/wf',
-				promptTemplate: 'from settings',
-			});
-			vi.mocked(mockGroveConfigService.readGroveRepoConfig).mockReturnValue({
-				promptTemplate: 'from repo',
-			});
-
-			expect(service.getPromptTemplateForRepo('/repo', 'web')).toBe('from project');
-		});
-
-		it('ignores whitespace-only templates and falls through', () => {
-			vi.mocked(mockGroveConfigService.readGroveRepoConfig).mockReturnValue({
 				promptTemplate: '   \n  ',
 			});
-			vi.mocked(mockSettingsService.readSettings).mockReturnValue({
-				workingFolder: '/wf',
-				promptTemplate: 'from settings',
-			});
 
-			expect(service.getPromptTemplateForRepo('/repo')).toBe('from settings');
+			expect(service.getPromptTemplateForRepo('/repo')).toBeUndefined();
 		});
 	});
 

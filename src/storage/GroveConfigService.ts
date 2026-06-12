@@ -3,6 +3,7 @@ import path from 'path';
 
 import type { MergedGroveConfig, TemplateValidationResult } from '../services/types.js';
 import type {
+	ClaudeTerminalType,
 	FileCopyPatternEntry,
 	GroveIDEConfig,
 	GroveRepoConfig,
@@ -55,6 +56,26 @@ export interface IGroveConfigService {
 	 * For monorepo projects, reads both root and project-level .grove.json files
 	 */
 	readMergedConfig(repositoryPath: string, projectPath?: string): MergedGroveConfig;
+	/**
+	 * Resolve the Claude session template content for a terminal type.
+	 * Precedence: project-level .grove.json > repo-level config
+	 * (.grove.json merged with .grove.local.json). Returns undefined when
+	 * neither configures a template for the terminal, so callers can fall
+	 * back to settings/defaults.
+	 */
+	getClaudeSessionTemplate(
+		terminalType: ClaudeTerminalType,
+		repositoryPath: string,
+		projectPath?: string
+	): string | undefined;
+	/**
+	 * Resolve the configured prompt template for a repository selection.
+	 * Precedence: project-level .grove.json > repo-level config
+	 * (.grove.json merged with .grove.local.json). Only non-empty (trimmed)
+	 * templates are returned; returns undefined otherwise so callers can fall
+	 * back to settings.
+	 */
+	getPromptTemplate(repositoryPath: string, projectPath?: string): string | undefined;
 	/** Validate branch name template contains ${GROVE_NAME} */
 	validateBranchNameTemplate(template: string): boolean;
 	/** Apply branch name template by replacing ${GROVE_NAME} */
@@ -292,6 +313,68 @@ export class GroveConfigService implements IGroveConfigService {
 		}
 
 		return mergedConfig;
+	}
+
+	/**
+	 * Resolve the Claude session template content for a terminal type.
+	 * Precedence: project-level .grove.json > repo-level config (.grove.json
+	 * merged with .grove.local.json). Reuses the existing config readers so
+	 * there is a single source of truth for config precedence; returns
+	 * undefined when neither level configures a template for the terminal.
+	 * @param terminalType - Terminal whose template to resolve
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	getClaudeSessionTemplate(
+		terminalType: ClaudeTerminalType,
+		repositoryPath: string,
+		projectPath?: string
+	): string | undefined {
+		// Project-level .grove.json takes precedence (monorepos). Only the
+		// project's own .grove.json participates here (not .grove.local.json).
+		if (projectPath) {
+			const projectConfig = this.readGroveConfigOnly(repositoryPath, projectPath);
+			const projectTemplate = projectConfig.claudeSessionTemplates?.[terminalType];
+			if (projectTemplate) {
+				return projectTemplate.content;
+			}
+		}
+
+		// Repository-level config (.grove.json merged with .grove.local.json)
+		const repoTemplate =
+			this.readGroveRepoConfig(repositoryPath).claudeSessionTemplates?.[terminalType];
+		if (repoTemplate) {
+			return repoTemplate.content;
+		}
+
+		return undefined;
+	}
+
+	/**
+	 * Resolve the configured prompt template for a repository selection.
+	 * Precedence: project-level .grove.json > repo-level config (.grove.json
+	 * merged with .grove.local.json). Only non-empty (trimmed) templates are
+	 * returned; returns undefined otherwise.
+	 * @param repositoryPath - Absolute path to the repository root
+	 * @param projectPath - Optional relative path to project folder (for monorepos)
+	 */
+	getPromptTemplate(repositoryPath: string, projectPath?: string): string | undefined {
+		// Project-level .grove.json takes precedence (monorepos). Only the
+		// project's own .grove.json participates here (not .grove.local.json).
+		if (projectPath) {
+			const projectTemplate = this.readGroveConfigOnly(repositoryPath, projectPath).promptTemplate;
+			if (typeof projectTemplate === 'string' && projectTemplate.trim()) {
+				return projectTemplate;
+			}
+		}
+
+		// Repository-level config (.grove.json merged with .grove.local.json)
+		const repoTemplate = this.readGroveRepoConfig(repositoryPath).promptTemplate;
+		if (typeof repoTemplate === 'string' && repoTemplate.trim()) {
+			return repoTemplate;
+		}
+
+		return undefined;
 	}
 
 	/**
