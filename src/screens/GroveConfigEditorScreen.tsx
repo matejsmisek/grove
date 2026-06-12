@@ -552,6 +552,67 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 		{ isActive: viewMode === 'editListItem' && editingListIndex !== -1 }
 	);
 
+	// Derived state for the 'editListItem' view and its key handler below. These
+	// are only meaningful while that view is active; otherwise displayItems is
+	// empty and unused.
+	const listField =
+		viewMode === 'editListItem' && editingField
+			? CONFIG_FIELDS.find((f) => f.key === editingField)
+			: undefined;
+	const isPatternField = editingField === 'fileCopyPatterns';
+	const rawListItems =
+		viewMode === 'editListItem' && editingField
+			? ((config[editingField] as (string | FileCopyPatternEntry)[] | undefined) ?? [])
+			: [];
+	const displayItems = isPatternField
+		? (rawListItems as FileCopyPatternEntry[]).map(patternEntryToDisplayString)
+		: (rawListItems as string[]);
+	const buildNewConfigItems = (newDisplayItems: string[]) =>
+		isPatternField ? newDisplayItems.map(displayStringToPatternEntry) : newDisplayItems;
+
+	// Navigate/edit/delete items in the list editor (was the ListEditControls
+	// child component). Active only while browsing the list (editingListIndex
+	// === -1); typing into an item is handled by the TextInput + the ESC handler
+	// above.
+	useInput(
+		(input, key) => {
+			if (editingField === null) return;
+			if (key.upArrow || key.downArrow) {
+				const delta = key.upArrow ? -1 : 1;
+				setSelectedIndex((prev) => {
+					const max = displayItems.length;
+					const next = prev + delta;
+					if (next < 0) return max;
+					if (next > max) return 0;
+					return next;
+				});
+			} else if (key.return) {
+				if (selectedIndex < displayItems.length) {
+					setTempValue(displayItems[selectedIndex]);
+					setEditingListIndex(selectedIndex);
+				} else {
+					setTempValue('');
+					setEditingListIndex(displayItems.length);
+				}
+			} else if ((input === 'd' || key.delete) && selectedIndex < displayItems.length) {
+				const newDisplayItems = displayItems.filter((_, i) => i !== selectedIndex);
+				const newConfig = {
+					...config,
+					[editingField]: newDisplayItems.length > 0 ? buildNewConfigItems(newDisplayItems) : undefined,
+				};
+				setConfig(newConfig);
+				saveConfig(newConfig);
+				if (selectedIndex >= newDisplayItems.length && selectedIndex > 0) {
+					setSelectedIndex(selectedIndex - 1);
+				}
+			} else if (key.escape) {
+				setEditingField(null);
+				setViewMode('editConfig');
+			}
+		},
+		{ isActive: viewMode === 'editListItem' && editingListIndex === -1 && editingField !== null }
+	);
+
 	// Start editing a field
 	const startEditField = (field: ConfigField) => {
 		setEditingField(field.key);
@@ -926,30 +987,17 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 
 	// List item editing
 	if (viewMode === 'editListItem' && editingField) {
-		const field = CONFIG_FIELDS.find((f) => f.key === editingField);
-		const isPatternField = editingField === 'fileCopyPatterns';
-		const rawItems = (config[editingField] as (string | FileCopyPatternEntry)[] | undefined) || [];
-		// Convert items to display strings for the UI
-		const displayItems = isPatternField
-			? (rawItems as FileCopyPatternEntry[]).map(patternEntryToDisplayString)
-			: (rawItems as string[]);
-
-		// Build new config items from display items with a modification
-		const buildNewConfigItems = (newDisplayItems: string[]) => {
-			return isPatternField ? newDisplayItems.map(displayStringToPatternEntry) : newDisplayItems;
-		};
-
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
 					<Text bold color="yellow">
-						Edit {field?.label}
+						Edit {listField?.label}
 					</Text>
 				</Box>
 
-				{field?.hint && (
+				{listField?.hint && (
 					<Box marginBottom={1}>
-						<Text dimColor>{field.hint}</Text>
+						<Text dimColor>{listField.hint}</Text>
 					</Box>
 				)}
 
@@ -1025,57 +1073,19 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					)}
 				</Box>
 
-				<ListEditControls
-					items={displayItems}
-					selectedIndex={selectedIndex}
-					editingListIndex={editingListIndex}
-					onNavigate={(delta) => {
-						if (editingListIndex === -1) {
-							setSelectedIndex((prev) => {
-								const max = displayItems.length;
-								const next = prev + delta;
-								if (next < 0) return max;
-								if (next > max) return 0;
-								return next;
-							});
-						}
-					}}
-					onEdit={() => {
-						if (editingListIndex === -1) {
-							if (selectedIndex < displayItems.length) {
-								setTempValue(displayItems[selectedIndex]);
-								setEditingListIndex(selectedIndex);
-							} else {
-								setTempValue('');
-								setEditingListIndex(displayItems.length);
-							}
-						}
-					}}
-					onDelete={() => {
-						if (editingListIndex === -1 && selectedIndex < displayItems.length) {
-							const newDisplayItems = displayItems.filter((_, i) => i !== selectedIndex);
-							const newConfig = {
-								...config,
-								[editingField]:
-									newDisplayItems.length > 0 ? buildNewConfigItems(newDisplayItems) : undefined,
-							};
-							setConfig(newConfig);
-							saveConfig(newConfig);
-							if (selectedIndex >= newDisplayItems.length && selectedIndex > 0) {
-								setSelectedIndex(selectedIndex - 1);
-							}
-						}
-					}}
-					onCancel={() => {
-						if (editingListIndex !== -1) {
-							setEditingListIndex(-1);
-							setTempValue('');
-						} else {
-							setEditingField(null);
-							setViewMode('editConfig');
-						}
-					}}
-				/>
+				<Box marginTop={1} flexDirection="column">
+					<Text dimColor>
+						<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Edit/Add
+					</Text>
+					{selectedIndex < displayItems.length && (
+						<Text dimColor>
+							<Text color="cyan">d</Text> Delete item
+						</Text>
+					)}
+					<Text dimColor>
+						Press <Text color="cyan">ESC</Text> to go back
+					</Text>
+				</Box>
 			</Box>
 		);
 	}
@@ -1189,60 +1199,6 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 					Press <Text color="cyan">ESC</Text> to go back
 				</Text>
 			</Box>
-		</Box>
-	);
-}
-
-// List edit controls component
-interface ListEditControlsProps {
-	items: string[];
-	selectedIndex: number;
-	editingListIndex: number;
-	onNavigate: (delta: number) => void;
-	onEdit: () => void;
-	onDelete: () => void;
-	onCancel: () => void;
-}
-
-function ListEditControls({
-	items,
-	selectedIndex,
-	editingListIndex,
-	onNavigate,
-	onEdit,
-	onDelete,
-	onCancel,
-}: ListEditControlsProps) {
-	useInput(
-		(input, key) => {
-			if (key.upArrow) {
-				onNavigate(-1);
-			} else if (key.downArrow) {
-				onNavigate(1);
-			} else if (key.return) {
-				onEdit();
-			} else if ((input === 'd' || key.delete) && selectedIndex < items.length) {
-				onDelete();
-			} else if (key.escape) {
-				onCancel();
-			}
-		},
-		{ isActive: editingListIndex === -1 }
-	);
-
-	return (
-		<Box marginTop={1} flexDirection="column">
-			<Text dimColor>
-				<Text color="cyan">Up/Down</Text> Navigate - <Text color="cyan">Enter</Text> Edit/Add
-			</Text>
-			{selectedIndex < items.length && (
-				<Text dimColor>
-					<Text color="cyan">d</Text> Delete item
-				</Text>
-			)}
-			<Text dimColor>
-				Press <Text color="cyan">ESC</Text> to go back
-			</Text>
 		</Box>
 	);
 }

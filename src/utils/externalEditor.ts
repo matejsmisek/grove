@@ -30,9 +30,11 @@ export function openExternalEditor(
 ): string | null {
 	const { extension = '.txt', prefix = 'grove-edit-', cursor } = options;
 
-	// Create temp file
-	const tempDir = os.tmpdir();
-	const tempFile = path.join(tempDir, `${prefix}${Date.now()}${extension}`);
+	// Create a unique temp directory so concurrent edits never collide on a
+	// shared file name.
+	const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'grove-'));
+	const baseName = prefix.replace(/-+$/, '') || 'grove-edit';
+	const tempFile = path.join(tempDir, `${baseName}${extension}`);
 
 	try {
 		// Write content to temp file
@@ -62,11 +64,9 @@ export function openExternalEditor(
 		console.error('Error opening editor:', error);
 		return null;
 	} finally {
-		// Clean up temp file
+		// Clean up the temp directory (and the file within it)
 		try {
-			if (fs.existsSync(tempFile)) {
-				fs.unlinkSync(tempFile);
-			}
+			fs.rmSync(tempDir, { recursive: true, force: true });
 		} catch {
 			// Ignore cleanup errors
 		}

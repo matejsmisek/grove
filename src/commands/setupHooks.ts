@@ -35,8 +35,12 @@ interface HookConfig {
  */
 function getGroveBinary(): string {
 	// In production, use the installed path
-	// In development, use the current process
-	const isDevMode = process.argv[1]?.includes('tsx') || process.argv[1]?.includes('node');
+	// In development, use the current process. Prefer an explicit GROVE_DEV=1
+	// flag; fall back to sniffing argv[1] for the tsx/node runner.
+	const isDevMode =
+		process.env.GROVE_DEV === '1' ||
+		process.argv[1]?.includes('tsx') ||
+		process.argv[1]?.includes('node');
 
 	if (isDevMode) {
 		// Development: use node with source file

@@ -58,6 +58,17 @@ function logHookEvent(event: string, data: Record<string, unknown>): void {
 		const timestamp = new Date().toISOString();
 		const logEntry = `[${timestamp}] ${event}: ${JSON.stringify(data)}\n`;
 
+		// Keep the log bounded: once it grows past 1 MB, trim it to the most
+		// recent ~200 entries before appending so it never grows without limit.
+		try {
+			if (fs.statSync(logFile).size > 1024 * 1024) {
+				const recent = fs.readFileSync(logFile, 'utf-8').split('\n').slice(-200).join('\n');
+				fs.writeFileSync(logFile, recent);
+			}
+		} catch {
+			// No existing log (or stat/read failed) - nothing to trim.
+		}
+
 		fs.appendFileSync(logFile, logEntry);
 	} catch {
 		// Silent fail - don't block hook execution
