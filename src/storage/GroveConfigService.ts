@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 import type { MergedGroveConfig, TemplateValidationResult } from '../services/types.js';
+import { invalidateJsonFileCache, readJsonFileCached } from './jsonFileCache.js';
 import type {
 	ClaudeTerminalType,
 	FileCopyPatternEntry,
@@ -136,23 +137,20 @@ export class GroveConfigService implements IGroveConfigService {
 
 		let config: GroveRepoConfig = {};
 
-		// Read .grove.json if it exists
-		if (fs.existsSync(groveConfigPath)) {
-			try {
-				const data = fs.readFileSync(groveConfigPath, 'utf-8');
-				const parsed = JSON.parse(data) as GroveRepoConfig;
+		// Read .grove.json if it exists (mtime-validated cache)
+		try {
+			const parsed = readJsonFileCached<GroveRepoConfig>(groveConfigPath);
+			if (parsed) {
 				config = { ...parsed };
-			} catch (error) {
-				console.error(`Error reading .grove.json from ${repositoryPath}:`, error);
 			}
+		} catch (error) {
+			console.error(`Error reading .grove.json from ${repositoryPath}:`, error);
 		}
 
 		// Read .grove.local.json if it exists and merge (overriding)
-		if (fs.existsSync(groveLocalConfigPath)) {
-			try {
-				const data = fs.readFileSync(groveLocalConfigPath, 'utf-8');
-				const parsed = JSON.parse(data) as GroveRepoConfig;
-
+		try {
+			const parsed = readJsonFileCached<GroveRepoConfig>(groveLocalConfigPath);
+			if (parsed) {
 				// Merge fileCopyPatterns arrays (don't override)
 				if (parsed.fileCopyPatterns) {
 					const basePatterns = config.fileCopyPatterns || [];
@@ -170,9 +168,9 @@ export class GroveConfigService implements IGroveConfigService {
 					// Normal override for other fields
 					config = { ...config, ...parsed };
 				}
-			} catch (error) {
-				console.error(`Error reading .grove.local.json from ${repositoryPath}:`, error);
 			}
+		} catch (error) {
+			console.error(`Error reading .grove.local.json from ${repositoryPath}:`, error);
 		}
 
 		return config;
@@ -258,22 +256,20 @@ export class GroveConfigService implements IGroveConfigService {
 
 		let projectConfig: GroveRepoConfig = {};
 
-		// Read project .grove.json if it exists
-		if (fs.existsSync(projectConfigPath)) {
-			try {
-				const data = fs.readFileSync(projectConfigPath, 'utf-8');
-				projectConfig = JSON.parse(data) as GroveRepoConfig;
-			} catch (error) {
-				console.error(`Error reading .grove.json from ${projectPath}:`, error);
+		// Read project .grove.json if it exists (mtime-validated cache)
+		try {
+			const parsed = readJsonFileCached<GroveRepoConfig>(projectConfigPath);
+			if (parsed) {
+				projectConfig = parsed;
 			}
+		} catch (error) {
+			console.error(`Error reading .grove.json from ${projectPath}:`, error);
 		}
 
 		// Read project .grove.local.json if it exists (overrides project .grove.json)
-		if (fs.existsSync(projectLocalConfigPath)) {
-			try {
-				const data = fs.readFileSync(projectLocalConfigPath, 'utf-8');
-				const localConfig = JSON.parse(data) as GroveRepoConfig;
-
+		try {
+			const localConfig = readJsonFileCached<GroveRepoConfig>(projectLocalConfigPath);
+			if (localConfig) {
 				// Merge project local config, with arrays being merged for fileCopyPatterns
 				if (localConfig.fileCopyPatterns) {
 					const basePatterns = projectConfig.fileCopyPatterns || [];
@@ -286,9 +282,9 @@ export class GroveConfigService implements IGroveConfigService {
 				} else {
 					projectConfig = { ...projectConfig, ...localConfig };
 				}
-			} catch (error) {
-				console.error(`Error reading .grove.local.json from ${projectPath}:`, error);
 			}
+		} catch (error) {
+			console.error(`Error reading .grove.local.json from ${projectPath}:`, error);
 		}
 
 		// Apply project config overrides
@@ -473,6 +469,7 @@ export class GroveConfigService implements IGroveConfigService {
 
 		// Write config with pretty formatting
 		fs.writeFileSync(configPath, JSON.stringify(config, null, '\t'), 'utf-8');
+		invalidateJsonFileCache(configPath);
 	}
 
 	/**
@@ -496,6 +493,7 @@ export class GroveConfigService implements IGroveConfigService {
 
 		// Write config with pretty formatting
 		fs.writeFileSync(configPath, JSON.stringify(config, null, '\t'), 'utf-8');
+		invalidateJsonFileCache(configPath);
 	}
 
 	/**
@@ -508,13 +506,8 @@ export class GroveConfigService implements IGroveConfigService {
 		const configDir = projectPath ? path.join(repositoryPath, projectPath) : repositoryPath;
 		const configPath = path.join(configDir, '.grove.json');
 
-		if (!fs.existsSync(configPath)) {
-			return {};
-		}
-
 		try {
-			const data = fs.readFileSync(configPath, 'utf-8');
-			return JSON.parse(data) as GroveRepoConfig;
+			return readJsonFileCached<GroveRepoConfig>(configPath) ?? {};
 		} catch (error) {
 			console.error(`Error reading .grove.json from ${configDir}:`, error);
 			return {};
@@ -531,13 +524,8 @@ export class GroveConfigService implements IGroveConfigService {
 		const configDir = projectPath ? path.join(repositoryPath, projectPath) : repositoryPath;
 		const configPath = path.join(configDir, '.grove.local.json');
 
-		if (!fs.existsSync(configPath)) {
-			return {};
-		}
-
 		try {
-			const data = fs.readFileSync(configPath, 'utf-8');
-			return JSON.parse(data) as GroveRepoConfig;
+			return readJsonFileCached<GroveRepoConfig>(configPath) ?? {};
 		} catch (error) {
 			console.error(`Error reading .grove.local.json from ${configDir}:`, error);
 			return {};

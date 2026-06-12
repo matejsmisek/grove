@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockFs, setupMockHomeDir } from '../../__tests__/helpers.js';
 import { JsonStore } from '../JsonStore.js';
+import { clearJsonFileCache } from '../jsonFileCache.js';
 
 // Mock filesystem and os modules
 let vol: Volume;
@@ -57,6 +58,63 @@ describe('JsonStore', () => {
 
 	afterEach(() => {
 		vi.clearAllMocks();
+		clearJsonFileCache();
+	});
+
+	describe('cacheByMtime', () => {
+		it('reuses the parsed value while the file is unchanged', () => {
+			const store = new JsonStore<TestData>(
+				() => mockFilePath,
+				() => mockGroveFolder,
+				getDefaults,
+				{
+					label: 'test',
+					cacheByMtime: true,
+				}
+			);
+			store.write({ items: ['a'], count: 1 });
+
+			// Populate the cache, then ensure a second read does not touch the disk.
+			expect(store.read()).toEqual({ items: ['a'], count: 1 });
+			const spy = vi.spyOn(vol, 'readFileSync');
+			expect(store.read()).toEqual({ items: ['a'], count: 1 });
+			expect(spy).not.toHaveBeenCalled();
+		});
+
+		it('invalidates the cache on write so reads see fresh data', () => {
+			const store = new JsonStore<TestData>(
+				() => mockFilePath,
+				() => mockGroveFolder,
+				getDefaults,
+				{
+					label: 'test',
+					cacheByMtime: true,
+				}
+			);
+			store.write({ items: ['a'], count: 1 });
+			expect(store.read()).toEqual({ items: ['a'], count: 1 });
+
+			store.write({ items: ['a', 'b'], count: 2 });
+			expect(store.read()).toEqual({ items: ['a', 'b'], count: 2 });
+		});
+
+		it('returns a mutation-safe copy', () => {
+			const store = new JsonStore<TestData>(
+				() => mockFilePath,
+				() => mockGroveFolder,
+				getDefaults,
+				{
+					label: 'test',
+					cacheByMtime: true,
+				}
+			);
+			store.write({ items: ['a'], count: 1 });
+
+			const first = store.read();
+			first.items.push('mutated');
+
+			expect(store.read()).toEqual({ items: ['a'], count: 1 });
+		});
 	});
 
 	describe('read', () => {

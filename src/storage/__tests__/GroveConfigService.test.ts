@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockFs } from '../../__tests__/helpers.js';
 import { GroveConfigService, getPatternString } from '../GroveConfigService.js';
+import { clearJsonFileCache } from '../jsonFileCache.js';
 import type { GroveRepoConfig } from '../types.js';
 
 // Mock filesystem
@@ -35,6 +36,9 @@ describe('GroveConfigService', () => {
 		// Create fresh in-memory filesystem
 		const mockFs = createMockFs();
 		vol = mockFs.vol;
+
+		// Reset the process-wide mtime cache so cases don't leak parsed data.
+		clearJsonFileCache();
 
 		service = new GroveConfigService();
 		repoPath = '/test-repo';
@@ -197,6 +201,16 @@ describe('GroveConfigService', () => {
 			expect(consoleErrorSpy).toHaveBeenCalled();
 
 			consoleErrorSpy.mockRestore();
+		});
+
+		it('reflects changes written via writeGroveConfig (cache invalidation)', () => {
+			service.writeGroveConfig(repoPath, { branchNameTemplate: 'first/${GROVE_NAME}' });
+			// Populate the cache.
+			expect(service.readGroveRepoConfig(repoPath).branchNameTemplate).toBe('first/${GROVE_NAME}');
+
+			// Re-write and confirm the next read is not served stale from cache.
+			service.writeGroveConfig(repoPath, { branchNameTemplate: 'second/${GROVE_NAME}' });
+			expect(service.readGroveRepoConfig(repoPath).branchNameTemplate).toBe('second/${GROVE_NAME}');
 		});
 	});
 

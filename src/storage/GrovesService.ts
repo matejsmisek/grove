@@ -3,6 +3,7 @@ import path from 'path';
 
 import { JsonStore } from './JsonStore.js';
 import type { ISettingsService } from './SettingsService.js';
+import { invalidateJsonFileCache, readJsonFileCached } from './jsonFileCache.js';
 import type { GroveMetadata, GroveReference, GrovesIndex, Worktree } from './types.js';
 
 /**
@@ -77,7 +78,7 @@ export class GrovesService implements IGrovesService {
 			() => this.settingsService.getStorageConfig().grovesIndexPath,
 			() => this.settingsService.getStorageConfig().groveFolder,
 			() => ({ groves: [] }),
-			{ label: 'groves index' }
+			{ label: 'groves index', cacheByMtime: true }
 		);
 	}
 
@@ -155,14 +156,9 @@ export class GrovesService implements IGrovesService {
 		const metadataPath = path.join(grovePath, 'grove.json');
 
 		try {
-			if (!fs.existsSync(metadataPath)) {
-				return null;
-			}
-
-			const data = fs.readFileSync(metadataPath, 'utf-8');
-			const metadata = JSON.parse(data) as GroveMetadata;
-
-			return metadata;
+			// mtime-validated cache: skips the blocking read + JSON.parse when the
+			// file is unchanged. Returns undefined when the file doesn't exist.
+			return readJsonFileCached<GroveMetadata>(metadataPath) ?? null;
 		} catch (error) {
 			console.error('Error reading grove metadata:', error);
 			return null;
@@ -181,6 +177,9 @@ export class GrovesService implements IGrovesService {
 
 			const jsonData = JSON.stringify(metadata, null, '\t');
 			fs.writeFileSync(metadataPath, jsonData, 'utf-8');
+			// Invalidate so the next read re-parses fresh content (guards against a
+			// same-tick mtime collision serving stale metadata).
+			invalidateJsonFileCache(metadataPath);
 
 			// Also update the groves index
 			this.updateGroveInIndex(metadata.id, {

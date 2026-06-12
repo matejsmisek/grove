@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockFs, setupMockHomeDir } from '../../__tests__/helpers.js';
 import { GrovesService, readGrovesIndexAt } from '../GrovesService.js';
 import { SettingsService } from '../SettingsService.js';
+import { clearJsonFileCache } from '../jsonFileCache.js';
 import type { GroveMetadata, GroveReference } from '../types.js';
 
 // Mock filesystem and os modules
@@ -44,6 +45,9 @@ describe('GrovesService', () => {
 		// Create fresh in-memory filesystem
 		const mockFs = createMockFs();
 		vol = mockFs.vol;
+
+		// Reset the process-wide mtime cache so cases don't leak parsed data.
+		clearJsonFileCache();
 
 		// Setup mock home directory
 		mockHomeDir = '/home/testuser';
@@ -253,6 +257,52 @@ describe('GrovesService', () => {
 			expect(consoleErrorSpy).toHaveBeenCalled();
 
 			consoleErrorSpy.mockRestore();
+		});
+
+		it('reflects changes written via writeGroveMetadata (cache invalidation)', () => {
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
+
+			const base: GroveMetadata = {
+				id: 'test-grove',
+				name: 'First',
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+				worktrees: [],
+			};
+
+			service.writeGroveMetadata(grovePath, base);
+			// Populate the cache.
+			expect(service.readGroveMetadata(grovePath)?.name).toBe('First');
+
+			// Re-write and confirm the next read is not served stale from cache.
+			service.writeGroveMetadata(grovePath, { ...base, name: 'Second' });
+			expect(service.readGroveMetadata(grovePath)?.name).toBe('Second');
+		});
+
+		it('returns a mutation-safe copy that cannot corrupt the cache', () => {
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
+
+			service.writeGroveMetadata(grovePath, {
+				id: 'test-grove',
+				name: 'Test Grove',
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+				worktrees: [],
+			});
+
+			const first = service.readGroveMetadata(grovePath)!;
+			first.worktrees.push({
+				repositoryName: 'repo',
+				repositoryPath: '/repo',
+				worktreePath: '/wt',
+				branch: 'main',
+			});
+
+			// A fresh read (file unchanged) must not see the local mutation.
+			const second = service.readGroveMetadata(grovePath)!;
+			expect(second.worktrees).toHaveLength(0);
 		});
 	});
 
