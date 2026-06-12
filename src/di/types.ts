@@ -66,14 +66,4 @@ export interface IMutableContainer extends IContainer {
 	 * Register a singleton service factory
 	 */
 	registerSingleton<T>(token: ServiceToken<T>, factory: ServiceFactory<T>): void;
-
-	/**
-	 * Register a transient service factory (new instance each time)
-	 */
-	registerTransient<T>(token: ServiceToken<T>, factory: ServiceFactory<T>): void;
-
-	/**
-	 * Register a constant value
-	 */
-	registerInstance<T>(token: ServiceToken<T>, instance: T): void;
 }

@@ -90,7 +90,7 @@ describe('groveStatus', () => {
 		grovesService = new GrovesService(settingsService);
 
 		resetContainer();
-		getContainer().registerInstance(GrovesServiceToken, grovesService);
+		getContainer().registerSingleton(GrovesServiceToken, () => grovesService);
 
 		cwdSpy = vi.spyOn(process, 'cwd');
 	});

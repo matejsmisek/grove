@@ -35,6 +35,7 @@ import {
 import {
 	ClaudeSessionServiceToken,
 	GitServiceToken,
+	GroveConfigServiceToken,
 	GroveServiceToken,
 	GrovesServiceToken,
 	PluginRegistryToken,
@@ -42,7 +43,7 @@ import {
 	WorkspaceServiceToken,
 } from '../services/tokens.js';
 import type { BranchUpstreamStatus, FileChangeStats } from '../services/types.js';
-import { GroveConfigService } from '../storage/index.js';
+import type { IGroveConfigService } from '../storage/GroveConfigService.js';
 import type { Settings, Worktree, WorktreeReference } from '../storage/types.js';
 import {
 	type ClaudeAgentInfo,
@@ -398,9 +399,6 @@ interface GroveDetailScreenProps {
 	focusWorktreeName?: string;
 }
 
-// Singleton instance for GroveConfigService
-const groveConfigService = new GroveConfigService();
-
 /**
  * Get the path to open for a worktree (including project path for monorepos)
  */
@@ -414,7 +412,12 @@ function getWorktreePath(worktree: Worktree): string {
 /**
  * Get the effective IDE config for a worktree
  */
-function getIDEConfigForWorktree(worktree: Worktree, settings: Settings, targetPath: string) {
+function getIDEConfigForWorktree(
+	groveConfigService: IGroveConfigService,
+	worktree: Worktree,
+	settings: Settings,
+	targetPath: string
+) {
 	// Check if the worktree's repository has an IDE config in .grove.json
 	const repoIDEConfig = groveConfigService.getIDEConfigForSelection(
 		worktree.repositoryPath,
@@ -451,6 +454,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	const { goBack, navigate } = useNavigation();
 	const gitService = useService(GitServiceToken);
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
+	const groveConfigService = useService(GroveConfigServiceToken);
 	const grovesService = useService(GrovesServiceToken);
 	const groveService = useService(GroveServiceToken);
 	const settingsService = useService(SettingsServiceToken);
@@ -872,7 +876,12 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		const targetPath = getWorktreePath(selectedWorktree);
 
 		// Get the IDE config for this worktree
-		const { config, resolvedType } = getIDEConfigForWorktree(selectedWorktree, settings, targetPath);
+		const { config, resolvedType } = getIDEConfigForWorktree(
+			groveConfigService,
+			selectedWorktree,
+			settings,
+			targetPath
+		);
 
 		if (!config) {
 			setShowActions(false);

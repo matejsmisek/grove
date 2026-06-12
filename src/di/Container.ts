@@ -40,24 +40,6 @@ export class Container implements IMutableContainer {
 	}
 
 	/**
-	 * Register a transient service (new instance each resolution)
-	 */
-	registerTransient<T>(token: ServiceToken<T>, factory: ServiceFactory<T>): void {
-		this.register({ token, factory, singleton: false });
-	}
-
-	/**
-	 * Register a pre-created instance
-	 */
-	registerInstance<T>(token: ServiceToken<T>, instance: T): void {
-		this.registrations.set(token.id, {
-			factory: () => instance,
-			singleton: true,
-			instance,
-		});
-	}
-
-	/**
 	 * Check if a service is registered
 	 */
 	has<T>(token: ServiceToken<T>): boolean {
@@ -108,19 +90,6 @@ export class Container implements IMutableContainer {
 	clear(): void {
 		this.registrations.clear();
 		this.resolving.clear();
-	}
-
-	/**
-	 * Create a child container that inherits from this container
-	 * Child can override registrations without affecting parent
-	 */
-	createChild(): Container {
-		const child = new Container();
-		// Copy registrations (shallow - singletons still shared)
-		for (const [key, value] of this.registrations) {
-			child.registrations.set(key, { ...value });
-		}
-		return child;
 	}
 }
 
