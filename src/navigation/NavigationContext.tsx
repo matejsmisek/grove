@@ -14,7 +14,7 @@ export function NavigationProvider({ children, initialScreen = 'home' }: Navigat
 	const [current, setCurrent] = useState<NavigationState>({
 		screen: initialScreen,
 		params: {} as Routes[typeof initialScreen],
-	});
+	} as NavigationState);
 	const [history, setHistory] = useState<NavigationState[]>([]);
 
 	// Mirror `current` in a ref so navigate/replace can read the freshest state
@@ -29,14 +29,14 @@ export function NavigationProvider({ children, initialScreen = 'home' }: Navigat
 		// flush time, by which point currentRef may already point at `next`.
 		const from = currentRef.current;
 		setHistory((prev) => [...prev, from]);
-		const next = { screen, params };
+		const next = { screen, params } as NavigationState;
 		currentRef.current = next;
 		setCurrent(next);
 	}, []);
 
 	const replace = useCallback(<T extends keyof Routes>(screen: T, params: Routes[T]) => {
 		// Replace current screen without modifying history
-		const next = { screen, params };
+		const next = { screen, params } as NavigationState;
 		currentRef.current = next;
 		setCurrent(next);
 	}, []);

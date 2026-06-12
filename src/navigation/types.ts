@@ -32,8 +32,15 @@ export type Routes = {
 	groveConfigEditor: { repositoryPath?: string };
 };
 
-// Navigation state for current screen and params
-export type NavigationState<T extends keyof Routes = keyof Routes> = {
+// Navigation state for current screen and params.
+// Discriminated union over Routes so that narrowing on `screen` narrows `params`.
+export type NavigationState = {
+	[K in keyof Routes]: { screen: K; params: Routes[K] };
+}[keyof Routes];
+
+// Parameterized helper retained for the generic navigate/replace signatures,
+// where the screen key is only known via a type parameter.
+export type NavigationStateFor<T extends keyof Routes = keyof Routes> = {
 	screen: T;
 	params: Routes[T];
 };

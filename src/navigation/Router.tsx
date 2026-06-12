@@ -31,6 +31,7 @@ import { SettingsScreen } from '../screens/SettingsScreen.js';
 import { SetupWizardScreen } from '../screens/SetupWizardScreen.js';
 import { WorkingFolderScreen } from '../screens/WorkingFolderScreen.js';
 import { WorkspaceSwitcherScreen } from '../screens/WorkspaceSwitcherScreen.js';
+import type { NavigationState } from './types.js';
 import { useNavigation } from './useNavigation.js';
 
 /**
@@ -42,21 +43,9 @@ export function Router() {
 
 	switch (current.screen) {
 		case 'home':
-			return (
-				<HomeScreen
-					selectedGroveId={
-						'selectedGroveId' in current.params ? current.params.selectedGroveId : undefined
-					}
-				/>
-			);
+			return <HomeScreen selectedGroveId={current.params.selectedGroveId} />;
 		case 'globalHome':
-			return (
-				<WorkspaceSwitcherScreen
-					selectedLocationPath={
-						'selectedLocationPath' in current.params ? current.params.selectedLocationPath : undefined
-					}
-				/>
-			);
+			return <WorkspaceSwitcherScreen selectedLocationPath={current.params.selectedLocationPath} />;
 		case 'setupWizard':
 			return <SetupWizardScreen />;
 		case 'direnvTrust':
@@ -68,70 +57,50 @@ export function Router() {
 		case 'createGrove':
 			return <CreateGroveScreen />;
 		case 'groveDetail':
-			// Type narrowing: we know params is { groveId: string; focusWorktreeName?: string } here
 			return (
 				<GroveDetailScreen
-					groveId={'groveId' in current.params ? current.params.groveId : ''}
-					focusWorktreeName={
-						'focusWorktreeName' in current.params ? current.params.focusWorktreeName : undefined
-					}
+					groveId={current.params.groveId}
+					focusWorktreeName={current.params.focusWorktreeName}
 				/>
 			);
 		case 'closeGrove':
-			// Type narrowing: we know params is { groveId: string } here
-			return <CloseGroveScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
+			return <CloseGroveScreen groveId={current.params.groveId} />;
 		case 'closeWorktree':
-			// Type narrowing: we know params is { groveId: string; worktreePath: string } here
 			return (
 				<CloseWorktreeScreen
-					groveId={'groveId' in current.params ? current.params.groveId : ''}
-					worktreePath={'worktreePath' in current.params ? (current.params.worktreePath as string) : ''}
+					groveId={current.params.groveId}
+					worktreePath={current.params.worktreePath}
 				/>
 			);
 		case 'closeMergedWorktrees':
-			// Type narrowing: we know params is { groveId: string } here
-			return (
-				<CloseMergedWorktreesScreen
-					groveId={'groveId' in current.params ? current.params.groveId : ''}
-				/>
-			);
+			return <CloseMergedWorktreesScreen groveId={current.params.groveId} />;
 		case 'addWorktree':
-			// Type narrowing: we know params is { groveId: string } here
-			return <AddWorktreeScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
+			return <AddWorktreeScreen groveId={current.params.groveId} />;
 		case 'forkWorktree':
-			// Type narrowing: we know params is { groveId: string; worktreePath: string } here
 			return (
 				<AddWorktreeScreen
-					groveId={'groveId' in current.params ? current.params.groveId : ''}
-					forkFromWorktreePath={
-						'worktreePath' in current.params ? (current.params.worktreePath as string) : ''
-					}
+					groveId={current.params.groveId}
+					forkFromWorktreePath={current.params.worktreePath}
 				/>
 			);
 		case 'openTerminal':
-			// Type narrowing: we know params is { groveId: string } here
-			return (
-				<OpenTerminalScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />
-			);
+			return <OpenTerminalScreen groveId={current.params.groveId} />;
 		case 'openIDE':
-			// Type narrowing: we know params is { groveId: string } here
-			return <OpenIDEScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
+			return <OpenIDEScreen groveId={current.params.groveId} />;
 		case 'openClaude':
-			// Type narrowing: we know params is { groveId: string } here
-			return <OpenClaudeScreen groveId={'groveId' in current.params ? current.params.groveId : ''} />;
+			return <OpenClaudeScreen groveId={current.params.groveId} />;
 		case 'resumeClaude':
-			// Type narrowing: we know params is { groveId: string; worktreePath?: string } here
 			return (
 				<ResumeClaudeScreen
-					groveId={'groveId' in current.params ? current.params.groveId : ''}
-					worktreePath={'worktreePath' in current.params ? current.params.worktreePath : undefined}
+					groveId={current.params.groveId}
+					worktreePath={current.params.worktreePath}
 				/>
 			);
 		case 'archivedSessions':
 			return (
 				<ArchivedSessionsScreen
-					groveId={'groveId' in current.params ? current.params.groveId : ''}
-					worktreePath={'worktreePath' in current.params ? (current.params.worktreePath as string) : ''}
+					groveId={current.params.groveId}
+					worktreePath={current.params.worktreePath}
 				/>
 			);
 		case 'ideSettings':
@@ -143,22 +112,13 @@ export function Router() {
 		case 'llmSettings':
 			return <LLMSettingsScreen />;
 		case 'settings':
-			// Type narrowing: we know params is { section?: string } here
-			return (
-				<SettingsScreen section={'section' in current.params ? current.params.section : undefined} />
-			);
+			return <SettingsScreen section={current.params.section} />;
 		case 'workingFolder':
 			return <WorkingFolderScreen />;
 		case 'repositories':
 			return <RepositoriesScreen />;
 		case 'pluginSettings':
-			return (
-				<PluginSettingsScreen
-					selectedPluginId={
-						'selectedPluginId' in current.params ? current.params.selectedPluginId : undefined
-					}
-				/>
-			);
+			return <PluginSettingsScreen selectedPluginId={current.params.selectedPluginId} />;
 		case 'gitlabSettings':
 			return <GitLabSettingsScreen />;
 		case 'asanaSettings':
@@ -166,15 +126,13 @@ export function Router() {
 		case 'interfaceSettings':
 			return <InterfaceSettingsScreen />;
 		case 'groveConfigEditor':
-			return (
-				<GroveConfigEditorScreen
-					repositoryPath={'repositoryPath' in current.params ? current.params.repositoryPath : undefined}
-				/>
-			);
+			return <GroveConfigEditorScreen repositoryPath={current.params.repositoryPath} />;
 		default:
+			// `current` is `never` here because the switch is exhaustive over the
+			// NavigationState union; read the screen name back for the 404 message.
 			return (
 				<Box padding={1}>
-					<Text color="red">404: Screen not found - {current.screen}</Text>
+					<Text color="red">404: Screen not found - {(current as NavigationState).screen}</Text>
 				</Box>
 			);
 	}
