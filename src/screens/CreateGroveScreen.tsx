@@ -3,8 +3,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 import { AsanaNameInput } from '../components/AsanaNameInput.js';
+import { RepositorySelector, getRecentKey } from '../components/RepositorySelector.js';
 import { useService } from '../di/index.js';
 import { getRepoProjects } from '../git/index.js';
+import { useMonorepoProjects } from '../hooks/useMonorepoProjects.js';
 import { useTask } from '../hooks/useTasks.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { ASANA_PLUGIN_ID, AsanaPlugin } from '../plugins/asana/index.js';
@@ -18,7 +20,6 @@ import {
 } from '../services/tokens.js';
 import type {
 	GroveMetadata,
-	RecentSelection,
 	Repository,
 	RepositorySelection,
 	WorktreeReference,
@@ -35,20 +36,6 @@ type CreateStep =
 	| 'creating'
 	| 'done'
 	| 'error';
-
-/**
- * Represents an item in the combined list (recent or repository)
- */
-interface ListItem {
-	type: 'recent' | 'repo';
-	/** For 'recent' type */
-	recent?: RecentSelection;
-	/** For 'repo' type */
-	repo?: Repository;
-	repoIndex?: number;
-	/** Display name for the item */
-	displayName: string;
-}
 
 export function CreateGroveScreen() {
 	const { replace, goBack } = useNavigation();
@@ -98,75 +85,14 @@ export function CreateGroveScreen() {
 	// Recent selections state
 	const [selectedRecentKeys, setSelectedRecentKeys] = useState<Set<string>>(new Set());
 
-	// Monorepo project folders, loaded asynchronously on mount to avoid blocking
-	// the render thread with synchronous directory reads.
-	const [projectsByRepo, setProjectsByRepo] = useState<Map<string, string[]>>(new Map());
-	const [projectsLoading, setProjectsLoading] = useState(false);
-
-	useEffect(() => {
-		const monorepos = repositories.filter((repo) => repo.isMonorepo);
-		if (monorepos.length === 0) {
-			return;
-		}
-
-		let cancelled = false;
-		setProjectsLoading(true);
-
-		Promise.all(monorepos.map(async (repo) => [repo.path, await getRepoProjects(repo.path)] as const))
-			.then((entries) => {
-				if (cancelled) return;
-				setProjectsByRepo(new Map(entries));
-				setProjectsLoading(false);
-			})
-			.catch(() => {
-				if (cancelled) return;
-				setProjectsLoading(false);
-			});
-
-		return () => {
-			cancelled = true;
-		};
-	}, [repositories]);
+	// Monorepo project folders, loaded asynchronously to avoid blocking the render thread.
+	const { projectsByRepo, projectsLoading } = useMonorepoProjects(repositories, getRepoProjects);
 
 	// Get recent selections (filtered to registered repos)
 	const recentSelections = useMemo(() => {
 		const registeredPaths = new Set(repositories.map((r) => r.path));
 		return recentSelectionsService.getRecentSelections(registeredPaths);
-	}, [repositories]);
-
-	// Build combined list of recent items + repositories
-	const listItems = useMemo((): ListItem[] => {
-		const items: ListItem[] = [];
-
-		// Add recent selections first
-		for (const recent of recentSelections) {
-			items.push({
-				type: 'recent',
-				recent,
-				displayName: recentSelectionsService.getRecentSelectionDisplayName(recent),
-			});
-		}
-
-		// Add all repositories
-		for (let i = 0; i < repositories.length; i++) {
-			const repo = repositories[i];
-			items.push({
-				type: 'repo',
-				repo,
-				repoIndex: i,
-				displayName: repo.name,
-			});
-		}
-
-		return items;
-	}, [recentSelections, repositories]);
-
-	// Generate key for recent selection
-	const getRecentKey = (recent: RecentSelection): string => {
-		return recent.projectPath
-			? `${recent.repositoryPath}::${recent.projectPath}`
-			: recent.repositoryPath;
-	};
+	}, [repositories, recentSelectionsService]);
 
 	// Get selected repositories
 	const selectedRepos = useMemo(
@@ -267,67 +193,40 @@ export function CreateGroveScreen() {
 		return selections;
 	};
 
-	// Check if we have any selections
-	const hasAnySelection = selectedRepoIndices.size > 0 || selectedRecentKeys.size > 0;
-
-	// Handle input for repository selection
-	useInput(
-		(input, key) => {
-			if (step !== 'repositories') return;
-
-			if (key.upArrow) {
-				setCursorIndex((prev) => (prev > 0 ? prev - 1 : listItems.length - 1));
-			} else if (key.downArrow) {
-				setCursorIndex((prev) => (prev < listItems.length - 1 ? prev + 1 : 0));
-			} else if (input === ' ') {
-				// Toggle selection with spacebar
-				const item = listItems[cursorIndex];
-				if (item.type === 'recent' && item.recent) {
-					const key = getRecentKey(item.recent);
-					setSelectedRecentKeys((prev) => {
-						const newSet = new Set(prev);
-						if (newSet.has(key)) {
-							newSet.delete(key);
-						} else {
-							newSet.add(key);
-						}
-						return newSet;
-					});
-				} else if (item.type === 'repo' && item.repoIndex !== undefined) {
-					setSelectedRepoIndices((prev) => {
-						const newSet = new Set(prev);
-						if (newSet.has(item.repoIndex!)) {
-							newSet.delete(item.repoIndex!);
-						} else {
-							newSet.add(item.repoIndex!);
-						}
-						return newSet;
-					});
-				}
-			} else if (key.return) {
-				// Proceed to next step
-				// Allow empty grove creation (no repositories selected) - worktrees can be added later
-
-				// Wait for monorepo project folders to finish loading before deciding
-				// whether to show the project selection step.
-				if (hasMonorepos && projectsLoading) {
-					return;
-				}
-
-				// If any monorepos are selected (not via recent), go to project selection step
-				if (hasMonorepos && allProjects.length > 0) {
-					setProjectCursor(0);
-					setStep('projects');
-				} else {
-					// No monorepos (or no selections), proceed directly to creation
-					createGrove();
-				}
-			} else if (key.escape) {
-				goBack();
+	const toggleRepo = (repoIndex: number) => {
+		setSelectedRepoIndices((prev) => {
+			const next = new Set(prev);
+			if (next.has(repoIndex)) {
+				next.delete(repoIndex);
+			} else {
+				next.add(repoIndex);
 			}
-		},
-		{ isActive: step === 'repositories' }
-	);
+			return next;
+		});
+	};
+
+	const toggleRecent = (key: string) => {
+		setSelectedRecentKeys((prev) => {
+			const next = new Set(prev);
+			if (next.has(key)) {
+				next.delete(key);
+			} else {
+				next.add(key);
+			}
+			return next;
+		});
+	};
+
+	// Repository step confirmed (Enter). Go to project selection when monorepos with
+	// projects are selected, otherwise create the grove (possibly empty).
+	const handleRepositoriesConfirm = () => {
+		if (hasMonorepos && allProjects.length > 0) {
+			setProjectCursor(0);
+			setStep('projects');
+		} else {
+			createGrove();
+		}
+	};
 
 	// Handle input for project selection
 	useInput(
@@ -725,91 +624,24 @@ export function CreateGroveScreen() {
 	}
 
 	if (step === 'repositories') {
-		const hasRecent = recentSelections.length > 0;
-		const totalSelected = selectedRepoIndices.size + selectedRecentKeys.size;
-
 		return (
-			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={1}>
-					<Text bold color="green">
-						Create Grove: {groveName}
-					</Text>
-				</Box>
-
-				<Box marginBottom={1}>
-					<Text>Select repositories to include (Space to toggle, Enter to continue):</Text>
-				</Box>
-
-				<Box flexDirection="column" marginLeft={2}>
-					{listItems.map((item, index) => {
-						const isCursor = index === cursorIndex;
-
-						// Add separator before repositories if we have recent items
-						const showSeparator = hasRecent && item.type === 'repo' && index === recentSelections.length;
-
-						if (item.type === 'recent' && item.recent) {
-							const key = getRecentKey(item.recent);
-							const isSelected = selectedRecentKeys.has(key);
-							return (
-								<Box key={`recent-${key}`} flexDirection="column">
-									{index === 0 && (
-										<Box marginBottom={0}>
-											<Text dimColor>Recently used:</Text>
-										</Box>
-									)}
-									<Box>
-										<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
-											{isCursor ? '❯ ' : '  '}[{isSelected ? '✓' : ' '}] <Text color="yellow">★</Text>{' '}
-											{item.displayName}
-										</Text>
-									</Box>
-								</Box>
-							);
-						} else if (item.type === 'repo' && item.repo && item.repoIndex !== undefined) {
-							const isSelected = selectedRepoIndices.has(item.repoIndex);
-							const monorepoIndicator = item.repo.isMonorepo ? ' [monorepo]' : '';
-							return (
-								<Box key={`repo-${item.repoIndex}`} flexDirection="column">
-									{showSeparator && (
-										<Box marginTop={1} marginBottom={0}>
-											<Text dimColor>All repositories:</Text>
-										</Box>
-									)}
-									<Box>
-										<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
-											{isCursor ? '❯ ' : '  '}[{isSelected ? '✓' : ' '}] {item.displayName}
-											<Text dimColor>{monorepoIndicator}</Text>
-										</Text>
-									</Box>
-								</Box>
-							);
-						}
-						return null;
-					})}
-				</Box>
-
-				<Box marginTop={1} flexDirection="column">
-					<Text dimColor>• Use ↑/↓ to navigate</Text>
-					<Text dimColor>• Space to toggle selection</Text>
-					<Text dimColor>
-						• Enter to {hasMonorepos ? 'select projects' : 'create grove'}
-						{!hasAnySelection && ' (empty grove - add worktrees later)'}
-					</Text>
-					<Text dimColor>• Esc to cancel</Text>
-				</Box>
-
-				{hasMonorepos && projectsLoading && (
-					<Box marginTop={1}>
-						<Text dimColor>Loading monorepo projects…</Text>
-					</Box>
-				)}
-
-				<Box marginTop={1}>
-					<Text color="yellow">
-						Selected: {totalSelected} / {listItems.length}
-					</Text>
-				</Box>
-			</Box>
+			<RepositorySelector
+				title={`Create Grove: ${groveName}`}
+				instruction="Select repositories to include (Space to toggle, Enter to continue):"
+				repositories={repositories}
+				recent={recentSelections}
+				getRecentDisplayName={(r) => recentSelectionsService.getRecentSelectionDisplayName(r)}
+				projectsLoading={projectsLoading}
+				multiSelect={true}
+				cursorIndex={cursorIndex}
+				onCursorChange={setCursorIndex}
+				selectedRepoIndices={selectedRepoIndices}
+				selectedRecentKeys={selectedRecentKeys}
+				onToggleRepo={toggleRepo}
+				onToggleRecent={toggleRecent}
+				onConfirm={handleRepositoriesConfirm}
+				onCancel={goBack}
+			/>
 		);
 	}
 

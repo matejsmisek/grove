@@ -3,8 +3,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 import { AsanaNameInput } from '../components/AsanaNameInput.js';
+import { ProjectSelector } from '../components/ProjectSelector.js';
+import { RepositorySelector } from '../components/RepositorySelector.js';
 import { useService } from '../di/index.js';
 import { getMonorepoProjects } from '../git/index.js';
+import { useMonorepoProjects } from '../hooks/useMonorepoProjects.js';
 import { useTask } from '../hooks/useTasks.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { ASANA_PLUGIN_ID, AsanaPlugin } from '../plugins/asana/index.js';
@@ -19,27 +22,12 @@ import {
 import type {
 	GroveMetadata,
 	RecentSelection,
-	Repository,
 	RepositorySelection,
 	WorktreeReference,
 } from '../storage/index.js';
 import { parseAsanaTaskUrl } from '../utils/index.js';
 
 type AddWorktreeStep = 'name' | 'repositories' | 'projects' | 'creating' | 'done' | 'error';
-
-/**
- * Represents an item in the combined list (recent or repository)
- */
-interface ListItem {
-	type: 'recent' | 'repo';
-	/** For 'recent' type */
-	recent?: RecentSelection;
-	/** For 'repo' type */
-	repo?: Repository;
-	repoIndex?: number;
-	/** Display name for the item */
-	displayName: string;
-}
 
 interface AddWorktreeScreenProps {
 	groveId: string;
@@ -63,7 +51,7 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 
 	const [step, setStep] = useState<AddWorktreeStep>('name');
 	const [worktreeName, setWorktreeName] = useState('');
-	const [repositories] = useState<Repository[]>(() => repositoryService.getAllRepositories());
+	const [repositories] = useState(() => repositoryService.getAllRepositories());
 	const [selectedRepoIndex, setSelectedRepoIndex] = useState<number | null>(null);
 	const [cursorIndex, setCursorIndex] = useState(0);
 	const [error, setError] = useState<string>('');
@@ -88,70 +76,16 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 	const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(null);
 	const [projectCursor, setProjectCursor] = useState(0);
 
-	// Monorepo project folders, loaded asynchronously on mount to avoid blocking
-	// the render thread with synchronous directory reads.
-	const [projectsByRepo, setProjectsByRepo] = useState<Map<string, string[]>>(new Map());
-	const [projectsLoading, setProjectsLoading] = useState(false);
+	// Monorepo project folders, loaded asynchronously to avoid blocking the render thread.
+	const { projectsByRepo, projectsLoading } = useMonorepoProjects(repositories, getMonorepoProjects);
 
-	useEffect(() => {
-		const monorepos = repositories.filter((repo) => repo.isMonorepo);
-		if (monorepos.length === 0) {
-			return;
-		}
-
-		let cancelled = false;
-		setProjectsLoading(true);
-
-		Promise.all(
-			monorepos.map(async (repo) => [repo.path, await getMonorepoProjects(repo.path)] as const)
-		)
-			.then((entries) => {
-				if (cancelled) return;
-				setProjectsByRepo(new Map(entries));
-				setProjectsLoading(false);
-			})
-			.catch(() => {
-				if (cancelled) return;
-				setProjectsLoading(false);
-			});
-
-		return () => {
-			cancelled = true;
-		};
-	}, [repositories]);
-
-	// Get recent selections (filtered to registered repos)
+	// Recent selections (filtered to registered repos)
 	const recentSelections = useMemo(() => {
 		const registeredPaths = new Set(repositories.map((r) => r.path));
 		return recentSelectionsService.getRecentSelections(registeredPaths);
-	}, [repositories]);
+	}, [repositories, recentSelectionsService]);
 
-	// Build combined list of recent items + repositories
-	const listItems = useMemo((): ListItem[] => {
-		const items: ListItem[] = [];
-
-		for (const recent of recentSelections) {
-			items.push({
-				type: 'recent',
-				recent,
-				displayName: recentSelectionsService.getRecentSelectionDisplayName(recent),
-			});
-		}
-
-		for (let i = 0; i < repositories.length; i++) {
-			const repo = repositories[i];
-			items.push({
-				type: 'repo',
-				repo,
-				repoIndex: i,
-				displayName: repo.name,
-			});
-		}
-
-		return items;
-	}, [recentSelections, repositories]);
-
-	// Get grove name for display
+	// Grove name for display
 	const groveName = useMemo(() => {
 		const groveRef = grovesService.getGroveById(groveId);
 		return groveRef?.name || 'Unknown Grove';
@@ -173,10 +107,9 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 		return { worktree, repoIndex };
 	}, [isFork, forkFromWorktreePath, groveId, grovesService, repositories]);
 
-	// Get selected repository
 	const selectedRepo = selectedRepoIndex !== null ? repositories[selectedRepoIndex] : null;
 
-	// Get projects for selected monorepo (from the pre-loaded map; no render-time IO)
+	// Projects for the selected monorepo (from the pre-loaded map; no render-time IO)
 	const projects = useMemo(() => {
 		if (!selectedRepo || !selectedRepo.isMonorepo) {
 			return [];
@@ -197,117 +130,42 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 		};
 	};
 
-	// Handle input for name entry
-	useInput(
-		(_input, key) => {
-			if (step !== 'name') return;
+	const createWorktree = (repoIndex: number, projectPath: string | null) => {
+		const selection: RepositorySelection = {
+			repository: repositories[repoIndex],
+			projectPath: projectPath || undefined,
+		};
+		navHandledRef.current = false;
 
-			if (key.escape) {
-				goBack();
-			}
-		},
-		{ isActive: step === 'name' }
-	);
+		// Use the resolved name (ref stays correct even on a same-tick create).
+		const name = worktreeNameRef.current || worktreeName;
+		// In fork mode, branch off the source worktree (its branch) and record the parentage.
+		const forkParentPath = isFork ? forkFromWorktreePath : undefined;
+		// External reference resolved via "Create from Asana" (undefined for manual entry).
+		const reference = asanaReferenceRef.current;
 
-	// Handle input for repository selection
-	useInput(
-		(input, key) => {
-			if (step !== 'repositories') return;
+		// Run as a background task so it survives navigating away from this screen.
+		const { id } = taskService.run<GroveMetadata>({
+			type: 'addWorktree',
+			title: isFork ? `Fork worktree "${name}"` : `Add worktree "${name}"`,
+			meta: { groveId, worktreeName: name },
+			execute: async (ctx) => {
+				const metadata = await groveService.addWorktreeToGrove(
+					groveId,
+					selection,
+					name,
+					ctx.log,
+					forkParentPath,
+					reference
+				);
+				recentSelectionsService.addRecentSelections([selection]);
+				return metadata;
+			},
+		});
 
-			if (key.upArrow) {
-				setCursorIndex((prev) => (prev > 0 ? prev - 1 : listItems.length - 1));
-			} else if (key.downArrow) {
-				setCursorIndex((prev) => (prev < listItems.length - 1 ? prev + 1 : 0));
-			} else if (input === ' ' || key.return) {
-				const item = listItems[cursorIndex];
-				if (!item) return;
-
-				if (item.type === 'recent' && item.recent) {
-					// Find the repo for this recent selection
-					const repoIndex = repositories.findIndex((r) => r.path === item.recent!.repositoryPath);
-					if (repoIndex === -1) return;
-
-					setSelectedRepoIndex(repoIndex);
-
-					// Recent selections include their project path (or none for whole repo),
-					// so skip the project selection step entirely.
-					createWorktree(repoIndex, item.recent.projectPath ?? null);
-				} else if (item.type === 'repo' && item.repo && item.repoIndex !== undefined) {
-					const repo = item.repo;
-					const repoIndex = item.repoIndex;
-
-					// If monorepo with projects, go to project selection
-					if (repo.isMonorepo) {
-						// Wait for project folders to finish loading before deciding.
-						if (projectsLoading) {
-							return;
-						}
-						setSelectedRepoIndex(repoIndex);
-						const repoProjects = projectsByRepo.get(repo.path) ?? [];
-						if (repoProjects.length > 0) {
-							setProjectCursor(0);
-							setStep('projects');
-							return;
-						}
-					} else {
-						setSelectedRepoIndex(repoIndex);
-					}
-
-					// Not a monorepo or no projects, proceed to creation
-					createWorktree(repoIndex, null);
-				}
-			} else if (key.escape) {
-				// Go back to name entry
-				setStep('name');
-			}
-		},
-		{ isActive: step === 'repositories' }
-	);
-
-	// Handle input for project selection
-	useInput(
-		(input, key) => {
-			if (step !== 'projects') return;
-
-			if (key.upArrow) {
-				setProjectCursor((prev) => (prev > 0 ? prev - 1 : projects.length));
-			} else if (key.downArrow) {
-				setProjectCursor((prev) => (prev < projects.length ? prev + 1 : 0));
-			} else if (input === ' ' || key.return) {
-				// Select project (or whole repo if cursor is on "Entire repository")
-				if (projectCursor === projects.length) {
-					// "Entire repository" selected
-					createWorktree(selectedRepoIndex!, null);
-				} else {
-					// Specific project selected
-					const projectPath = projects[projectCursor];
-					setSelectedProjectPath(projectPath);
-					createWorktree(selectedRepoIndex!, projectPath);
-				}
-			} else if (key.escape) {
-				if (isFork) {
-					// Fork mode skips repository selection; go back to name entry (repo stays locked).
-					setStep('name');
-				} else {
-					// Go back to repository selection
-					setSelectedRepoIndex(null);
-					setStep('repositories');
-				}
-			}
-		},
-		{ isActive: step === 'projects' }
-	);
-
-	// Handle escape key for other steps. During 'creating', Esc leaves the task
-	// running in the background (reachable from Background Tasks).
-	useInput(
-		(_input, key) => {
-			if (key.escape) {
-				goBack();
-			}
-		},
-		{ isActive: step === 'error' || step === 'done' || step === 'creating' }
-	);
+		setTaskId(id);
+		setStep('creating');
+	};
 
 	const handleNameSubmit = (value: string) => {
 		if (!value.trim()) {
@@ -391,41 +249,27 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 		setStep('repositories');
 	};
 
-	const createWorktree = (repoIndex: number, projectPath: string | null) => {
-		const selection: RepositorySelection = {
-			repository: repositories[repoIndex],
-			projectPath: projectPath || undefined,
-		};
-		navHandledRef.current = false;
+	// Repository chosen in the (non-fork) repository step.
+	const handlePickRepo = (repoIndex: number) => {
+		const repo = repositories[repoIndex];
+		setSelectedRepoIndex(repoIndex);
 
-		// Use the resolved name (ref stays correct even on a same-tick create).
-		const name = worktreeNameRef.current || worktreeName;
-		// In fork mode, branch off the source worktree (its branch) and record the parentage.
-		const forkParentPath = isFork ? forkFromWorktreePath : undefined;
-		// External reference resolved via "Create from Asana" (undefined for manual entry).
-		const reference = asanaReferenceRef.current;
+		// Monorepo with projects: go to project selection. Otherwise create directly.
+		if (repo.isMonorepo && (projectsByRepo.get(repo.path) ?? []).length > 0) {
+			setProjectCursor(0);
+			setStep('projects');
+			return;
+		}
 
-		// Run as a background task so it survives navigating away from this screen.
-		const { id } = taskService.run<GroveMetadata>({
-			type: 'addWorktree',
-			title: isFork ? `Fork worktree "${name}"` : `Add worktree "${name}"`,
-			meta: { groveId, worktreeName: name },
-			execute: async (ctx) => {
-				const metadata = await groveService.addWorktreeToGrove(
-					groveId,
-					selection,
-					name,
-					ctx.log,
-					forkParentPath,
-					reference
-				);
-				recentSelectionsService.addRecentSelections([selection]);
-				return metadata;
-			},
-		});
+		createWorktree(repoIndex, null);
+	};
 
-		setTaskId(id);
-		setStep('creating');
+	// Recent item chosen: it already carries its project path, so skip the project step.
+	const handlePickRecent = (recent: RecentSelection) => {
+		const repoIndex = repositories.findIndex((r) => r.path === recent.repositoryPath);
+		if (repoIndex === -1) return;
+		setSelectedRepoIndex(repoIndex);
+		createWorktree(repoIndex, recent.projectPath ?? null);
 	};
 
 	// Observe the task while mounted: navigate to the grove on success, surface
@@ -458,6 +302,18 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 			}
 		};
 	}, []);
+
+	// Escape handling for the screen-owned steps. The repository/project steps own
+	// their own key handling (RepositorySelector / ProjectSelector). During
+	// 'creating', Esc leaves the task running in the background.
+	useInput(
+		(_input, key) => {
+			if (key.escape) {
+				goBack();
+			}
+		},
+		{ isActive: step === 'name' || step === 'creating' || step === 'done' || step === 'error' }
+	);
 
 	if (step === 'name') {
 		return (
@@ -524,129 +380,47 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 	}
 
 	if (step === 'repositories') {
-		const hasRecent = recentSelections.length > 0;
-
 		return (
-			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={1}>
-					<Text bold color="green">
-						Add Worktree: {worktreeName}
-					</Text>
-				</Box>
-
-				<Box marginBottom={1}>
-					<Text>Select a repository:</Text>
-				</Box>
-
-				<Box flexDirection="column" marginLeft={2}>
-					{listItems.map((item, index) => {
-						const isCursor = index === cursorIndex;
-						const showSeparator = hasRecent && item.type === 'repo' && index === recentSelections.length;
-
-						if (item.type === 'recent' && item.recent) {
-							const key = item.recent.projectPath
-								? `${item.recent.repositoryPath}::${item.recent.projectPath}`
-								: item.recent.repositoryPath;
-							return (
-								<Box key={`recent-${key}`} flexDirection="column">
-									{index === 0 && (
-										<Box marginBottom={0}>
-											<Text dimColor>Recently used:</Text>
-										</Box>
-									)}
-									<Box>
-										<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
-											{isCursor ? '❯ ' : '  '}
-											<Text color="yellow">★</Text> {item.displayName}
-										</Text>
-									</Box>
-								</Box>
-							);
-						} else if (item.type === 'repo' && item.repo) {
-							const monorepoIndicator = item.repo.isMonorepo ? ' [monorepo]' : '';
-							return (
-								<Box key={`repo-${item.repo.path}`} flexDirection="column">
-									{showSeparator && (
-										<Box marginTop={1} marginBottom={0}>
-											<Text dimColor>All repositories:</Text>
-										</Box>
-									)}
-									<Box>
-										<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
-											{isCursor ? '❯ ' : '  '}
-											{item.repo.name}
-											<Text dimColor>{monorepoIndicator}</Text>
-										</Text>
-									</Box>
-								</Box>
-							);
-						}
-						return null;
-					})}
-				</Box>
-
-				<Box marginTop={1} flexDirection="column">
-					<Text dimColor>• Use ↑/↓ to navigate</Text>
-					<Text dimColor>• Enter or Space to select</Text>
-					<Text dimColor>• Esc to go back</Text>
-				</Box>
-
-				{projectsLoading && (
-					<Box marginTop={1}>
-						<Text dimColor>Loading monorepo projects…</Text>
-					</Box>
-				)}
-			</Box>
+			<RepositorySelector
+				title={`Add Worktree: ${worktreeName}`}
+				instruction="Select a repository:"
+				repositories={repositories}
+				recent={recentSelections}
+				getRecentDisplayName={(r) => recentSelectionsService.getRecentSelectionDisplayName(r)}
+				projectsLoading={projectsLoading}
+				multiSelect={false}
+				cursorIndex={cursorIndex}
+				onCursorChange={setCursorIndex}
+				onPickRecent={handlePickRecent}
+				onPickRepo={handlePickRepo}
+				onCancel={() => setStep('name')}
+			/>
 		);
 	}
 
 	if (step === 'projects') {
 		return (
-			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={1}>
-					<Text bold color="green">
-						{isFork ? 'Fork Worktree: ' : 'Add Worktree: '}
-						{worktreeName}
-					</Text>
-				</Box>
-
-				<Box marginBottom={1}>
-					<Text>
-						Select a project from <Text color="yellow">{selectedRepo?.name}</Text>:
-					</Text>
-				</Box>
-
-				<Box flexDirection="column" marginLeft={2}>
-					{projects.map((projectPath, index) => {
-						const isCursor = index === projectCursor;
-
-						return (
-							<Box key={projectPath}>
-								<Text color={isCursor ? 'cyan' : undefined} bold={isCursor}>
-									{isCursor ? '❯ ' : '  '}
-									{projectPath}
-								</Text>
-							</Box>
-						);
-					})}
-					{/* Option to select entire repository */}
-					<Box marginTop={1}>
-						<Text
-							color={projectCursor === projects.length ? 'cyan' : undefined}
-							bold={projectCursor === projects.length}
-						>
-							{projectCursor === projects.length ? '❯ ' : '  '}
-							<Text dimColor>(Entire repository)</Text>
-						</Text>
-					</Box>
-				</Box>
-
-				<Box marginTop={1} flexDirection="column">
-					<Text dimColor>• Use ↑/↓ to navigate</Text>
-					<Text dimColor>• Enter or Space to select</Text>
-					<Text dimColor>• Esc to go back</Text>
-				</Box>
-			</Box>
+			<ProjectSelector
+				title={`${isFork ? 'Fork Worktree: ' : 'Add Worktree: '}${worktreeName}`}
+				repoName={selectedRepo?.name ?? ''}
+				projects={projects}
+				cursor={projectCursor}
+				onCursorChange={setProjectCursor}
+				onPickProject={(projectPath) => {
+					setSelectedProjectPath(projectPath);
+					createWorktree(selectedRepoIndex!, projectPath);
+				}}
+				onPickEntireRepo={() => createWorktree(selectedRepoIndex!, null)}
+				onCancel={() => {
+					if (isFork) {
+						// Fork mode skips repository selection; go back to name entry.
+						setStep('name');
+					} else {
+						setSelectedRepoIndex(null);
+						setStep('repositories');
+					}
+				}}
+			/>
 		);
 	}
 
