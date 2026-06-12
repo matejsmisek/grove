@@ -470,7 +470,7 @@ type UIMode =
 	| { type: 'initLog'; content: string };
 
 export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScreenProps) {
-	const { goBack, navigate } = useNavigation();
+	const { goBack, navigate, replace } = useNavigation();
 	const gitService = useService(GitServiceToken);
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
 	const groveConfigService = useService(GroveConfigServiceToken);
@@ -513,10 +513,24 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	// does not apply. Computed early because the mode helpers below depend on it.
 	const isSingleWorktreeMode = worktreeDetails.length === 1;
 
-	// Close any open overlay back to the base view: the inline actions in single-worktree mode
-	// (always visible), or the worktree list otherwise. Cursor state is intentionally preserved.
-	const closeToBase = () => {
-		setUIMode(isSingleWorktreeMode ? { type: 'actions' } : { type: 'list' });
+	// Return to the selected worktree's detail (the actions view) after closing an in-screen
+	// overlay (Claude submenu, init-log viewer, Asana attach) or finishing an in-screen action.
+	// In single-worktree mode this is the always-visible inline detail; in multi-worktree mode
+	// it's the actions overlay for the selected worktree. Cursor state is intentionally preserved.
+	// Backing out of the detail itself (to the list / home) is handled by the 'actions' Esc branch.
+	const returnToDetail = () => {
+		setUIMode({ type: 'actions' });
+	};
+
+	// Before navigating to a worktree sub-screen (fork / close / archived sessions), stamp the
+	// selected worktree into this screen's own history entry. The navigation layer pushes the
+	// just-replaced entry to history, so goBack() restores the worktree's detail (focus opens its
+	// actions) instead of the bare list. Single-worktree mode opens its inline detail regardless.
+	const focusSelectedOnReturn = () => {
+		const selected = worktreeDetails[selectedIndex]?.worktree;
+		if (selected) {
+			replace('groveDetail', { groveId, focusWorktreeName: selected.name });
+		}
 	};
 
 	// Load grove details on mount
@@ -662,7 +676,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 
 	// Show a loading screen, then run the (blocking) launch work on the next tick.
 	const beginLaunch = (message: string, run: () => void) => {
-		closeToBase();
+		returnToDetail();
 		launchRunnerRef.current = run;
 		setLaunchingMessage(message);
 	};
@@ -769,7 +783,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 			return;
 		}
 		const targetPath = getWorktreePath(selected);
-		closeToBase();
+		returnToDetail();
 		setLaunchingMessage(`Fetching Asana task for ${selected.repositoryName}…`);
 		asanaPlugin
 			.getTask(reference.id)
@@ -826,7 +840,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		const terminal =
 			settings.selectedClaudeTerminal ?? claudeSessionService.detectTerminal() ?? undefined;
 		if (!terminal) {
-			closeToBase();
+			returnToDetail();
 			setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
 			return;
 		}
@@ -864,7 +878,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	// allow resuming them.
 	const handleShowArchivedSessions = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
-		closeToBase();
+		focusSelectedOnReturn();
 		navigate('archivedSessions', { groveId, worktreePath: selected.worktreePath });
 	};
 
@@ -877,7 +891,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 			: settings.terminal;
 
 		if (!terminalConfig) {
-			closeToBase();
+			returnToDetail();
 			setError('No terminal configured. Please restart Grove to detect available terminals.');
 			return;
 		}
@@ -885,7 +899,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selectedWorktree);
 		const result = openTerminalInPath(targetPath, terminalConfig);
-		closeToBase();
+		returnToDetail();
 		if (result.success) {
 			setResultMessage(`Opened terminal in ${selectedWorktree.repositoryName}`);
 			setTimeout(() => setResultMessage(null), 2000);
@@ -908,13 +922,13 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		);
 
 		if (!config) {
-			closeToBase();
+			returnToDetail();
 			setError('No IDE configured. Please configure an IDE in Settings or .grove.json.');
 			return;
 		}
 
 		const result = openIDEInPath(targetPath, config);
-		closeToBase();
+		returnToDetail();
 		if (result.success) {
 			const ideName = resolvedType ? getIDEDisplayName(resolvedType) : 'IDE';
 			setResultMessage(`Opened ${ideName} in ${selectedWorktree.repositoryName}`);
@@ -930,20 +944,20 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 			const content = groveService.readWorktreeInitLog(groveId, selectedWorktree.worktreePath);
 			setUIMode({ type: 'initLog', content });
 		} catch (err) {
-			closeToBase();
+			returnToDetail();
 			setError(err instanceof Error ? err.message : 'Failed to read init log');
 		}
 	};
 
 	const handleFork = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
-		closeToBase();
+		focusSelectedOnReturn();
 		navigate('forkWorktree', { groveId, worktreePath: selected.worktreePath });
 	};
 
 	const handleCloseWorktree = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
-		closeToBase();
+		focusSelectedOnReturn();
 		navigate('closeWorktree', { groveId, worktreePath: selected.worktreePath });
 	};
 
@@ -953,7 +967,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	};
 
 	const cancelAttachAsana = () => {
-		closeToBase();
+		returnToDetail();
 	};
 
 	// Verify the pasted Asana task URL via the API, then persist it onto the worktree.
@@ -1072,14 +1086,14 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 				{
 					label: 'Launch background claude',
 					run: () => {
-						closeToBase();
+						returnToDetail();
 						handleInstantClaude();
 					},
 				},
 				{
 					label: 'Launch standard claude',
 					run: () => {
-						closeToBase();
+						returnToDetail();
 						handleOpenInClaude();
 					},
 				},
@@ -1091,7 +1105,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 				options.push({
 					label: 'Launch instant Claude from Asana',
 					run: () => {
-						closeToBase();
+						returnToDetail();
 						handleInstantClaudeFromAsana();
 					},
 				});
@@ -1109,14 +1123,14 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					? {
 							label: 'Attach',
 							run: () => {
-								closeToBase();
+								returnToDetail();
 								handleAttachSession(session);
 							},
 						}
 					: {
 							label: 'Resume',
 							run: () => {
-								closeToBase();
+								returnToDetail();
 								handleResumeSession(session);
 							},
 						},
@@ -1138,7 +1152,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 			{
 				label: 'Yes, terminate this session',
 				run: () => {
-					closeToBase();
+					returnToDetail();
 					handleArchiveSession(session);
 				},
 			},
@@ -1224,6 +1238,21 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	// between modes (especially Esc) are explicit per branch.
 	useInput(
 		(input, key) => {
+			// An error (from a failed action) takes over the screen; Esc dismisses it. A failed
+			// action returns to the worktree detail; a grove that failed to load (no worktrees)
+			// leaves the screen entirely.
+			if (error) {
+				if (key.escape) {
+					setError(null);
+					if (worktreeDetails.length > 0) {
+						returnToDetail();
+					} else {
+						goBack();
+					}
+				}
+				return;
+			}
+
 			switch (uiMode.type) {
 				case 'asanaAttach': {
 					// The attach prompt's text input handles typing/submit; only Esc cancels here.
@@ -1233,9 +1262,9 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					return;
 				}
 				case 'initLog': {
-					// Init log viewer: Esc returns to the base view.
+					// Init log viewer: Esc returns to the worktree detail.
 					if (key.escape) {
-						closeToBase();
+						returnToDetail();
 					}
 					return;
 				}
@@ -1243,11 +1272,12 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					// Claude submenu navigation (launch / per-session / archive confirm).
 					const options = getClaudeSubmenuOptions();
 					if (key.escape) {
-						// archiveConfirm steps back to the per-session menu; everything else closes.
+						// archiveConfirm steps back to the per-session menu; launch/session close the
+						// submenu back to the worktree detail (the Claude panels + actions list).
 						if (uiMode.mode === 'archiveConfirm') {
 							setUIMode({ type: 'claudeSubmenu', mode: 'session', sessionId: uiMode.sessionId });
 						} else {
-							closeToBase();
+							returnToDetail();
 						}
 						setSubmenuIndex(0);
 					} else if (key.upArrow && options.length > 0) {
