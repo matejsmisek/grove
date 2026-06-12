@@ -30,6 +30,7 @@ vi.mock('fs', () => ({
 
 // Keep init-action execution hermetic: never probe/run direnv.
 vi.mock('../../utils/direnv.js', () => ({
+	getDirenvWarning: () => undefined,
 	getDirenvAllowWarning: () => undefined,
 	wrapSpawnWithDirenv: (_dir: string, command: string, args: string[]) => ({ command, args }),
 }));

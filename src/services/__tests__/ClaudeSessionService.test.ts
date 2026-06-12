@@ -50,6 +50,7 @@ vi.mock('../../utils/commandExists.js', () => ({
 // Pass direnv wrapping through unchanged so spawn assertions see the real argv.
 vi.mock('../../utils/direnv.js', () => ({
 	wrapSpawnWithDirenv: (_dir: string, command: string, args: string[]) => ({ command, args }),
+	getDirenvWarning: () => undefined,
 	getDirenvAllowWarning: () => undefined,
 	prefixCommandWithDirenv: (_dir: string, command: string) => command,
 }));
