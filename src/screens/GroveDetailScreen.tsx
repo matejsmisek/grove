@@ -252,7 +252,7 @@ function WorktreePanel({
 			{/* Worktree Name with Session Indicator */}
 			<Box>
 				<Text bold color={isClosed ? 'gray' : isSelected ? 'cyan' : undefined}>
-					{detail.worktree.name || repoLabel}
+					{detail.worktree.name}
 				</Text>
 				{isClosed && <Text dimColor> (Closed)</Text>}
 				{!isClosed && hasSessions && (

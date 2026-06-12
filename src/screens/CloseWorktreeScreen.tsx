@@ -58,12 +58,7 @@ export function CloseWorktreeScreen({ groveId, worktreePath }: CloseWorktreeScre
 					return;
 				}
 
-				setWorktreeName(
-					worktree.name ||
-						(worktree.projectPath
-							? `${worktree.repositoryName}/${worktree.projectPath}`
-							: worktree.repositoryName)
-				);
+				setWorktreeName(worktree.name);
 
 				const [uncommitted, unpushed, upstreamStatus] = await Promise.all([
 					gitService.hasUncommittedChanges(worktree.worktreePath),

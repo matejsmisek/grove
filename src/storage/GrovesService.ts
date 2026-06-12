@@ -158,7 +158,23 @@ export class GrovesService implements IGrovesService {
 		try {
 			// mtime-validated cache: skips the blocking read + JSON.parse when the
 			// file is unchanged. Returns undefined when the file doesn't exist.
-			return readJsonFileCached<GroveMetadata>(metadataPath) ?? null;
+			const metadata = readJsonFileCached<GroveMetadata>(metadataPath) ?? null;
+			if (!metadata) {
+				return null;
+			}
+
+			// Backfill the (now-required) display name for legacy grove.json files
+			// written before `name` existed. The derivation matches the read-time
+			// fallbacks that previously lived in the consuming screens.
+			for (const worktree of metadata.worktrees ?? []) {
+				if (!worktree.name) {
+					worktree.name = worktree.projectPath
+						? `${worktree.repositoryName}/${worktree.projectPath}`
+						: worktree.repositoryName;
+				}
+			}
+
+			return metadata;
 		} catch (error) {
 			console.error('Error reading grove metadata:', error);
 			return null;
@@ -211,6 +227,7 @@ export class GrovesService implements IGrovesService {
 
 		// Create worktree entry
 		const worktree: Worktree = {
+			name: repositoryName,
 			repositoryName,
 			repositoryPath,
 			worktreePath,

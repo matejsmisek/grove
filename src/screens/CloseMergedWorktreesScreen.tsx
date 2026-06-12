@@ -83,11 +83,7 @@ export function CloseMergedWorktreesScreen({ groveId }: CloseMergedWorktreesScre
 							gitService.getBranchUpstreamStatus(worktree.worktreePath),
 						]);
 
-						const name =
-							worktree.name ||
-							(worktree.projectPath
-								? `${worktree.repositoryName}/${worktree.projectPath}`
-								: worktree.repositoryName);
+						const name = worktree.name;
 
 						return {
 							name,

@@ -90,7 +90,7 @@ export async function addWorktree(
 			if (!source) {
 				const available = metadata.worktrees
 					.filter((w) => !w.closed)
-					.map((w) => w.name || path.basename(w.worktreePath))
+					.map((w) => w.name)
 					.join(', ');
 				return {
 					success: false,

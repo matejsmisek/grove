@@ -68,11 +68,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 						foundIssues = true;
 					}
 
-					const displayName =
-						worktree.name ||
-						(worktree.projectPath
-							? `${worktree.repositoryName}/${worktree.projectPath}`
-							: worktree.repositoryName);
+					const displayName = worktree.name;
 
 					checkGroups.push({ title: displayName, checks: buildWorktreeSafetyChecks(input) });
 				}

@@ -294,6 +294,7 @@ describe('GrovesService', () => {
 
 			const first = service.readGroveMetadata(grovePath)!;
 			first.worktrees.push({
+				name: 'repo',
 				repositoryName: 'repo',
 				repositoryPath: '/repo',
 				worktreePath: '/wt',
@@ -303,6 +304,96 @@ describe('GrovesService', () => {
 			// A fresh read (file unchanged) must not see the local mutation.
 			const second = service.readGroveMetadata(grovePath)!;
 			expect(second.worktrees).toHaveLength(0);
+		});
+
+		it('should backfill a missing worktree name from the repository name', () => {
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
+
+			// Legacy grove.json written before `name` existed on Worktree.
+			const legacyMetadata = {
+				id: 'legacy-grove',
+				name: 'Legacy Grove',
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+				worktrees: [
+					{
+						repositoryName: 'my-repo',
+						repositoryPath: '/path/to/my-repo',
+						worktreePath: path.join(grovePath, 'my-repo.worktree'),
+						branch: 'feature',
+					},
+				],
+			};
+
+			vol.writeFileSync(
+				path.join(grovePath, 'grove.json'),
+				JSON.stringify(legacyMetadata, null, '\t')
+			);
+
+			const metadata = service.readGroveMetadata(grovePath);
+
+			expect(metadata?.worktrees[0].name).toBe('my-repo');
+		});
+
+		it('should backfill a missing monorepo worktree name as repo/project', () => {
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
+
+			const legacyMetadata = {
+				id: 'legacy-grove',
+				name: 'Legacy Grove',
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+				worktrees: [
+					{
+						repositoryName: 'monorepo',
+						repositoryPath: '/path/to/monorepo',
+						worktreePath: path.join(grovePath, 'monorepo.worktree'),
+						branch: 'feature',
+						projectPath: 'packages/api',
+					},
+				],
+			};
+
+			vol.writeFileSync(
+				path.join(grovePath, 'grove.json'),
+				JSON.stringify(legacyMetadata, null, '\t')
+			);
+
+			const metadata = service.readGroveMetadata(grovePath);
+
+			expect(metadata?.worktrees[0].name).toBe('monorepo/packages/api');
+		});
+
+		it('should preserve an existing worktree name', () => {
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
+
+			const metadataWithName: GroveMetadata = {
+				id: 'grove',
+				name: 'Grove',
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+				worktrees: [
+					{
+						name: 'custom-name',
+						repositoryName: 'my-repo',
+						repositoryPath: '/path/to/my-repo',
+						worktreePath: path.join(grovePath, 'my-repo.worktree'),
+						branch: 'feature',
+					},
+				],
+			};
+
+			vol.writeFileSync(
+				path.join(grovePath, 'grove.json'),
+				JSON.stringify(metadataWithName, null, '\t')
+			);
+
+			const metadata = service.readGroveMetadata(grovePath);
+
+			expect(metadata?.worktrees[0].name).toBe('custom-name');
 		});
 	});
 

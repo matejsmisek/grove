@@ -266,8 +266,11 @@ export interface WorktreeReference {
  * Represents a worktree within a grove
  */
 export interface Worktree {
-	/** Display name for this worktree */
-	name?: string;
+	/**
+	 * Display name for this worktree. Legacy grove.json files written before this
+	 * field existed are backfilled on read in GrovesService.readGroveMetadata().
+	 */
+	name: string;
 	/** Name of the repository */
 	repositoryName: string;
 	/** Path to the repository root */
