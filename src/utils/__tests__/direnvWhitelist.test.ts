@@ -3,7 +3,7 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockFs } from '../../__tests__/helpers.js';
-import { __resetDirenvCacheForTests } from '../direnv.js';
+import { detectDirenvAvailable } from '../direnv.js';
 import {
 	addDirenvWhitelistPrefix,
 	getDirenvConfigPath,
@@ -74,7 +74,7 @@ describe('direnvWhitelist', () => {
 		vol.mkdirSync(mockHomeDir, { recursive: true });
 		delete process.env.XDG_CONFIG_HOME;
 		direnvInstalled = true;
-		__resetDirenvCacheForTests();
+		detectDirenvAvailable();
 	});
 
 	afterEach(() => {
@@ -210,7 +210,7 @@ describe('direnvWhitelist', () => {
 
 		it('does not offer when direnv is not installed', () => {
 			direnvInstalled = false;
-			__resetDirenvCacheForTests();
+			detectDirenvAvailable();
 			expect(shouldOfferDirenvWhitelist('/home/tester/groves')).toBe(false);
 		});
 

@@ -19,19 +19,28 @@ import { execSync, spawnSync } from 'child_process';
 let direnvAvailableCache: boolean | undefined;
 
 /**
- * Whether the `direnv` binary is available on PATH. Memoized for the process
- * lifetime since installation state does not change while Grove is running.
+ * Probe for the `direnv` binary on PATH and cache the result for the process
+ * lifetime. Called once at startup (initializeServices) so the lifetime of the
+ * cached value is explicit; calling it again re-probes (used by tests to refresh
+ * the cache after changing the mocked environment).
  */
-export function isDirenvAvailable(): boolean {
-	if (direnvAvailableCache === undefined) {
-		try {
-			execSync('which direnv', { stdio: 'ignore' });
-			direnvAvailableCache = true;
-		} catch {
-			direnvAvailableCache = false;
-		}
+export function detectDirenvAvailable(): boolean {
+	try {
+		execSync('which direnv', { stdio: 'ignore' });
+		direnvAvailableCache = true;
+	} catch {
+		direnvAvailableCache = false;
 	}
 	return direnvAvailableCache;
+}
+
+/**
+ * Whether the `direnv` binary is available on PATH. Detection normally runs once
+ * at startup via {@link detectDirenvAvailable}; if a code path runs before that
+ * (e.g. a CLI command), it is detected lazily on first use.
+ */
+export function isDirenvAvailable(): boolean {
+	return direnvAvailableCache ?? detectDirenvAvailable();
 }
 
 export interface DirenvDirStatus {
@@ -241,9 +250,4 @@ export function getStaleDirenvWarning(dir: string): string | undefined {
 export function getDirenvWarning(dir: string): string | undefined {
 	const warnings = [getStaleDirenvWarning(dir), getDirenvAllowWarning(dir)].filter(Boolean);
 	return warnings.length > 0 ? warnings.join('\n') : undefined;
-}
-
-/** Reset the memoized availability probe. Intended for tests only. */
-export function __resetDirenvCacheForTests(): void {
-	direnvAvailableCache = undefined;
 }

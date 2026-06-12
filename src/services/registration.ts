@@ -17,6 +17,7 @@ import {
 	SettingsService,
 } from '../storage/index.js';
 import type { WorkspaceContext } from '../storage/types.js';
+import { detectDirenvAvailable } from '../utils/direnv.js';
 import { ClaudeSessionService } from './ClaudeSessionService.js';
 import { ContextService } from './ContextService.js';
 import { FileService } from './FileService.js';
@@ -192,6 +193,9 @@ export function initializeServices(
 	workspaceContext?: WorkspaceContext
 ): void {
 	registerServices(container, workspaceContext);
+	// Probe for direnv once at startup so its availability is detected at an
+	// explicit point in the lifecycle rather than lazily on first use.
+	detectDirenvAvailable();
 }
 
 /**

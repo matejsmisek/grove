@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-	__resetDirenvCacheForTests,
+	detectDirenvAvailable,
 	dirNeedsDirenv,
 	getDirenvAllowWarning,
 	getDirenvDirStatus,
@@ -61,7 +61,7 @@ describe('direnv utils', () => {
 	beforeEach(() => {
 		direnvInstalled = true;
 		statusOutput = NONE;
-		__resetDirenvCacheForTests();
+		detectDirenvAvailable();
 	});
 
 	afterEach(() => {
@@ -75,6 +75,7 @@ describe('direnv utils', () => {
 
 		it('returns false when direnv is missing', () => {
 			direnvInstalled = false;
+			detectDirenvAvailable();
 			expect(isDirenvAvailable()).toBe(false);
 		});
 	});
@@ -82,6 +83,7 @@ describe('direnv utils', () => {
 	describe('getDirenvDirStatus', () => {
 		it('reports no envrc when direnv is not installed', () => {
 			direnvInstalled = false;
+			detectDirenvAvailable();
 			expect(getDirenvDirStatus('/repo')).toEqual({ hasEnvrc: false, allowed: false });
 		});
 
@@ -232,6 +234,7 @@ describe('direnv utils', () => {
 
 		it('does not warn when direnv is not installed', () => {
 			direnvInstalled = false;
+			detectDirenvAvailable();
 			expect(getDirenvAllowWarning('/repo')).toBeUndefined();
 		});
 	});
