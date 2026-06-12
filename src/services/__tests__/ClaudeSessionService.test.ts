@@ -31,10 +31,18 @@ vi.mock('fs', () => {
 // Mock child_process
 vi.mock('child_process', () => ({
 	execSync: vi.fn(),
+	spawnSync: vi.fn(),
 	spawn: vi.fn(() => ({
 		on: vi.fn(),
 		unref: vi.fn(),
 	})),
+}));
+
+// Mock the shared command-availability helper so terminal detection is
+// deterministic without spawning real `which` probes.
+const { commandState } = vi.hoisted(() => ({ commandState: { installed: new Set<string>() } }));
+vi.mock('../../utils/commandExists.js', () => ({
+	commandExists: vi.fn((command: string) => Promise.resolve(commandState.installed.has(command))),
 }));
 
 describe('ClaudeSessionService', () => {
@@ -385,6 +393,35 @@ launch --title "my-worktree-lon" bash`;
 
 			expect(template).toContain('${WORKING_DIR}');
 			expect(template).toContain('${AGENT_COMMAND}');
+		});
+	});
+
+	describe('detectAvailableTerminals', () => {
+		beforeEach(() => {
+			commandState.installed = new Set();
+		});
+
+		it('returns both terminals when konsole and kitty are installed', async () => {
+			commandState.installed = new Set(['konsole', 'kitty']);
+			await expect(service.detectAvailableTerminals()).resolves.toEqual(['konsole', 'kitty']);
+		});
+
+		it('returns only the installed terminals', async () => {
+			commandState.installed = new Set(['kitty']);
+			await expect(service.detectAvailableTerminals()).resolves.toEqual(['kitty']);
+		});
+
+		it('returns an empty list when neither is installed', async () => {
+			await expect(service.detectAvailableTerminals()).resolves.toEqual([]);
+		});
+
+		it('detectTerminal returns the first available terminal', async () => {
+			commandState.installed = new Set(['konsole', 'kitty']);
+			await expect(service.detectTerminal()).resolves.toBe('konsole');
+		});
+
+		it('detectTerminal returns null when none are installed', async () => {
+			await expect(service.detectTerminal()).resolves.toBeNull();
 		});
 	});
 });

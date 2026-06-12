@@ -100,113 +100,132 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 	};
 
 	useEffect(() => {
-		// Check if supported terminals are available
-		const terminals = claudeSessionService.detectAvailableTerminals();
-		if (terminals.length === 0) {
-			setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
-			setLoading(false);
-			return;
-		}
+		let cancelled = false;
 
-		setAvailableTerminals(terminals);
-
-		// Check if user has a selected terminal in settings
-		const settings = settingsService.readSettings();
-		const userSelectedTerminal = settings.selectedClaudeTerminal;
-
-		// Determine which terminal to use
-		let terminalToUse: ClaudeTerminalType | null = null;
-		if (userSelectedTerminal && terminals.includes(userSelectedTerminal)) {
-			terminalToUse = userSelectedTerminal;
-		} else if (terminals.length === 1) {
-			terminalToUse = terminals[0];
-		}
-
-		const groveRef = grovesService.getGroveById(groveId);
-		if (!groveRef) {
-			setError('Grove not found');
-			setLoading(false);
-			return;
-		}
-
-		setGroveName(groveRef.name);
-
-		const metadata = grovesService.readGroveMetadata(groveRef.path);
-		if (!metadata) {
-			setError('Grove metadata not found');
-			setLoading(false);
-			return;
-		}
-
-		setGroveWorktrees(metadata.worktrees);
-
-		// Get sessions for this grove
-		let groveSessions = sessionsService
-			.getSessionsByGrove(groveId)
-			.filter((s) => s.isRunning && s.agentType === 'claude');
-
-		// If worktreePath is provided, filter to that worktree only
-		if (worktreePath) {
-			groveSessions = groveSessions.filter((s) => s.worktreePath === worktreePath);
-		}
-
-		if (groveSessions.length === 0) {
-			setError('No active Claude sessions found in this grove');
-			setLoading(false);
-			return;
-		}
-
-		// Sort by most recent activity first
-		groveSessions.sort((a, b) => {
-			const aTime = a.metadata?.lastActivity || a.lastUpdate;
-			const bTime = b.metadata?.lastActivity || b.lastUpdate;
-			return new Date(bTime).getTime() - new Date(aTime).getTime();
-		});
-
-		setSessions(groveSessions);
-
-		// If no terminal is determined and multiple are available, show terminal selection
-		if (!terminalToUse && terminals.length > 1) {
-			setViewMode('selectTerminal');
-			setShowedTerminalSelection(true);
-			setLoading(false);
-			return;
-		}
-
-		setSelectedTerminal(terminalToUse);
-
-		// If only one session, resume it directly
-		if (groveSessions.length === 1) {
-			const session = groveSessions[0];
-			const worktree = session.worktreePath
-				? metadata.worktrees.find((w) => w.worktreePath === session.worktreePath)
-				: undefined;
-			const result = claudeSessionService.resumeSession(
-				session.sessionId,
-				session.workspacePath,
-				terminalToUse!,
-				groveRef.name,
-				worktree?.name
-			);
-			if (result.success) {
-				goBack();
-			} else {
-				setError(result.message);
+		const load = async () => {
+			// Check if supported terminals are available
+			const terminals = await claudeSessionService.detectAvailableTerminals();
+			if (cancelled) return;
+			if (terminals.length === 0) {
+				setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
 				setLoading(false);
+				return;
 			}
-			return;
-		}
 
-		// Multiple sessions - show selection
-		setViewMode('selectSession');
-		setLoading(false);
-	}, [groveId, worktreePath, goBack, claudeSessionService, sessionsService, settingsService]);
+			setAvailableTerminals(terminals);
 
-	const handleSelectTerminal = (terminal: ClaudeTerminalType) => {
+			// Check if user has a selected terminal in settings
+			const settings = settingsService.readSettings();
+			const userSelectedTerminal = settings.selectedClaudeTerminal;
+
+			// Determine which terminal to use
+			let terminalToUse: ClaudeTerminalType | null = null;
+			if (userSelectedTerminal && terminals.includes(userSelectedTerminal)) {
+				terminalToUse = userSelectedTerminal;
+			} else if (terminals.length === 1) {
+				terminalToUse = terminals[0];
+			}
+
+			const groveRef = grovesService.getGroveById(groveId);
+			if (!groveRef) {
+				setError('Grove not found');
+				setLoading(false);
+				return;
+			}
+
+			setGroveName(groveRef.name);
+
+			const metadata = grovesService.readGroveMetadata(groveRef.path);
+			if (!metadata) {
+				setError('Grove metadata not found');
+				setLoading(false);
+				return;
+			}
+
+			setGroveWorktrees(metadata.worktrees);
+
+			// Get sessions for this grove
+			let groveSessions = sessionsService
+				.getSessionsByGrove(groveId)
+				.filter((s) => s.isRunning && s.agentType === 'claude');
+
+			// If worktreePath is provided, filter to that worktree only
+			if (worktreePath) {
+				groveSessions = groveSessions.filter((s) => s.worktreePath === worktreePath);
+			}
+
+			if (groveSessions.length === 0) {
+				setError('No active Claude sessions found in this grove');
+				setLoading(false);
+				return;
+			}
+
+			// Sort by most recent activity first
+			groveSessions.sort((a, b) => {
+				const aTime = a.metadata?.lastActivity || a.lastUpdate;
+				const bTime = b.metadata?.lastActivity || b.lastUpdate;
+				return new Date(bTime).getTime() - new Date(aTime).getTime();
+			});
+
+			setSessions(groveSessions);
+
+			// If no terminal is determined and multiple are available, show terminal selection
+			if (!terminalToUse && terminals.length > 1) {
+				setViewMode('selectTerminal');
+				setShowedTerminalSelection(true);
+				setLoading(false);
+				return;
+			}
+
+			setSelectedTerminal(terminalToUse);
+
+			// If only one session, resume it directly
+			if (groveSessions.length === 1) {
+				const session = groveSessions[0];
+				const worktree = session.worktreePath
+					? metadata.worktrees.find((w) => w.worktreePath === session.worktreePath)
+					: undefined;
+				const result = await claudeSessionService.resumeSession(
+					session.sessionId,
+					session.workspacePath,
+					terminalToUse!,
+					groveRef.name,
+					worktree?.name
+				);
+				if (cancelled) return;
+				if (result.success) {
+					goBack();
+				} else {
+					setError(result.message);
+					setLoading(false);
+				}
+				return;
+			}
+
+			// Multiple sessions - show selection
+			setViewMode('selectSession');
+			setLoading(false);
+		};
+
+		void load();
+		return () => {
+			cancelled = true;
+		};
+	}, [
+		groveId,
+		worktreePath,
+		goBack,
+		claudeSessionService,
+		sessionsService,
+		settingsService,
+		grovesService,
+	]);
+
+	const handleSelectTerminal = async (terminal: ClaudeTerminalType) => {
 		setSelectedTerminal(terminal);
 		if (sessions.length === 1) {
 			const session = sessions[0];
-			const result = claudeSessionService.resumeSession(
+			const result = await claudeSessionService.resumeSession(
 				session.sessionId,
 				session.workspacePath,
 				terminal,
@@ -224,8 +243,8 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 		}
 	};
 
-	const handleSelectSession = (session: AgentSession) => {
-		const result = claudeSessionService.resumeSession(
+	const handleSelectSession = async (session: AgentSession) => {
+		const result = await claudeSessionService.resumeSession(
 			session.sessionId,
 			session.workspacePath,
 			selectedTerminal!,
@@ -265,9 +284,9 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 				}
 			} else if (key.return) {
 				if (viewMode === 'selectTerminal') {
-					handleSelectTerminal(availableTerminals[selectedIndex]);
+					void handleSelectTerminal(availableTerminals[selectedIndex]);
 				} else {
-					handleSelectSession(sessions[selectedIndex]);
+					void handleSelectSession(sessions[selectedIndex]);
 				}
 			} else if (input === 's' && viewMode === 'selectTerminal') {
 				// Open terminal settings

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
@@ -25,9 +25,21 @@ export function ClaudeTerminalSettingsScreen() {
 
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [savedMessage, setSavedMessage] = useState<string | null>(null);
-
-	const availableTerminals = claudeSessionService.detectAvailableTerminals();
+	const [availableTerminals, setAvailableTerminals] = useState<ClaudeTerminalType[]>([]);
 	const allTerminals: ClaudeTerminalType[] = ['konsole', 'kitty'];
+
+	// Detect installed terminals once on mount (async, non-blocking).
+	useEffect(() => {
+		let cancelled = false;
+		claudeSessionService.detectAvailableTerminals().then((found) => {
+			if (!cancelled) {
+				setAvailableTerminals(found);
+			}
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [claudeSessionService]);
 
 	const handleSelectTerminal = (terminalType: ClaudeTerminalType) => {
 		settingsService.updateSettings({ selectedClaudeTerminal: terminalType });

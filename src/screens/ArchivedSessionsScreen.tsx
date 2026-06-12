@@ -86,9 +86,17 @@ export function ArchivedSessionsScreen({ groveId, worktreePath }: ArchivedSessio
 	}, [sessionsService, worktreePath, worktree?.bgSessionId]);
 
 	useEffect(() => {
+		let cancelled = false;
 		setSessions(loadSessions());
-		setAvailableTerminals(claudeSessionService.detectAvailableTerminals());
-		setLoading(false);
+		claudeSessionService.detectAvailableTerminals().then((found) => {
+			if (!cancelled) {
+				setAvailableTerminals(found);
+				setLoading(false);
+			}
+		});
+		return () => {
+			cancelled = true;
+		};
 	}, [loadSessions, claudeSessionService]);
 
 	// Determine which terminal to use, or null when the user must pick one.
@@ -103,9 +111,9 @@ export function ArchivedSessionsScreen({ groveId, worktreePath }: ArchivedSessio
 		return availableTerminals.length === 1 ? availableTerminals[0] : null;
 	};
 
-	const resume = (session: AgentSession, terminal: ClaudeTerminalType) => {
+	const resume = async (session: AgentSession, terminal: ClaudeTerminalType) => {
 		const workingDir = session.workspacePath || worktreePath;
-		const result = claudeSessionService.resumeSession(
+		const result = await claudeSessionService.resumeSession(
 			session.sessionId,
 			workingDir,
 			terminal,
@@ -138,7 +146,7 @@ export function ArchivedSessionsScreen({ groveId, worktreePath }: ArchivedSessio
 			setSelectedIndex(0);
 			return;
 		}
-		resume(session, terminal);
+		void resume(session, terminal);
 	};
 
 	useInput(
@@ -168,7 +176,7 @@ export function ArchivedSessionsScreen({ groveId, worktreePath }: ArchivedSessio
 				if (viewMode === 'selectTerminal') {
 					const terminal = availableTerminals[selectedIndex];
 					if (pendingSession) {
-						resume(pendingSession, terminal);
+						void resume(pendingSession, terminal);
 						setPendingSession(null);
 					}
 				} else {

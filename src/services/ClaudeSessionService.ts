@@ -1,4 +1,4 @@
-import { execSync, spawn, spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
@@ -13,6 +13,7 @@ import {
 	listClaudeAgentSessions,
 	shortSessionId,
 } from '../utils/claudeAgents.js';
+import { commandExists } from '../utils/commandExists.js';
 import { getDirenvWarning, prefixCommandWithDirenv, wrapSpawnWithDirenv } from '../utils/direnv.js';
 import { hasExternalEditor, openExternalEditor } from '../utils/externalEditor.js';
 import {
@@ -28,9 +29,9 @@ import type { ClaudeSessionResult } from './types.js';
  */
 export interface IClaudeSessionService {
 	/** Detect all available supported terminals (konsole or kitty) */
-	detectAvailableTerminals(): ClaudeTerminalType[];
+	detectAvailableTerminals(): Promise<ClaudeTerminalType[]>;
 	/** @deprecated Use detectAvailableTerminals() instead */
-	detectTerminal(): ClaudeTerminalType | null;
+	detectTerminal(): Promise<ClaudeTerminalType | null>;
 	/** Get the default template for a terminal type */
 	getDefaultTemplate(terminalType: ClaudeTerminalType): string;
 	/** Get the effective template for a terminal type */
@@ -58,7 +59,7 @@ export interface IClaudeSessionService {
 		projectPath?: string,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult;
+	): Promise<ClaudeSessionResult>;
 	/**
 	 * Launch an "Instant Claude" background session like {@link launchInstantSession},
 	 * but seed the prompt by replacing the template's `{prompt}` placeholder with
@@ -72,7 +73,7 @@ export interface IClaudeSessionService {
 		projectPath?: string,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult;
+	): Promise<ClaudeSessionResult>;
 	/**
 	 * Launch a standard Claude session as a background session (`claude --bg`, no
 	 * prompt) and attach to it immediately, so every regular launch is a tracked,
@@ -85,7 +86,7 @@ export interface IClaudeSessionService {
 		terminalType?: ClaudeTerminalType,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult;
+	): Promise<ClaudeSessionResult>;
 	/** Attach to a running background session via `claude attach <id>` in a terminal */
 	attachSession(
 		sessionId: string,
@@ -95,7 +96,7 @@ export interface IClaudeSessionService {
 		terminalType?: ClaudeTerminalType,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult;
+	): Promise<ClaudeSessionResult>;
 	/** Whether a background session still exists (its `~/.claude/jobs/<id>` dir is present) */
 	isBackgroundSessionAlive(sessionId: string): boolean;
 	/** List all live Claude sessions (interactive + background) via `claude agents --json` */
@@ -129,7 +130,7 @@ export interface IClaudeSessionService {
 		terminalType?: ClaudeTerminalType,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult;
+	): Promise<ClaudeSessionResult>;
 	/** Resume an existing Claude session */
 	resumeSession(
 		sessionId: string,
@@ -137,7 +138,7 @@ export interface IClaudeSessionService {
 		terminalType: ClaudeTerminalType,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult;
+	): Promise<ClaudeSessionResult>;
 	/** Continue the most recent Claude session in a directory */
 	continueSession(
 		workingDir: string,
@@ -146,7 +147,7 @@ export interface IClaudeSessionService {
 		terminalType?: ClaudeTerminalType,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult;
+	): Promise<ClaudeSessionResult>;
 }
 
 /**
@@ -161,26 +162,22 @@ export class ClaudeSessionService implements IClaudeSessionService {
 	) {}
 
 	/**
-	 * Check if a command exists in the system PATH
+	 * Check if a command exists in the system PATH (async, non-blocking).
+	 * Delegates to the shared, cached {@link commandExists} helper.
 	 */
-	private commandExists(command: string): boolean {
-		try {
-			execSync(`which ${command}`, { stdio: 'ignore' });
-			return true;
-		} catch {
-			return false;
-		}
+	private commandExists(command: string): Promise<boolean> {
+		return commandExists(command);
 	}
 
 	/**
 	 * Detect all available supported terminals (konsole or kitty)
 	 */
-	detectAvailableTerminals(): ClaudeTerminalType[] {
+	async detectAvailableTerminals(): Promise<ClaudeTerminalType[]> {
 		const terminals: ClaudeTerminalType[] = [];
-		if (this.commandExists('konsole')) {
+		if (await this.commandExists('konsole')) {
 			terminals.push('konsole');
 		}
-		if (this.commandExists('kitty')) {
+		if (await this.commandExists('kitty')) {
 			terminals.push('kitty');
 		}
 		return terminals;
@@ -190,8 +187,8 @@ export class ClaudeSessionService implements IClaudeSessionService {
 	 * Detect which supported terminal is available (konsole or kitty)
 	 * @deprecated Use detectAvailableTerminals() instead
 	 */
-	detectTerminal(): ClaudeTerminalType | null {
-		const terminals = this.detectAvailableTerminals();
+	async detectTerminal(): Promise<ClaudeTerminalType | null> {
+		const terminals = await this.detectAvailableTerminals();
 		return terminals.length > 0 ? terminals[0] : null;
 	}
 
@@ -465,14 +462,14 @@ launch --title "cmd" bash
 	 * printing the session's short ID, which is parsed and returned so the caller
 	 * can persist it and later attach with `attachSession`.
 	 */
-	launchInstantSession(
+	async launchInstantSession(
 		workingDir: string,
 		repositoryPath: string,
 		projectPath?: string,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult {
-		if (!this.commandExists('claude')) {
+	): Promise<ClaudeSessionResult> {
+		if (!(await this.commandExists('claude'))) {
 			return {
 				success: false,
 				message: 'Claude CLI not found. Please install Claude CLI first.',
@@ -510,15 +507,15 @@ launch --title "cmd" bash
 	 * (e.g. a linked Asana task's name + description), opened in $EDITOR for review,
 	 * then dispatched via `claude --bg`. Mirrors {@link launchInstantSession}.
 	 */
-	launchInstantSessionFromReference(
+	async launchInstantSessionFromReference(
 		workingDir: string,
 		repositoryPath: string,
 		promptBody: string,
 		projectPath?: string,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult {
-		if (!this.commandExists('claude')) {
+	): Promise<ClaudeSessionResult> {
+		if (!(await this.commandExists('claude'))) {
 			return {
 				success: false,
 				message: 'Claude CLI not found. Please install Claude CLI first.',
@@ -557,15 +554,15 @@ launch --title "cmd" bash
 	 * caller can persist it on the worktree. If the attach step fails, the session
 	 * id is still returned (the background session was created and is tracked).
 	 */
-	launchStandardSession(
+	async launchStandardSession(
 		workingDir: string,
 		repositoryPath: string,
 		projectPath?: string,
 		terminalType?: ClaudeTerminalType,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult {
-		if (!this.commandExists('claude')) {
+	): Promise<ClaudeSessionResult> {
+		if (!(await this.commandExists('claude'))) {
 			return {
 				success: false,
 				message: 'Claude CLI not found. Please install Claude CLI first.',
@@ -579,7 +576,7 @@ launch --title "cmd" bash
 		}
 
 		const sessionId = dispatched.sessionId;
-		const attach = this.attachSession(
+		const attach = await this.attachSession(
 			shortSessionId(sessionId),
 			workingDir,
 			repositoryPath,
@@ -654,7 +651,7 @@ launch --title "cmd" bash
 	 * Attach to a running background Claude session in a terminal, launching
 	 * `claude attach <sessionId>` via the repository's session template.
 	 */
-	attachSession(
+	async attachSession(
 		sessionId: string,
 		workingDir: string,
 		repositoryPath: string,
@@ -662,7 +659,7 @@ launch --title "cmd" bash
 		terminalType?: ClaudeTerminalType,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult {
+	): Promise<ClaudeSessionResult> {
 		// Determine which terminal to use (same logic as openSession)
 		let terminal: ClaudeTerminalType | undefined = terminalType;
 		if (!terminal) {
@@ -670,7 +667,7 @@ launch --title "cmd" bash
 			if (settings.selectedClaudeTerminal) {
 				terminal = settings.selectedClaudeTerminal;
 			} else {
-				const detected = this.detectTerminal();
+				const detected = await this.detectTerminal();
 				terminal = detected ?? undefined;
 			}
 		}
@@ -682,14 +679,14 @@ launch --title "cmd" bash
 			};
 		}
 
-		if (!this.commandExists(terminal)) {
+		if (!(await this.commandExists(terminal))) {
 			return {
 				success: false,
 				message: `Selected terminal '${terminal}' is not available on this system.`,
 			};
 		}
 
-		if (!this.commandExists('claude')) {
+		if (!(await this.commandExists('claude'))) {
 			return {
 				success: false,
 				message: 'Claude CLI not found. Please install Claude CLI first.',
@@ -797,14 +794,14 @@ launch --title "cmd" bash
 	/**
 	 * Open Claude in a terminal session with the working directory set
 	 */
-	openSession(
+	async openSession(
 		workingDir: string,
 		repositoryPath: string,
 		projectPath?: string,
 		terminalType?: ClaudeTerminalType,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult {
+	): Promise<ClaudeSessionResult> {
 		// Determine which terminal to use
 		let terminal: ClaudeTerminalType | undefined = terminalType;
 		if (!terminal) {
@@ -814,7 +811,7 @@ launch --title "cmd" bash
 				terminal = settings.selectedClaudeTerminal;
 			} else {
 				// Auto-detect
-				const detected = this.detectTerminal();
+				const detected = await this.detectTerminal();
 				terminal = detected ?? undefined;
 			}
 		}
@@ -827,7 +824,7 @@ launch --title "cmd" bash
 		}
 
 		// Verify the selected terminal is actually available
-		if (!this.commandExists(terminal)) {
+		if (!(await this.commandExists(terminal))) {
 			return {
 				success: false,
 				message: `Selected terminal '${terminal}' is not available on this system.`,
@@ -835,7 +832,7 @@ launch --title "cmd" bash
 		}
 
 		// Check if claude command is available
-		if (!this.commandExists('claude')) {
+		if (!(await this.commandExists('claude'))) {
 			return {
 				success: false,
 				message: 'Claude CLI not found. Please install Claude CLI first.',
@@ -966,14 +963,14 @@ launch --title "cmd" bash
 	/**
 	 * Continue the most recent Claude session in a directory using `claude --continue`
 	 */
-	continueSession(
+	async continueSession(
 		workingDir: string,
 		repositoryPath: string,
 		projectPath?: string,
 		terminalType?: ClaudeTerminalType,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult {
+	): Promise<ClaudeSessionResult> {
 		// Determine which terminal to use (same logic as openSession)
 		let terminal: ClaudeTerminalType | undefined = terminalType;
 		if (!terminal) {
@@ -981,7 +978,7 @@ launch --title "cmd" bash
 			if (settings.selectedClaudeTerminal) {
 				terminal = settings.selectedClaudeTerminal;
 			} else {
-				const detected = this.detectTerminal();
+				const detected = await this.detectTerminal();
 				terminal = detected ?? undefined;
 			}
 		}
@@ -993,14 +990,14 @@ launch --title "cmd" bash
 			};
 		}
 
-		if (!this.commandExists(terminal)) {
+		if (!(await this.commandExists(terminal))) {
 			return {
 				success: false,
 				message: `Selected terminal '${terminal}' is not available on this system.`,
 			};
 		}
 
-		if (!this.commandExists('claude')) {
+		if (!(await this.commandExists('claude'))) {
 			return {
 				success: false,
 				message: 'Claude CLI not found. Please install Claude CLI first.',
@@ -1039,15 +1036,15 @@ launch --title "cmd" bash
 	/**
 	 * Resume an existing Claude session
 	 */
-	resumeSession(
+	async resumeSession(
 		sessionId: string,
 		workingDir: string,
 		terminalType: ClaudeTerminalType,
 		groveName?: string,
 		worktreeName?: string
-	): ClaudeSessionResult {
+	): Promise<ClaudeSessionResult> {
 		// Verify the selected terminal is actually available
-		if (!this.commandExists(terminalType)) {
+		if (!(await this.commandExists(terminalType))) {
 			return {
 				success: false,
 				message: `Selected terminal '${terminalType}' is not available on this system.`,
@@ -1055,7 +1052,7 @@ launch --title "cmd" bash
 		}
 
 		// Check if claude command is available
-		if (!this.commandExists('claude')) {
+		if (!(await this.commandExists('claude'))) {
 			return {
 				success: false,
 				message: 'Claude CLI not found. Please install Claude CLI first.',

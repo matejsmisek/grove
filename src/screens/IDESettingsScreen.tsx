@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
@@ -33,6 +33,10 @@ export function IDESettingsScreen() {
 	const [tempCommand, setTempCommand] = useState('');
 	const [tempArgs, setTempArgs] = useState('');
 
+	// Detected availability per IDE type (computed async on mount). Undefined until
+	// the probe completes, so the "(not detected)" marker only appears once known.
+	const [availability, setAvailability] = useState<Partial<Record<IDEType, boolean>>>({});
+
 	// Get the current config for an IDE
 	const getIDEConfig = (ideType: IDEType): IDEConfig => {
 		if (settings.ideConfigs && settings.ideConfigs[ideType]) {
@@ -40,6 +44,27 @@ export function IDESettingsScreen() {
 		}
 		return getDefaultIDEConfig(ideType);
 	};
+
+	useEffect(() => {
+		let cancelled = false;
+		void (async () => {
+			const jetbrainsAvailable = (await detectAvailableIDEs()).includes('jetbrains-auto');
+			const entries = await Promise.all(
+				ALL_IDE_TYPES.map(async (ideType): Promise<[IDEType, boolean]> => {
+					if (ideType === 'jetbrains-auto') {
+						return [ideType, jetbrainsAvailable];
+					}
+					return [ideType, await isCommandAvailable(getIDEConfig(ideType).command)];
+				})
+			);
+			if (!cancelled) {
+				setAvailability(Object.fromEntries(entries) as Partial<Record<IDEType, boolean>>);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [settings.ideConfigs]);
 
 	// Handle IDE selection
 	const handleSelectIDE = (ideType: IDEType) => {
@@ -227,12 +252,9 @@ export function IDESettingsScreen() {
 			{ALL_IDE_TYPES.map((ideType, index) => {
 				const isSelected = index === selectedIndex;
 				const isCurrent = settings.selectedIDE === ideType;
-				const config = getIDEConfig(ideType);
-				// For jetbrains-auto, check if any JetBrains IDE is available
-				const isAvailable =
-					ideType === 'jetbrains-auto'
-						? detectAvailableIDEs().includes('jetbrains-auto')
-						: isCommandAvailable(config.command);
+				// Availability is probed asynchronously; default to available until known
+				// so the "(not detected)" marker appears rather than flashing off.
+				const isAvailable = availability[ideType] ?? true;
 				const hasCustomConfig = settings.ideConfigs && settings.ideConfigs[ideType];
 
 				return (

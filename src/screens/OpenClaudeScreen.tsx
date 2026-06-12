@@ -38,89 +38,100 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 	const [selectedTerminal, setSelectedTerminal] = useState<ClaudeTerminalType | null>(null);
 
 	useEffect(() => {
-		// Check if supported terminals are available
-		const terminals = claudeSessionService.detectAvailableTerminals();
-		if (terminals.length === 0) {
-			setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
-			setLoading(false);
-			return;
-		}
+		let cancelled = false;
 
-		setAvailableTerminals(terminals);
-
-		// Check if user has a selected terminal in settings
-		const settings = settingsService.readSettings();
-		const userSelectedTerminal = settings.selectedClaudeTerminal;
-
-		// Determine which terminal to use
-		let terminalToUse: ClaudeTerminalType | null = null;
-		if (userSelectedTerminal && terminals.includes(userSelectedTerminal)) {
-			terminalToUse = userSelectedTerminal;
-		} else if (terminals.length === 1) {
-			terminalToUse = terminals[0];
-		}
-
-		const groveRef = grovesService.getGroveById(groveId);
-		if (!groveRef) {
-			setError('Grove not found');
-			setLoading(false);
-			return;
-		}
-
-		setGroveName(groveRef.name);
-
-		const metadata = grovesService.readGroveMetadata(groveRef.path);
-		if (!metadata) {
-			setError('Grove metadata not found');
-			setLoading(false);
-			return;
-		}
-
-		if (metadata.worktrees.length === 0) {
-			setError('No worktrees found in this grove');
-			setLoading(false);
-			return;
-		}
-
-		// If no terminal is determined and multiple are available, show terminal selection
-		if (!terminalToUse && terminals.length > 1) {
-			setViewMode('selectTerminal');
-			setWorktrees(metadata.worktrees);
-			setLoading(false);
-			return;
-		}
-
-		setSelectedTerminal(terminalToUse);
-
-		// If only one worktree, open Claude directly
-		if (metadata.worktrees.length === 1) {
-			const worktree = metadata.worktrees[0];
-			// Use project path within worktree if available, otherwise use worktree path
-			const workingDir = worktree.projectPath
-				? `${worktree.worktreePath}/${worktree.projectPath}`
-				: worktree.worktreePath;
-			const result = claudeSessionService.openSession(
-				workingDir,
-				worktree.repositoryPath,
-				worktree.projectPath,
-				terminalToUse!,
-				groveRef.name,
-				worktree.name
-			);
-			if (result.success) {
-				goBack();
-			} else {
-				setError(result.message);
+		const load = async () => {
+			// Check if supported terminals are available
+			const terminals = await claudeSessionService.detectAvailableTerminals();
+			if (cancelled) return;
+			if (terminals.length === 0) {
+				setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
 				setLoading(false);
+				return;
 			}
-			return;
-		}
 
-		// Multiple worktrees - show selection
-		setWorktrees(metadata.worktrees);
-		setViewMode('selectWorktree');
-		setLoading(false);
-	}, [groveId, goBack, claudeSessionService, settingsService]);
+			setAvailableTerminals(terminals);
+
+			// Check if user has a selected terminal in settings
+			const settings = settingsService.readSettings();
+			const userSelectedTerminal = settings.selectedClaudeTerminal;
+
+			// Determine which terminal to use
+			let terminalToUse: ClaudeTerminalType | null = null;
+			if (userSelectedTerminal && terminals.includes(userSelectedTerminal)) {
+				terminalToUse = userSelectedTerminal;
+			} else if (terminals.length === 1) {
+				terminalToUse = terminals[0];
+			}
+
+			const groveRef = grovesService.getGroveById(groveId);
+			if (!groveRef) {
+				setError('Grove not found');
+				setLoading(false);
+				return;
+			}
+
+			setGroveName(groveRef.name);
+
+			const metadata = grovesService.readGroveMetadata(groveRef.path);
+			if (!metadata) {
+				setError('Grove metadata not found');
+				setLoading(false);
+				return;
+			}
+
+			if (metadata.worktrees.length === 0) {
+				setError('No worktrees found in this grove');
+				setLoading(false);
+				return;
+			}
+
+			// If no terminal is determined and multiple are available, show terminal selection
+			if (!terminalToUse && terminals.length > 1) {
+				setViewMode('selectTerminal');
+				setWorktrees(metadata.worktrees);
+				setLoading(false);
+				return;
+			}
+
+			setSelectedTerminal(terminalToUse);
+
+			// If only one worktree, open Claude directly
+			if (metadata.worktrees.length === 1) {
+				const worktree = metadata.worktrees[0];
+				// Use project path within worktree if available, otherwise use worktree path
+				const workingDir = worktree.projectPath
+					? `${worktree.worktreePath}/${worktree.projectPath}`
+					: worktree.worktreePath;
+				const result = await claudeSessionService.openSession(
+					workingDir,
+					worktree.repositoryPath,
+					worktree.projectPath,
+					terminalToUse!,
+					groveRef.name,
+					worktree.name
+				);
+				if (cancelled) return;
+				if (result.success) {
+					goBack();
+				} else {
+					setError(result.message);
+					setLoading(false);
+				}
+				return;
+			}
+
+			// Multiple worktrees - show selection
+			setWorktrees(metadata.worktrees);
+			setViewMode('selectWorktree');
+			setLoading(false);
+		};
+
+		void load();
+		return () => {
+			cancelled = true;
+		};
+	}, [groveId, goBack, claudeSessionService, settingsService, grovesService]);
 
 	const handleSelectTerminal = (terminal: ClaudeTerminalType) => {
 		setSelectedTerminal(terminal);
@@ -128,12 +139,12 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 		setSelectedIndex(0); // Reset selection for worktree
 	};
 
-	const handleSelectWorktree = (worktree: Worktree) => {
+	const handleSelectWorktree = async (worktree: Worktree) => {
 		// Use project path within worktree if available, otherwise use worktree path
 		const workingDir = worktree.projectPath
 			? `${worktree.worktreePath}/${worktree.projectPath}`
 			: worktree.worktreePath;
-		const result = claudeSessionService.openSession(
+		const result = await claudeSessionService.openSession(
 			workingDir,
 			worktree.repositoryPath,
 			worktree.projectPath,
@@ -176,7 +187,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 				if (viewMode === 'selectTerminal') {
 					handleSelectTerminal(availableTerminals[selectedIndex]);
 				} else {
-					handleSelectWorktree(worktrees[selectedIndex]);
+					void handleSelectWorktree(worktrees[selectedIndex]);
 				}
 			} else if (input === 's' && viewMode === 'selectTerminal') {
 				// Open terminal settings

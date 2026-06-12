@@ -413,7 +413,7 @@ function getWorktreePath(worktree: Worktree): string {
 /**
  * Get the effective IDE config for a worktree
  */
-function getIDEConfigForWorktree(
+async function getIDEConfigForWorktree(
 	groveConfigService: IGroveConfigService,
 	worktree: Worktree,
 	settings: Settings,
@@ -428,7 +428,7 @@ function getIDEConfigForWorktree(
 	if (repoIDEConfig) {
 		// If it's a reference to a global IDE type (e.g., "@phpstorm")
 		if ('ideType' in repoIDEConfig) {
-			const { resolvedType, config } = resolveIDEForPath(
+			const { resolvedType, config } = await resolveIDEForPath(
 				repoIDEConfig.ideType,
 				targetPath,
 				settings.ideConfigs
@@ -443,7 +443,7 @@ function getIDEConfigForWorktree(
 	if (!settings.selectedIDE) {
 		return { config: undefined };
 	}
-	const { resolvedType, config } = resolveIDEForPath(
+	const { resolvedType, config } = await resolveIDEForPath(
 		settings.selectedIDE,
 		targetPath,
 		settings.ideConfigs
@@ -507,7 +507,7 @@ export function GroveDetailScreen({
 	// Ink render loop. We show a loading screen first and run the blocking work
 	// from an effect on the next tick, so the feedback paints before we block.
 	const [launchingMessage, setLaunchingMessage] = useState<string | null>(null);
-	const launchRunnerRef = useRef<(() => void) | null>(null);
+	const launchRunnerRef = useRef<(() => void | Promise<void>) | null>(null);
 
 	// Get workspace context to display workspace name
 	const workspaceContext = workspaceService.getCurrentContext();
@@ -684,13 +684,15 @@ export function GroveDetailScreen({
 		const timer = setTimeout(() => {
 			const run = launchRunnerRef.current;
 			launchRunnerRef.current = null;
-			run?.();
+			void run?.();
 		}, 0);
 		return () => clearTimeout(timer);
 	}, [launchingMessage]);
 
-	// Show a loading screen, then run the (blocking) launch work on the next tick.
-	const beginLaunch = (message: string, run: () => void) => {
+	// Show a loading screen, then run the launch work on the next tick. The launch
+	// itself is async; any still-blocking step (e.g. the $EDITOR prompt) runs after
+	// the loading message has painted.
+	const beginLaunch = (message: string, run: () => void | Promise<void>) => {
 		returnToDetail();
 		launchRunnerRef.current = run;
 		setLaunchingMessage(message);
@@ -746,8 +748,8 @@ export function GroveDetailScreen({
 	const handleOpenInClaude = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
-		beginLaunch(`Launching Claude in ${selected.repositoryName}…`, () => {
-			const result = claudeSessionService.launchStandardSession(
+		beginLaunch(`Launching Claude in ${selected.repositoryName}…`, async () => {
+			const result = await claudeSessionService.launchStandardSession(
 				targetPath,
 				selected.repositoryPath,
 				selected.projectPath,
@@ -770,8 +772,8 @@ export function GroveDetailScreen({
 	const handleInstantClaude = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
-		beginLaunch(`Opening prompt editor for ${selected.repositoryName}…`, () => {
-			const result = claudeSessionService.launchInstantSession(
+		beginLaunch(`Opening prompt editor for ${selected.repositoryName}…`, async () => {
+			const result = await claudeSessionService.launchInstantSession(
 				targetPath,
 				selected.repositoryPath,
 				selected.projectPath,
@@ -804,8 +806,8 @@ export function GroveDetailScreen({
 			.getTask(reference.id)
 			.then((task) => {
 				const promptBody = asanaPlugin.buildInstantClaudePrompt(task);
-				beginLaunch(`Opening prompt editor for ${selected.repositoryName}…`, () => {
-					const result = claudeSessionService.launchInstantSessionFromReference(
+				beginLaunch(`Opening prompt editor for ${selected.repositoryName}…`, async () => {
+					const result = await claudeSessionService.launchInstantSessionFromReference(
 						targetPath,
 						selected.repositoryPath,
 						promptBody,
@@ -830,8 +832,8 @@ export function GroveDetailScreen({
 	const handleAttachSession = (session: ClaudeAgentInfo) => {
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
-		beginLaunch(`Attaching to Claude in ${selected.repositoryName}…`, () => {
-			const result = claudeSessionService.attachSession(
+		beginLaunch(`Attaching to Claude in ${selected.repositoryName}…`, async () => {
+			const result = await claudeSessionService.attachSession(
 				shortSessionId(session.sessionId ?? ''),
 				targetPath,
 				selected.repositoryPath,
@@ -848,19 +850,19 @@ export function GroveDetailScreen({
 	};
 
 	// Resume a standard (interactive) session (`claude --resume <session id>`).
-	const handleResumeSession = (session: ClaudeAgentInfo) => {
+	const handleResumeSession = async (session: ClaudeAgentInfo) => {
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
 		const settings = settingsService.readSettings();
 		const terminal =
-			settings.selectedClaudeTerminal ?? claudeSessionService.detectTerminal() ?? undefined;
+			settings.selectedClaudeTerminal ?? (await claudeSessionService.detectTerminal()) ?? undefined;
 		if (!terminal) {
 			returnToDetail();
 			setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
 			return;
 		}
-		beginLaunch(`Resuming Claude session in ${selected.repositoryName}…`, () => {
-			const result = claudeSessionService.resumeSession(
+		beginLaunch(`Resuming Claude session in ${selected.repositoryName}…`, async () => {
+			const result = await claudeSessionService.resumeSession(
 				session.sessionId ?? '',
 				targetPath,
 				terminal,
@@ -923,13 +925,13 @@ export function GroveDetailScreen({
 		}
 	};
 
-	const handleOpenInIDE = () => {
+	const handleOpenInIDE = async () => {
 		const settings = settingsService.readSettings();
 		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selectedWorktree);
 
 		// Get the IDE config for this worktree
-		const { config, resolvedType } = getIDEConfigForWorktree(
+		const { config, resolvedType } = await getIDEConfigForWorktree(
 			groveConfigService,
 			selectedWorktree,
 			settings,

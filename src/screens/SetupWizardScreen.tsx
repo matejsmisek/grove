@@ -56,6 +56,9 @@ export function SetupWizardScreen() {
 		const jetbrains = ALL_IDE_TYPES.indexOf('jetbrains-auto');
 		return jetbrains >= 0 ? jetbrains : 0;
 	});
+	// Detected availability per IDE type (probed async on mount). Undefined until
+	// known, so the "(not detected)" marker only appears once the probe completes.
+	const [ideAvailability, setIdeAvailability] = useState<Partial<Record<string, boolean>>>({});
 
 	// Detect installed terminals once on mount
 	useEffect(() => {
@@ -65,6 +68,28 @@ export function SetupWizardScreen() {
 				setTerminals(found);
 			}
 		});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
+	// Detect installed IDEs once on mount (async, non-blocking)
+	useEffect(() => {
+		let cancelled = false;
+		void (async () => {
+			const jetbrainsAvailable = (await detectAvailableIDEs()).includes('jetbrains-auto');
+			const entries = await Promise.all(
+				ALL_IDE_TYPES.map(async (ideType): Promise<[string, boolean]> => {
+					if (ideType === 'jetbrains-auto') {
+						return [ideType, jetbrainsAvailable];
+					}
+					return [ideType, await isCommandAvailable(getDefaultIDEConfig(ideType).command)];
+				})
+			);
+			if (!cancelled) {
+				setIdeAvailability(Object.fromEntries(entries));
+			}
+		})();
 		return () => {
 			cancelled = true;
 		};
@@ -240,10 +265,9 @@ export function SetupWizardScreen() {
 					</Box>
 					{ALL_IDE_TYPES.map((ideType, index) => {
 						const isSelected = index === ideIndex;
-						const isAvailable =
-							ideType === 'jetbrains-auto'
-								? detectAvailableIDEs().includes('jetbrains-auto')
-								: isCommandAvailable(getDefaultIDEConfig(ideType).command);
+						// Availability is probed asynchronously; default to available until
+						// known so the "(not detected)" marker appears rather than flashing off.
+						const isAvailable = ideAvailability[ideType] ?? true;
 						return (
 							<Box key={ideType}>
 								<Text color={isSelected ? 'cyan' : undefined} bold={isSelected}>

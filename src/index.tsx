@@ -316,15 +316,17 @@ if (args[0] === 'workspace' && args[1] === 'init') {
 } else if (args[0] === 'claude') {
 	// Handle claude command: grove claude [grove-id]
 	const groveId = args[1]; // Optional grove ID
-	const result = openClaude(groveId);
+	void (async () => {
+		const result = await openClaude(groveId);
 
-	if (result.success) {
-		console.log('✓', result.message);
-		process.exit(0);
-	} else {
-		console.error('✗', result.message);
-		process.exit(1);
-	}
+		if (result.success) {
+			console.log('✓', result.message);
+			process.exit(0);
+		} else {
+			console.error('✗', result.message);
+			process.exit(1);
+		}
+	})();
 } else if (args[0] === 'list') {
 	// Handle list command: grove list [--json]
 	const jsonOutput = args.includes('--json');

@@ -55,7 +55,7 @@ function findCurrentWorktree(resolvedCwd: string, metadata: GroveMetadata): Work
  * @param groveId - Optional grove ID. If not provided, detects grove from cwd.
  * @returns Result indicating success or failure
  */
-export function openClaude(groveId?: string): ClaudeResult {
+export async function openClaude(groveId?: string): Promise<ClaudeResult> {
 	try {
 		// Get services from DI container
 		const container = getContainer();
@@ -146,7 +146,7 @@ export function openClaude(groveId?: string): ClaudeResult {
 			: targetWorktree.worktreePath;
 
 		// Open Claude session
-		const result = claudeSessionService.openSession(
+		const result = await claudeSessionService.openSession(
 			workingDir,
 			targetWorktree.repositoryPath,
 			targetWorktree.projectPath,

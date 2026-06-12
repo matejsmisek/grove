@@ -1,9 +1,10 @@
-import { execSync, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
 import type { IDEConfig, IDEType } from '../storage/types.js';
+import { commandExists } from '../utils/commandExists.js';
 
 export interface IDEResult {
 	success: boolean;
@@ -101,16 +102,11 @@ export function getIDEDisplayName(ideType: IDEType): string {
 }
 
 /**
- * Check if a command exists in the system PATH
+ * Check if a command exists in the system PATH (async, non-blocking).
+ * Delegates to the shared, cached {@link commandExists} helper.
  */
-export function isCommandAvailable(command: string): boolean {
-	try {
-		const checkCmd = os.platform() === 'win32' ? `where ${command}` : `which ${command}`;
-		execSync(checkCmd, { stdio: 'ignore' });
-		return true;
-	} catch {
-		return false;
-	}
+export function isCommandAvailable(command: string): Promise<boolean> {
+	return commandExists(command);
 }
 
 /**
@@ -227,11 +223,11 @@ export interface ResolvedIDEConfig {
  * Resolve IDE type and config for a specific project path.
  * Handles 'jetbrains-auto' by detecting the appropriate JetBrains IDE.
  */
-export function resolveIDEForPath(
+export async function resolveIDEForPath(
 	ideType: IDEType,
 	projectPath: string,
 	customConfigs?: Partial<Record<IDEType, IDEConfig>>
-): ResolvedIDEConfig {
+): Promise<ResolvedIDEConfig> {
 	let resolvedType: Exclude<IDEType, 'jetbrains-auto'>;
 
 	if (ideType === 'jetbrains-auto') {
@@ -240,7 +236,7 @@ export function resolveIDEForPath(
 		resolvedType = ideType;
 	}
 
-	const config = getEffectiveIDEConfig(resolvedType, customConfigs);
+	const config = await getEffectiveIDEConfig(resolvedType, customConfigs);
 	return { resolvedType, config };
 }
 
@@ -253,7 +249,7 @@ const JETBRAINS_IDE_TYPES: JetBrainsIDEType[] = ['phpstorm', 'webstorm', 'idea',
  * Detect which IDEs are available on the system
  * Returns an array of available IDE types
  */
-export function detectAvailableIDEs(): IDEType[] {
+export async function detectAvailableIDEs(): Promise<IDEType[]> {
 	const available: IDEType[] = [];
 	let hasAnyJetBrains = false;
 
@@ -264,7 +260,7 @@ export function detectAvailableIDEs(): IDEType[] {
 		const definition = IDE_DEFINITIONS[ideType];
 
 		// Check main command
-		if (isCommandAvailable(definition.command)) {
+		if (await isCommandAvailable(definition.command)) {
 			available.push(ideType);
 			if (JETBRAINS_IDE_TYPES.includes(ideType as JetBrainsIDEType)) {
 				hasAnyJetBrains = true;
@@ -275,7 +271,7 @@ export function detectAvailableIDEs(): IDEType[] {
 		// Check alternative commands
 		if (definition.alternativeCommands) {
 			for (const altCmd of definition.alternativeCommands) {
-				if (isCommandAvailable(altCmd)) {
+				if (await isCommandAvailable(altCmd)) {
 					available.push(ideType);
 					if (JETBRAINS_IDE_TYPES.includes(ideType as JetBrainsIDEType)) {
 						hasAnyJetBrains = true;
@@ -305,10 +301,10 @@ export function detectAvailableIDEs(): IDEType[] {
  * Returns custom config if set, otherwise returns default for the IDE type
  * Returns undefined if the IDE type is not valid
  */
-export function getEffectiveIDEConfig(
+export async function getEffectiveIDEConfig(
 	ideType: IDEType | string,
 	customConfigs?: Partial<Record<IDEType, IDEConfig>>
-): IDEConfig | undefined {
+): Promise<IDEConfig | undefined> {
 	// Validate IDE type at runtime (TypeScript types are erased)
 	if (!isValidIDEType(ideType)) {
 		console.warn(`Invalid IDE type: "${ideType}". Valid types: ${ALL_IDE_TYPES.join(', ')}`);
@@ -324,7 +320,7 @@ export function getEffectiveIDEConfig(
 	const definition = IDE_DEFINITIONS[ideType];
 
 	// Check if default command exists, otherwise try alternatives
-	if (isCommandAvailable(definition.command)) {
+	if (await isCommandAvailable(definition.command)) {
 		return {
 			command: definition.command,
 			args: definition.args,
@@ -334,7 +330,7 @@ export function getEffectiveIDEConfig(
 	// Try alternative commands
 	if (definition.alternativeCommands) {
 		for (const altCmd of definition.alternativeCommands) {
-			if (isCommandAvailable(altCmd)) {
+			if (await isCommandAvailable(altCmd)) {
 				return {
 					command: altCmd,
 					args: definition.args,
