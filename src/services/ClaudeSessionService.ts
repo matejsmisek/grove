@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
@@ -113,7 +113,7 @@ export interface IClaudeSessionService {
 	 * mark it archived in the registry so Grove stops showing it. The registry
 	 * entry is kept (archived sessions are stored, just hidden).
 	 */
-	archiveSession(sessionId: string): void;
+	archiveSession(sessionId: string): Promise<void>;
 	/** Apply template by replacing placeholders */
 	applyTemplate(
 		template: string,
@@ -415,8 +415,8 @@ launch --title "cmd" bash
 	 * list, then flag it archived in the registry so it disappears from the UI
 	 * immediately (the entry is kept, just hidden).
 	 */
-	archiveSession(sessionId: string): void {
-		this.claudeRemoveAgent(sessionId);
+	async archiveSession(sessionId: string): Promise<void> {
+		await this.claudeRemoveAgent(sessionId);
 		try {
 			const existing = this.sessionsService.getSession(sessionId);
 			if (existing) {
@@ -444,15 +444,54 @@ launch --title "cmd" bash
 	}
 
 	/** Remove a session from Claude's agent list via `claude rm <id>` (best-effort). */
-	private claudeRemoveAgent(sessionId: string): void {
-		try {
-			spawnSync('claude', ['rm', shortSessionId(sessionId)], {
-				stdio: 'ignore',
-				timeout: 20000,
+	private async claudeRemoveAgent(sessionId: string): Promise<void> {
+		// Non-blocking; failures are ignored — the registry archive still hides the session.
+		await this.spawnCollect('claude', ['rm', shortSessionId(sessionId)], { timeoutMs: 20000 });
+	}
+
+	/**
+	 * Run a command via async `spawn`, collecting stdout/stderr, with a timeout.
+	 * Never rejects: process errors and timeouts are reported on the resolved
+	 * object so callers can branch without try/catch. On timeout the child is
+	 * killed.
+	 */
+	private spawnCollect(
+		command: string,
+		args: string[],
+		opts: { cwd?: string; timeoutMs: number }
+	): Promise<{ stdout: string; stderr: string; error?: Error; timedOut: boolean }> {
+		return new Promise((resolve) => {
+			let stdout = '';
+			let stderr = '';
+			let timedOut = false;
+			let settled = false;
+
+			const proc = spawn(command, args, { cwd: opts.cwd });
+
+			const finish = (extra: { error?: Error } = {}) => {
+				if (settled) {
+					return;
+				}
+				settled = true;
+				clearTimeout(timer);
+				resolve({ stdout, stderr, timedOut, ...extra });
+			};
+
+			const timer = setTimeout(() => {
+				timedOut = true;
+				proc.kill();
+				finish();
+			}, opts.timeoutMs);
+
+			proc.stdout?.on('data', (chunk) => {
+				stdout += chunk.toString();
 			});
-		} catch {
-			// Ignore — the registry archive below still hides the session.
-		}
+			proc.stderr?.on('data', (chunk) => {
+				stderr += chunk.toString();
+			});
+			proc.on('error', (error) => finish({ error }));
+			proc.on('close', () => finish());
+		});
 	}
 
 	/**
@@ -485,7 +524,7 @@ launch --title "cmd" bash
 		}
 
 		const name = this.buildSessionName(repositoryPath, groveName, worktreeName);
-		const dispatched = this.dispatchBackgroundSession(workingDir, name, prompt);
+		const dispatched = await this.dispatchBackgroundSession(workingDir, name, prompt);
 		if ('errorMessage' in dispatched) {
 			return { success: false, message: dispatched.errorMessage };
 		}
@@ -531,7 +570,7 @@ launch --title "cmd" bash
 		}
 
 		const name = this.buildSessionName(repositoryPath, groveName, worktreeName);
-		const dispatched = this.dispatchBackgroundSession(workingDir, name, prompt);
+		const dispatched = await this.dispatchBackgroundSession(workingDir, name, prompt);
 		if ('errorMessage' in dispatched) {
 			return { success: false, message: dispatched.errorMessage };
 		}
@@ -570,7 +609,7 @@ launch --title "cmd" bash
 		}
 
 		const name = this.buildSessionName(repositoryPath, groveName, worktreeName);
-		const dispatched = this.dispatchBackgroundSession(workingDir, name);
+		const dispatched = await this.dispatchBackgroundSession(workingDir, name);
 		if ('errorMessage' in dispatched) {
 			return { success: false, message: dispatched.errorMessage };
 		}
@@ -606,11 +645,11 @@ launch --title "cmd" bash
 	 * `--bg` returns immediately, printing the session's short ID, which is parsed
 	 * and returned. Omitting the prompt launches a plain background session.
 	 */
-	private dispatchBackgroundSession(
+	private async dispatchBackgroundSession(
 		workingDir: string,
 		name: string,
 		prompt?: string
-	): { sessionId: string; warning?: string } | { errorMessage: string } {
+	): Promise<{ sessionId: string; warning?: string } | { errorMessage: string }> {
 		const claudeArgs = ['--bg', '--name', name];
 		if (prompt) {
 			claudeArgs.push(prompt);
@@ -620,31 +659,29 @@ launch --title "cmd" bash
 		// session inherits the same environment an interactive shell would load.
 		const { command, args } = wrapSpawnWithDirenv(workingDir, 'claude', claudeArgs);
 
-		try {
-			const result = spawnSync(command, args, {
-				cwd: workingDir,
-				encoding: 'utf-8',
-			});
+		const result = await this.spawnCollect(command, args, {
+			cwd: workingDir,
+			timeoutMs: 30000,
+		});
 
-			if (result.error) {
-				return { errorMessage: `Failed to launch background session: ${result.error.message}` };
-			}
+		if (result.error) {
+			return { errorMessage: `Failed to launch background session: ${result.error.message}` };
+		}
 
-			const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-			const sessionId = this.parseBackgroundSessionId(output);
+		if (result.timedOut) {
+			return { errorMessage: 'Timed out launching background session.' };
+		}
 
-			if (!sessionId) {
-				return {
-					errorMessage: `Started Claude but could not determine the session ID. Output: ${output.trim().slice(0, 200)}`,
-				};
-			}
+		const output = `${result.stdout}\n${result.stderr}`;
+		const sessionId = this.parseBackgroundSessionId(output);
 
-			return { sessionId, warning: getDirenvWarning(workingDir) };
-		} catch (error) {
+		if (!sessionId) {
 			return {
-				errorMessage: `Failed to launch background session: ${error instanceof Error ? error.message : String(error)}`,
+				errorMessage: `Started Claude but could not determine the session ID. Output: ${output.trim().slice(0, 200)}`,
 			};
 		}
+
+		return { sessionId, warning: getDirenvWarning(workingDir) };
 	}
 
 	/**

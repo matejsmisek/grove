@@ -884,8 +884,10 @@ export function GroveDetailScreen({
 		if (!sessionId) {
 			return;
 		}
-		claudeSessionService.archiveSession(sessionId);
-		// Reflect locally so the session disappears without waiting for the poll.
+		// Fire-and-forget: archiving (`claude rm` + registry flag) is best-effort and
+		// no longer blocks the UI. Reflect locally so the session disappears without
+		// waiting for the removal or the next poll.
+		void claudeSessionService.archiveSession(sessionId);
 		setAgentSessions((prev) => prev.filter((agent) => agent.sessionId !== sessionId));
 		setResultMessage('Terminated Claude session');
 		setTimeout(() => setResultMessage(null), 2000);

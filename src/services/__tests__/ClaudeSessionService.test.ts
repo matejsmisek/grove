@@ -1,3 +1,5 @@
+import { spawn } from 'child_process';
+import { EventEmitter } from 'events';
 import { Volume } from 'memfs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -44,6 +46,53 @@ const { commandState } = vi.hoisted(() => ({ commandState: { installed: new Set<
 vi.mock('../../utils/commandExists.js', () => ({
 	commandExists: vi.fn((command: string) => Promise.resolve(commandState.installed.has(command))),
 }));
+
+// Pass direnv wrapping through unchanged so spawn assertions see the real argv.
+vi.mock('../../utils/direnv.js', () => ({
+	wrapSpawnWithDirenv: (_dir: string, command: string, args: string[]) => ({ command, args }),
+	getDirenvAllowWarning: () => undefined,
+	prefixCommandWithDirenv: (_dir: string, command: string) => command,
+}));
+
+const spawnMock = vi.mocked(spawn);
+
+/**
+ * Build a fake child process for the mocked `spawn`. Emits the given stdout/stderr
+ * then `close` on the next microtask, or `error` when provided. When `hang` is set
+ * it never settles (for timeout tests).
+ */
+function fakeProc(opts: {
+	stdout?: string;
+	stderr?: string;
+	code?: number;
+	error?: Error;
+	hang?: boolean;
+}) {
+	const proc = new EventEmitter() as EventEmitter & {
+		stdout: EventEmitter;
+		stderr: EventEmitter;
+		kill: () => void;
+	};
+	proc.stdout = new EventEmitter();
+	proc.stderr = new EventEmitter();
+	proc.kill = vi.fn();
+	if (!opts.hang) {
+		queueMicrotask(() => {
+			if (opts.error) {
+				proc.emit('error', opts.error);
+				return;
+			}
+			if (opts.stdout) {
+				proc.stdout.emit('data', Buffer.from(opts.stdout));
+			}
+			if (opts.stderr) {
+				proc.stderr.emit('data', Buffer.from(opts.stderr));
+			}
+			proc.emit('close', opts.code ?? 0);
+		});
+	}
+	return proc;
+}
 
 describe('ClaudeSessionService', () => {
 	let service: ClaudeSessionService;
@@ -422,6 +471,116 @@ launch --title "my-worktree-lon" bash`;
 
 		it('detectTerminal returns null when none are installed', async () => {
 			await expect(service.detectTerminal()).resolves.toBeNull();
+		});
+	});
+
+	describe('dispatchBackgroundSession', () => {
+		type Dispatched = { sessionId: string; warning?: string } | { errorMessage: string };
+		const dispatch = (workingDir: string, name: string, prompt?: string): Promise<Dispatched> =>
+			(
+				service as unknown as {
+					dispatchBackgroundSession(d: string, n: string, p?: string): Promise<Dispatched>;
+				}
+			).dispatchBackgroundSession(workingDir, name, prompt);
+
+		it('spawns `claude --bg` and parses the session id from output', async () => {
+			spawnMock.mockImplementation(
+				() => fakeProc({ stdout: 'backgrounded · abc123 · my-name' }) as never
+			);
+
+			const result = await dispatch('/work', 'my-name');
+
+			expect(result).toEqual({ sessionId: 'abc123', warning: undefined });
+			expect(spawnMock).toHaveBeenCalledWith(
+				'claude',
+				['--bg', '--name', 'my-name'],
+				expect.objectContaining({ cwd: '/work' })
+			);
+		});
+
+		it('passes the prompt as a trailing argument when provided', async () => {
+			spawnMock.mockImplementation(
+				() => fakeProc({ stdout: 'backgrounded · def456 · my-name' }) as never
+			);
+
+			await dispatch('/work', 'my-name', 'do the thing');
+
+			expect(spawnMock).toHaveBeenCalledWith(
+				'claude',
+				['--bg', '--name', 'my-name', 'do the thing'],
+				expect.objectContaining({ cwd: '/work' })
+			);
+		});
+
+		it('returns an error when the session id cannot be parsed', async () => {
+			spawnMock.mockImplementation(() => fakeProc({ stdout: 'nothing useful here' }) as never);
+
+			const result = await dispatch('/work', 'my-name');
+
+			expect('errorMessage' in result && result.errorMessage).toContain(
+				'could not determine the session ID'
+			);
+		});
+
+		it('returns an error when spawn emits an error', async () => {
+			spawnMock.mockImplementation(() => fakeProc({ error: new Error('ENOENT') }) as never);
+
+			const result = await dispatch('/work', 'my-name');
+
+			expect('errorMessage' in result && result.errorMessage).toContain('Failed to launch');
+		});
+
+		it('returns a timeout error and kills the process when it hangs', async () => {
+			vi.useFakeTimers();
+			const proc = fakeProc({ hang: true });
+			spawnMock.mockImplementation(() => proc as never);
+
+			const promise = dispatch('/work', 'my-name');
+			await vi.advanceTimersByTimeAsync(30000);
+			const result = await promise;
+
+			expect(result).toEqual({ errorMessage: 'Timed out launching background session.' });
+			expect((proc as unknown as { kill: () => void }).kill).toHaveBeenCalled();
+			vi.useRealTimers();
+		});
+	});
+
+	describe('archiveSession', () => {
+		it('runs `claude rm` and flags an existing registry entry archived', async () => {
+			spawnMock.mockImplementation(() => fakeProc({ code: 0 }) as never);
+			vi.mocked(mockSessionsService.getSession).mockReturnValue({
+				sessionId: 'abc12345',
+				agentType: 'claude',
+				groveId: null,
+				workspacePath: '',
+				worktreePath: null,
+				status: 'idle',
+				isRunning: true,
+				lastUpdate: '2026-01-01T00:00:00Z',
+			});
+
+			await service.archiveSession('abc12345');
+
+			expect(spawnMock).toHaveBeenCalledWith(
+				'claude',
+				expect.arrayContaining(['rm']),
+				expect.any(Object)
+			);
+			expect(mockSessionsService.updateSession).toHaveBeenCalledWith(
+				'abc12345',
+				expect.objectContaining({ archived: true, isRunning: false })
+			);
+		});
+
+		it('adds an archived registry entry when none exists', async () => {
+			spawnMock.mockImplementation(() => fakeProc({ code: 0 }) as never);
+			vi.mocked(mockSessionsService.getSession).mockReturnValue(null);
+
+			await service.archiveSession('zzz99999');
+
+			expect(mockSessionsService.addSession).toHaveBeenCalledWith(
+				expect.objectContaining({ sessionId: 'zzz99999', archived: true, isRunning: false })
+			);
 		});
 	});
 });
