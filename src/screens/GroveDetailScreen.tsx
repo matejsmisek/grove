@@ -450,6 +450,26 @@ function getIDEConfigForWorktree(
 	return { config, resolvedType };
 }
 
+/**
+ * The active modal/panel of the grove detail screen, modelled as one discriminated union so
+ * invalid combinations (e.g. the init-log viewer open while the Claude submenu is active) are
+ * unrepresentable. Plain cursor state (selectedIndex / selectedActionIndex / submenuIndex) and
+ * fetched data live outside this union — they persist across modes, like the worktree list cursor.
+ *
+ * - `list`        — multi-worktree list (the base view when there is more than one worktree).
+ * - `actions`     — the worktree actions menu. The base view in single-worktree mode (always shown
+ *                   inline); an overlay in multi-worktree mode.
+ * - `claudeSubmenu` — the Claude launch / per-session / archive-confirm submenu.
+ * - `asanaAttach` — the "paste the Asana task URL" prompt.
+ * - `initLog`     — the init-actions log viewer.
+ */
+type UIMode =
+	| { type: 'list' }
+	| { type: 'actions' }
+	| { type: 'claudeSubmenu'; mode: 'launch' | 'session' | 'archiveConfirm'; sessionId?: string }
+	| { type: 'asanaAttach'; worktreePath: string; input: string; error: string; busy: boolean }
+	| { type: 'initLog'; content: string };
+
 export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScreenProps) {
 	const { goBack, navigate } = useNavigation();
 	const gitService = useService(GitServiceToken);
@@ -468,20 +488,16 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	const [worktreeDetails, setWorktreeDetails] = useState<WorktreeDetails[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [error, setError] = useState<string | null>(null);
-	const [showActions, setShowActions] = useState(false);
-	const [selectedActionIndex, setSelectedActionIndex] = useState(0);
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
+	// The active modal/panel. Plain cursors (below) persist across mode changes.
+	const [uiMode, setUIMode] = useState<UIMode>({ type: 'list' });
+	// Cursor into the combined worktree-actions list (Claude rows + worktreeActions).
+	const [selectedActionIndex, setSelectedActionIndex] = useState(0);
+	// Cursor into the active Claude submenu's options.
+	const [submenuIndex, setSubmenuIndex] = useState(0);
 	// Live Claude sessions (interactive + background) from `claude agents --json`,
 	// refreshed in the background. Drives the per-worktree status icons + panels.
 	const [agentSessions, setAgentSessions] = useState<ClaudeAgentInfo[]>([]);
-	// Claude panel submenu state for the worktree actions view.
-	const [claudeSubmenu, setClaudeSubmenu] = useState<
-		| { mode: 'launch' }
-		| { mode: 'session'; sessionId: string }
-		| { mode: 'archiveConfirm'; sessionId: string }
-		| null
-	>(null);
-	const [submenuIndex, setSubmenuIndex] = useState(0);
 	// Launching a Claude session blocks (spawnSync / $EDITOR), which freezes the
 	// Ink render loop. We show a loading screen first and run the blocking work
 	// from an effect on the next tick, so the feedback paints before we block.
@@ -491,17 +507,18 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	// Get workspace context to display workspace name
 	const workspaceContext = workspaceService.getCurrentContext();
 	const workspaceName = getContextDisplayName(workspaceContext);
-	const [showInitLog, setShowInitLog] = useState(false);
-	const [initLogContent, setInitLogContent] = useState<string>('');
 	// Whether closed worktrees are shown. Defaults to hidden and is not persisted.
 	const [showClosed, setShowClosed] = useState(false);
 
-	// Asana "Attach reference" flow. When a worktree path is set, a paste-the-URL prompt
-	// takes over the screen; submitting verifies the task via the API before persisting.
-	const [attachingWorktreePath, setAttachingWorktreePath] = useState<string | null>(null);
-	const [attachInput, setAttachInput] = useState('');
-	const [attachError, setAttachError] = useState<string>('');
-	const [attachBusy, setAttachBusy] = useState(false);
+	// Single-worktree groves show their actions inline; the multi-worktree list/overlay split
+	// does not apply. Computed early because the mode helpers below depend on it.
+	const isSingleWorktreeMode = worktreeDetails.length === 1;
+
+	// Close any open overlay back to the base view: the inline actions in single-worktree mode
+	// (always visible), or the worktree list otherwise. Cursor state is intentionally preserved.
+	const closeToBase = () => {
+		setUIMode(isSingleWorktreeMode ? { type: 'actions' } : { type: 'list' });
+	};
 
 	// Load grove details on mount
 	useEffect(() => {
@@ -570,7 +587,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					);
 					if (focusIndex !== -1) {
 						setSelectedIndex(focusIndex);
-						setShowActions(true);
+						setUIMode({ type: 'actions' });
 						setSelectedActionIndex(0);
 					} else {
 						// Fallback: select first non-closed worktree
@@ -584,6 +601,10 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					const firstOpenIndex = details.findIndex((d) => !d.worktree.closed);
 					if (firstOpenIndex !== -1) {
 						setSelectedIndex(firstOpenIndex);
+					}
+					// Single-worktree groves show their actions inline from the start.
+					if (details.length === 1) {
+						setUIMode({ type: 'actions' });
 					}
 				}
 				setLoading(false);
@@ -635,8 +656,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 
 	// Show a loading screen, then run the (blocking) launch work on the next tick.
 	const beginLaunch = (message: string, run: () => void) => {
-		setShowActions(false);
-		setClaudeSubmenu(null);
+		closeToBase();
 		launchRunnerRef.current = run;
 		setLaunchingMessage(message);
 	};
@@ -743,8 +763,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 			return;
 		}
 		const targetPath = getWorktreePath(selected);
-		setShowActions(false);
-		setClaudeSubmenu(null);
+		closeToBase();
 		setLaunchingMessage(`Fetching Asana task for ${selected.repositoryName}…`);
 		asanaPlugin
 			.getTask(reference.id)
@@ -801,8 +820,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		const terminal =
 			settings.selectedClaudeTerminal ?? claudeSessionService.detectTerminal() ?? undefined;
 		if (!terminal) {
-			setShowActions(false);
-			setClaudeSubmenu(null);
+			closeToBase();
 			setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
 			return;
 		}
@@ -840,7 +858,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	// allow resuming them.
 	const handleShowArchivedSessions = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
-		setShowActions(false);
+		closeToBase();
 		navigate('archivedSessions', { groveId, worktreePath: selected.worktreePath });
 	};
 
@@ -853,7 +871,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 			: settings.terminal;
 
 		if (!terminalConfig) {
-			setShowActions(false);
+			closeToBase();
 			setError('No terminal configured. Please restart Grove to detect available terminals.');
 			return;
 		}
@@ -861,7 +879,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selectedWorktree);
 		const result = openTerminalInPath(targetPath, terminalConfig);
-		setShowActions(false);
+		closeToBase();
 		if (result.success) {
 			setResultMessage(`Opened terminal in ${selectedWorktree.repositoryName}`);
 			setTimeout(() => setResultMessage(null), 2000);
@@ -884,13 +902,13 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		);
 
 		if (!config) {
-			setShowActions(false);
+			closeToBase();
 			setError('No IDE configured. Please configure an IDE in Settings or .grove.json.');
 			return;
 		}
 
 		const result = openIDEInPath(targetPath, config);
-		setShowActions(false);
+		closeToBase();
 		if (result.success) {
 			const ideName = resolvedType ? getIDEDisplayName(resolvedType) : 'IDE';
 			setResultMessage(`Opened ${ideName} in ${selectedWorktree.repositoryName}`);
@@ -903,7 +921,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	const handleViewInitLog = () => {
 		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
 		if (!selectedWorktree.initActionsStatus) {
-			setShowActions(false);
+			closeToBase();
 			setError('No init actions were executed for this worktree');
 			return;
 		}
@@ -913,62 +931,52 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 
 		try {
 			const content = fs.readFileSync(logPath, 'utf-8');
-			setInitLogContent(content);
-			setShowActions(false);
-			setShowInitLog(true);
+			setUIMode({ type: 'initLog', content });
 		} catch (err) {
-			setShowActions(false);
+			closeToBase();
 			setError(`Failed to read init log: ${err instanceof Error ? err.message : 'Unknown error'}`);
 		}
 	};
 
 	const handleFork = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
-		setShowActions(false);
+		closeToBase();
 		navigate('forkWorktree', { groveId, worktreePath: selected.worktreePath });
 	};
 
 	const handleCloseWorktree = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
-		setShowActions(false);
+		closeToBase();
 		navigate('closeWorktree', { groveId, worktreePath: selected.worktreePath });
 	};
 
 	// Open the attach-Asana prompt for a worktree.
 	const startAttachAsana = (worktreePath: string) => {
-		setShowActions(false);
-		setAttachingWorktreePath(worktreePath);
-		setAttachInput('');
-		setAttachError('');
-		setAttachBusy(false);
+		setUIMode({ type: 'asanaAttach', worktreePath, input: '', error: '', busy: false });
 	};
 
 	const cancelAttachAsana = () => {
-		setAttachingWorktreePath(null);
-		setAttachInput('');
-		setAttachError('');
-		setAttachBusy(false);
+		closeToBase();
 	};
 
 	// Verify the pasted Asana task URL via the API, then persist it onto the worktree.
 	const submitAttachAsana = (value: string) => {
-		const worktreePath = attachingWorktreePath;
-		if (!worktreePath) {
+		if (uiMode.type !== 'asanaAttach') {
 			return;
 		}
+		const worktreePath = uiMode.worktreePath;
 
 		const parsed = parseAsanaTaskUrl(value);
 		if (!parsed) {
-			setAttachError('That does not look like an Asana task URL.');
+			setUIMode({ ...uiMode, error: 'That does not look like an Asana task URL.' });
 			return;
 		}
 		if (!asanaPlugin) {
-			setAttachError('Asana plugin is not available.');
+			setUIMode({ ...uiMode, error: 'Asana plugin is not available.' });
 			return;
 		}
 
-		setAttachBusy(true);
-		setAttachError('');
+		setUIMode({ ...uiMode, busy: true, error: '' });
 
 		asanaPlugin
 			.getTask(parsed.gid)
@@ -988,8 +996,10 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 				setTimeout(() => setResultMessage(null), 2000);
 			})
 			.catch((err: unknown) => {
-				setAttachBusy(false);
-				setAttachError(err instanceof Error ? err.message : 'Failed to fetch Asana task');
+				const message = err instanceof Error ? err.message : 'Failed to fetch Asana task';
+				setUIMode((prev) =>
+					prev.type === 'asanaAttach' ? { ...prev, busy: false, error: message } : prev
+				);
 			});
 	};
 
@@ -1057,22 +1067,22 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 
 	// Options shown in the active Claude submenu (launch / per-session / archive confirm).
 	const getClaudeSubmenuOptions = (): { label: string; run: () => void }[] => {
-		if (!claudeSubmenu) {
+		if (uiMode.type !== 'claudeSubmenu') {
 			return [];
 		}
-		if (claudeSubmenu.mode === 'launch') {
+		if (uiMode.mode === 'launch') {
 			const options = [
 				{
 					label: 'Launch background claude',
 					run: () => {
-						setClaudeSubmenu(null);
+						closeToBase();
 						handleInstantClaude();
 					},
 				},
 				{
 					label: 'Launch standard claude',
 					run: () => {
-						setClaudeSubmenu(null);
+						closeToBase();
 						handleOpenInClaude();
 					},
 				},
@@ -1084,39 +1094,43 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 				options.push({
 					label: 'Launch instant Claude from Asana',
 					run: () => {
-						setClaudeSubmenu(null);
+						closeToBase();
 						handleInstantClaudeFromAsana();
 					},
 				});
 			}
 			return options;
 		}
-		const session = actionsSessions.find((s) => s.sessionId === claudeSubmenu.sessionId);
+		const session = actionsSessions.find((s) => s.sessionId === uiMode.sessionId);
 		if (!session) {
 			return [];
 		}
-		if (claudeSubmenu.mode === 'session') {
+		if (uiMode.mode === 'session') {
 			const isBackground = session.kind === 'background';
 			return [
 				isBackground
 					? {
 							label: 'Attach',
 							run: () => {
-								setClaudeSubmenu(null);
+								closeToBase();
 								handleAttachSession(session);
 							},
 						}
 					: {
 							label: 'Resume',
 							run: () => {
-								setClaudeSubmenu(null);
+								closeToBase();
 								handleResumeSession(session);
 							},
 						},
 				{
 					label: 'Terminate',
 					run: () => {
-						setClaudeSubmenu({ mode: 'archiveConfirm', sessionId: session.sessionId ?? '' });
+						setUIMode({
+							type: 'claudeSubmenu',
+							mode: 'archiveConfirm',
+							sessionId: session.sessionId ?? '',
+						});
 						setSubmenuIndex(0);
 					},
 				},
@@ -1127,14 +1141,14 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 			{
 				label: 'Yes, terminate this session',
 				run: () => {
-					setClaudeSubmenu(null);
+					closeToBase();
 					handleArchiveSession(session);
 				},
 			},
 			{
 				label: 'Cancel',
 				run: () => {
-					setClaudeSubmenu({ mode: 'session', sessionId: session.sessionId ?? '' });
+					setUIMode({ type: 'claudeSubmenu', mode: 'session', sessionId: session.sessionId ?? '' });
 					setSubmenuIndex(0);
 				},
 			},
@@ -1146,12 +1160,12 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 	const activateActionItem = (index: number) => {
 		if (claudeRowCount > 0 && index >= 0 && index < actionsSessions.length) {
 			const session = actionsSessions[index];
-			setClaudeSubmenu({ mode: 'session', sessionId: session.sessionId ?? '' });
+			setUIMode({ type: 'claudeSubmenu', mode: 'session', sessionId: session.sessionId ?? '' });
 			setSubmenuIndex(0);
 			return;
 		}
 		if (claudeRowCount > 0 && index === actionsSessions.length) {
-			setClaudeSubmenu({ mode: 'launch' });
+			setUIMode({ type: 'claudeSubmenu', mode: 'launch' });
 			setSubmenuIndex(0);
 			return;
 		}
@@ -1171,9 +1185,6 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		}
 		return current; // All closed, stay put
 	};
-
-	// Determine if we're in single-worktree shortcut mode
-	const isSingleWorktreeMode = worktreeDetails.length === 1;
 
 	// Closed worktrees are hidden by default; track which ones are visible
 	const closedCount = worktreeDetails.filter((d) => d.worktree.closed).length;
@@ -1200,9 +1211,8 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		// In single-worktree mode the actions are already shown inline, so there's
 		// nothing extra to open.
 		if (!isSingleWorktreeMode) {
-			setShowActions(true);
+			setUIMode({ type: 'actions' });
 			setSelectedActionIndex(0);
-			setClaudeSubmenu(null);
 		}
 	};
 
@@ -1213,135 +1223,144 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		worktreeActions[index]?.action();
 	};
 
-	// Handle keyboard navigation
+	// Handle keyboard navigation. Each mode owns only its own keys; transitions
+	// between modes (especially Esc) are explicit per branch.
 	useInput(
 		(input, key) => {
-			if (attachingWorktreePath !== null) {
-				// The attach prompt's text input handles typing/submit; only Esc cancels here.
-				if (key.escape) {
-					cancelAttachAsana();
-				}
-				return;
-			}
-
-			if (showInitLog) {
-				// Init log viewer navigation
-				if (key.escape) {
-					setShowInitLog(false);
-					setInitLogContent('');
-				}
-			} else if (claudeSubmenu) {
-				// Claude submenu navigation (launch / per-session / archive confirm)
-				const options = getClaudeSubmenuOptions();
-				if (key.escape) {
-					if (claudeSubmenu.mode === 'archiveConfirm') {
-						setClaudeSubmenu({ mode: 'session', sessionId: claudeSubmenu.sessionId });
-					} else {
-						setClaudeSubmenu(null);
+			switch (uiMode.type) {
+				case 'asanaAttach': {
+					// The attach prompt's text input handles typing/submit; only Esc cancels here.
+					if (key.escape) {
+						cancelAttachAsana();
 					}
-					setSubmenuIndex(0);
-				} else if (key.upArrow && options.length > 0) {
-					setSubmenuIndex((prev) => (prev > 0 ? prev - 1 : options.length - 1));
-				} else if (key.downArrow && options.length > 0) {
-					setSubmenuIndex((prev) => (prev < options.length - 1 ? prev + 1 : 0));
-				} else if (key.return && options.length > 0) {
-					options[Math.min(submenuIndex, options.length - 1)].run();
+					return;
 				}
-			} else if (showActions || isSingleWorktreeMode) {
-				// Actions menu navigation (including single-worktree shortcut mode)
-				if (key.escape) {
-					if (showActions && !isSingleWorktreeMode) {
-						// Multiple worktrees: close actions menu
-						setShowActions(false);
-						setSelectedActionIndex(0);
-					} else {
-						// Single worktree or main screen: go back to home
+				case 'initLog': {
+					// Init log viewer: Esc returns to the base view.
+					if (key.escape) {
+						closeToBase();
+					}
+					return;
+				}
+				case 'claudeSubmenu': {
+					// Claude submenu navigation (launch / per-session / archive confirm).
+					const options = getClaudeSubmenuOptions();
+					if (key.escape) {
+						// archiveConfirm steps back to the per-session menu; everything else closes.
+						if (uiMode.mode === 'archiveConfirm') {
+							setUIMode({ type: 'claudeSubmenu', mode: 'session', sessionId: uiMode.sessionId });
+						} else {
+							closeToBase();
+						}
+						setSubmenuIndex(0);
+					} else if (key.upArrow && options.length > 0) {
+						setSubmenuIndex((prev) => (prev > 0 ? prev - 1 : options.length - 1));
+					} else if (key.downArrow && options.length > 0) {
+						setSubmenuIndex((prev) => (prev < options.length - 1 ? prev + 1 : 0));
+					} else if (key.return && options.length > 0) {
+						options[Math.min(submenuIndex, options.length - 1)].run();
+					}
+					return;
+				}
+				case 'actions': {
+					// Actions menu navigation (the inline menu in single-worktree mode, or the
+					// overlay in multi-worktree mode).
+					if (key.escape) {
+						if (!isSingleWorktreeMode) {
+							// Multiple worktrees: close the actions overlay back to the list.
+							setUIMode({ type: 'list' });
+							setSelectedActionIndex(0);
+						} else {
+							// Single worktree: go back to home.
+							goBack();
+						}
+					} else if (
+						(key.leftArrow || key.rightArrow) &&
+						claudeRowCount > 1 &&
+						selectedActionIndex < claudeRowCount
+					) {
+						// The Claude panels sit side by side, so left/right cycle between them.
+						const dir = key.rightArrow ? 1 : -1;
+						setSelectedActionIndex((prev) => (prev + dir + claudeRowCount) % claudeRowCount);
+					} else if (key.upArrow && totalActionItems > 0) {
+						// Up/down move between the Claude panel block and the menu below it;
+						// the panels (left/right) count as a single row here.
+						setSelectedActionIndex((prev) => {
+							if (claudeRowCount > 0 && prev < claudeRowCount) {
+								return totalActionItems - 1;
+							}
+							if (claudeRowCount > 0 && prev === claudeRowCount) {
+								return 0;
+							}
+							return prev > 0 ? prev - 1 : totalActionItems - 1;
+						});
+					} else if (key.downArrow && totalActionItems > 0) {
+						setSelectedActionIndex((prev) => {
+							if (claudeRowCount > 0 && prev < claudeRowCount) {
+								return claudeRowCount;
+							}
+							return prev < totalActionItems - 1 ? prev + 1 : 0;
+						});
+					} else if (key.return && totalActionItems > 0) {
+						activateActionItem(Math.min(selectedActionIndex, totalActionItems - 1));
+					} else if (input === 'C' && isSingleWorktreeMode) {
+						// Close all merged worktrees (Shift+C)
+						const hasMerged = worktreeDetails.some(
+							(d) => !d.worktree.closed && d.upstreamStatus === 'gone'
+						);
+						if (hasMerged) {
+							navigate('closeMergedWorktrees', { groveId });
+						}
+					} else if (input === 'c' && isSingleWorktreeMode) {
+						// Allow closing grove from single-worktree mode
+						navigate('closeGrove', { groveId });
+					} else if (input === 'a' && isSingleWorktreeMode) {
+						// Allow adding worktree from single-worktree mode
+						navigate('addWorktree', { groveId });
+					} else if (input === 'd' && isSingleWorktreeMode) {
+						// Toggle visibility of closed worktrees
+						setShowClosed((prev) => !prev);
+					} else if (input === 'r' && isSingleWorktreeMode && asanaEnabled) {
+						// Open or attach the worktree's Asana reference
+						handleReferenceShortcut();
+					}
+					return;
+				}
+				case 'list': {
+					// Main screen navigation (multiple worktrees)
+					if (key.escape) {
 						goBack();
-					}
-				} else if (
-					(key.leftArrow || key.rightArrow) &&
-					claudeRowCount > 1 &&
-					selectedActionIndex < claudeRowCount
-				) {
-					// The Claude panels sit side by side, so left/right cycle between them.
-					const dir = key.rightArrow ? 1 : -1;
-					setSelectedActionIndex((prev) => (prev + dir + claudeRowCount) % claudeRowCount);
-				} else if (key.upArrow && totalActionItems > 0) {
-					// Up/down move between the Claude panel block and the menu below it;
-					// the panels (left/right) count as a single row here.
-					setSelectedActionIndex((prev) => {
-						if (claudeRowCount > 0 && prev < claudeRowCount) {
-							return totalActionItems - 1;
+					} else if (key.upArrow && worktreeDetails.length > 0) {
+						setSelectedIndex((prev) => findNextOpenIndex(prev, -1));
+					} else if (key.downArrow && worktreeDetails.length > 0) {
+						setSelectedIndex((prev) => findNextOpenIndex(prev, 1));
+					} else if (
+						key.return &&
+						worktreeDetails.length > 0 &&
+						!worktreeDetails[selectedIndex]?.worktree.closed
+					) {
+						setUIMode({ type: 'actions' });
+						setSelectedActionIndex(0);
+					} else if (input === 'C') {
+						// Close all merged worktrees (Shift+C)
+						const hasMerged = worktreeDetails.some(
+							(d) => !d.worktree.closed && d.upstreamStatus === 'gone'
+						);
+						if (hasMerged) {
+							navigate('closeMergedWorktrees', { groveId });
 						}
-						if (claudeRowCount > 0 && prev === claudeRowCount) {
-							return 0;
-						}
-						return prev > 0 ? prev - 1 : totalActionItems - 1;
-					});
-				} else if (key.downArrow && totalActionItems > 0) {
-					setSelectedActionIndex((prev) => {
-						if (claudeRowCount > 0 && prev < claudeRowCount) {
-							return claudeRowCount;
-						}
-						return prev < totalActionItems - 1 ? prev + 1 : 0;
-					});
-				} else if (key.return && totalActionItems > 0) {
-					activateActionItem(Math.min(selectedActionIndex, totalActionItems - 1));
-				} else if (input === 'C' && isSingleWorktreeMode) {
-					// Close all merged worktrees (Shift+C)
-					const hasMerged = worktreeDetails.some(
-						(d) => !d.worktree.closed && d.upstreamStatus === 'gone'
-					);
-					if (hasMerged) {
-						navigate('closeMergedWorktrees', { groveId });
+					} else if (input === 'c') {
+						navigate('closeGrove', { groveId });
+					} else if (input === 'a') {
+						navigate('addWorktree', { groveId });
+					} else if (input === 'd') {
+						// Toggle visibility of closed worktrees
+						setShowClosed((prev) => !prev);
+					} else if (input === 'r' && asanaEnabled) {
+						// Open or attach the selected worktree's Asana reference
+						handleReferenceShortcut();
 					}
-				} else if (input === 'c' && isSingleWorktreeMode) {
-					// Allow closing grove from single-worktree mode
-					navigate('closeGrove', { groveId });
-				} else if (input === 'a' && isSingleWorktreeMode) {
-					// Allow adding worktree from single-worktree mode
-					navigate('addWorktree', { groveId });
-				} else if (input === 'd' && isSingleWorktreeMode) {
-					// Toggle visibility of closed worktrees
-					setShowClosed((prev) => !prev);
-				} else if (input === 'r' && isSingleWorktreeMode && asanaEnabled) {
-					// Open or attach the worktree's Asana reference
-					handleReferenceShortcut();
-				}
-			} else {
-				// Main screen navigation (multiple worktrees)
-				if (key.escape) {
-					goBack();
-				} else if (key.upArrow && worktreeDetails.length > 0) {
-					setSelectedIndex((prev) => findNextOpenIndex(prev, -1));
-				} else if (key.downArrow && worktreeDetails.length > 0) {
-					setSelectedIndex((prev) => findNextOpenIndex(prev, 1));
-				} else if (
-					key.return &&
-					worktreeDetails.length > 0 &&
-					!worktreeDetails[selectedIndex]?.worktree.closed
-				) {
-					setShowActions(true);
-					setSelectedActionIndex(0);
-					setClaudeSubmenu(null);
-				} else if (input === 'C') {
-					// Close all merged worktrees (Shift+C)
-					const hasMerged = worktreeDetails.some(
-						(d) => !d.worktree.closed && d.upstreamStatus === 'gone'
-					);
-					if (hasMerged) {
-						navigate('closeMergedWorktrees', { groveId });
-					}
-				} else if (input === 'c') {
-					navigate('closeGrove', { groveId });
-				} else if (input === 'a') {
-					navigate('addWorktree', { groveId });
-				} else if (input === 'd') {
-					// Toggle visibility of closed worktrees
-					setShowClosed((prev) => !prev);
-				} else if (input === 'r' && asanaEnabled) {
-					// Open or attach the selected worktree's Asana reference
-					handleReferenceShortcut();
+					return;
 				}
 			}
 		},
@@ -1356,12 +1375,12 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 			return null;
 		}
 
-		if (claudeSubmenu) {
+		if (uiMode.type === 'claudeSubmenu') {
 			const options = getClaudeSubmenuOptions();
 			const title =
-				claudeSubmenu.mode === 'launch'
+				uiMode.mode === 'launch'
 					? 'Launch Claude'
-					: claudeSubmenu.mode === 'archiveConfirm'
+					: uiMode.mode === 'archiveConfirm'
 						? 'Terminate this session?'
 						: 'Session actions';
 			return (
@@ -1371,7 +1390,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 							{title}
 						</Text>
 					</Box>
-					{claudeSubmenu.mode === 'archiveConfirm' && (
+					{uiMode.mode === 'archiveConfirm' && (
 						<Box marginBottom={1}>
 							<Text dimColor>
 								This terminates the running Claude session (`claude rm`) and removes it from Grove. You can
@@ -1505,7 +1524,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		);
 	}
 
-	if (showInitLog) {
+	if (uiMode.type === 'initLog') {
 		return (
 			<Box flexDirection="column" padding={1}>
 				{/* Header */}
@@ -1526,7 +1545,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 
 				{/* Log Content */}
 				<Box flexDirection="column" borderStyle="single" borderColor="gray" padding={1}>
-					{initLogContent.split('\n').map((line, index) => (
+					{uiMode.content.split('\n').map((line, index) => (
 						<Text key={index}>{line}</Text>
 					))}
 				</Box>
@@ -1539,9 +1558,10 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 		);
 	}
 
-	if (attachingWorktreePath !== null) {
+	if (uiMode.type === 'asanaAttach') {
+		const attachMode = uiMode;
 		const attachingWorktree = worktreeDetails.find(
-			(d) => d.worktree.worktreePath === attachingWorktreePath
+			(d) => d.worktree.worktreePath === attachMode.worktreePath
 		)?.worktree;
 
 		return (
@@ -1564,15 +1584,16 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 
 				<Box borderStyle="round" borderColor="cyan" paddingX={1} width="100%">
 					<Text color="cyan">URL: </Text>
-					{attachBusy ? (
+					{attachMode.busy ? (
 						<Text dimColor>Verifying task…</Text>
 					) : (
 						<Box flexGrow={1}>
 							<TextInput
-								value={attachInput}
+								value={attachMode.input}
 								onChange={(value) => {
-									setAttachInput(value);
-									if (attachError) setAttachError('');
+									setUIMode((prev) =>
+										prev.type === 'asanaAttach' ? { ...prev, input: value, error: '' } : prev
+									);
 								}}
 								onSubmit={submitAttachAsana}
 								placeholder="https://app.asana.com/..."
@@ -1581,9 +1602,9 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					)}
 				</Box>
 
-				{attachError && (
+				{attachMode.error && (
 					<Box marginTop={1}>
-						<Text color="red">{attachError}</Text>
+						<Text color="red">{attachMode.error}</Text>
 					</Box>
 				)}
 
@@ -1596,7 +1617,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			{showActions && !isSingleWorktreeMode ? (
+			{(uiMode.type === 'actions' || uiMode.type === 'claudeSubmenu') && !isSingleWorktreeMode ? (
 				/* Show Actions Menu (multiple worktrees only) */
 				<Box flexDirection="column">
 					{/* Header */}
@@ -1625,7 +1646,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 					{renderClaudeSection()}
 
 					{/* Other actions */}
-					{!claudeSubmenu && (
+					{uiMode.type !== 'claudeSubmenu' && (
 						<WorktreeActionList
 							actions={worktreeActions}
 							selectedIndex={selectedActionIndex - claudeRowCount}
@@ -1749,7 +1770,7 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 							{/* Claude: launch panel + tracked sessions (or active submenu) */}
 							{renderClaudeSection()}
 
-							{!claudeSubmenu && (
+							{uiMode.type !== 'claudeSubmenu' && (
 								<>
 									<Box marginBottom={1}>
 										<Text bold underline>
