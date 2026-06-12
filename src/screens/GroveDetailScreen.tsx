@@ -8,7 +8,6 @@ import {
 	useOnPress,
 	useOnRelease,
 } from '@ink-tools/ink-mouse';
-import fs from 'fs';
 import path from 'path';
 
 import {
@@ -927,21 +926,12 @@ export function GroveDetailScreen({ groveId, focusWorktreeName }: GroveDetailScr
 
 	const handleViewInitLog = () => {
 		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
-		if (!selectedWorktree.initActionsStatus) {
-			closeToBase();
-			setError('No init actions were executed for this worktree');
-			return;
-		}
-
-		// Log file is now stored in the grove directory (next to CONTEXT.md)
-		const logPath = path.join(grovePath, selectedWorktree.initActionsStatus.logFile);
-
 		try {
-			const content = fs.readFileSync(logPath, 'utf-8');
+			const content = groveService.readWorktreeInitLog(groveId, selectedWorktree.worktreePath);
 			setUIMode({ type: 'initLog', content });
 		} catch (err) {
 			closeToBase();
-			setError(`Failed to read init log: ${err instanceof Error ? err.message : 'Unknown error'}`);
+			setError(err instanceof Error ? err.message : 'Failed to read init log');
 		}
 	};
 

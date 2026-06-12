@@ -69,6 +69,12 @@ export interface IGroveService {
 		sessionId: string | undefined,
 		sessionName?: string
 	): GroveMetadata;
+	/**
+	 * Read the init-actions execution log for a worktree.
+	 * @returns The full log file contents
+	 * @throws if the grove or worktree is missing, no init actions ran, or the log file can't be read
+	 */
+	readWorktreeInitLog(groveId: string, worktreePath: string): string;
 	/** Close a grove - removes worktrees and deletes folder */
 	closeGrove(groveId: string): Promise<CloseGroveResult>;
 	/** Close a single worktree within a grove */
@@ -959,6 +965,44 @@ Completed at: ${new Date().toISOString()}
 		this.grovesService.updateGroveInIndex(groveId, { updatedAt: metadata.updatedAt });
 
 		return metadata;
+	}
+
+	/**
+	 * Read the init-actions execution log for a worktree. The log lives in the grove
+	 * directory (next to CONTEXT.md) under the file name recorded on the worktree's
+	 * initActionsStatus.
+	 * @param groveId - ID of the grove containing the worktree
+	 * @param worktreePath - Path of the worktree whose log to read
+	 * @returns The full log file contents
+	 * @throws if the grove or worktree is missing, no init actions ran, or the log file can't be read
+	 */
+	readWorktreeInitLog(groveId: string, worktreePath: string): string {
+		const groveRef = this.grovesService.getGroveById(groveId);
+		if (!groveRef) {
+			throw new Error('Grove not found');
+		}
+
+		const metadata = this.grovesService.readGroveMetadata(groveRef.path);
+		if (!metadata) {
+			throw new Error('Grove metadata not found');
+		}
+
+		const worktree = metadata.worktrees.find((w) => w.worktreePath === worktreePath);
+		if (!worktree) {
+			throw new Error('Worktree not found in grove');
+		}
+
+		if (!worktree.initActionsStatus) {
+			throw new Error('No init actions were executed for this worktree');
+		}
+
+		const logPath = path.join(groveRef.path, worktree.initActionsStatus.logFile);
+		try {
+			return fs.readFileSync(logPath, 'utf-8');
+		} catch (err) {
+			const message = err instanceof Error ? err.message : 'Unknown error';
+			throw new Error(`Failed to read init log: ${message}`);
+		}
 	}
 
 	/**
