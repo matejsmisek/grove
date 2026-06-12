@@ -22,7 +22,7 @@ describe('AsanaPlugin', () => {
 	let originalEnv: NodeJS.ProcessEnv;
 
 	beforeEach(() => {
-		plugin = new AsanaPlugin();
+		plugin = new AsanaPlugin({ readSettings: () => ({}), updateSettings: () => undefined });
 		originalEnv = { ...process.env };
 		// Clear ASANA_TOKEN env var for each test
 		delete process.env[ASANA_TOKEN_ENV_VAR];

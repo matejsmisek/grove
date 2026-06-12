@@ -1,6 +1,7 @@
 /**
  * Plugin System
- * Exports plugin types and registry
+ * Exports plugin types and the shared base plugin
  */
 export * from './types.js';
-export { PluginRegistry } from './PluginRegistry.js';
+export { BasePlugin } from './BasePlugin.js';
+export type { PluginSettingsStore } from './BasePlugin.js';

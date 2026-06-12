@@ -4,14 +4,9 @@ import { Box, Text, useInput } from 'ink';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import {
-	GITLAB_PLUGIN_ID,
-	GITLAB_TOKEN_ENV_VAR,
-	GITLAB_URL_ENV_VAR,
-	GitLabPlugin,
-} from '../plugins/gitlab/index.js';
+import { GITLAB_TOKEN_ENV_VAR, GITLAB_URL_ENV_VAR } from '../plugins/gitlab/index.js';
 import type { GitLabUser } from '../plugins/gitlab/index.js';
-import { PluginRegistryToken } from '../services/tokens.js';
+import { GitLabPluginToken } from '../services/tokens.js';
 
 type ConnectionStatus =
 	| { state: 'no-token' }
@@ -21,18 +16,15 @@ type ConnectionStatus =
 
 export function GitLabSettingsScreen() {
 	const { goBack, canGoBack } = useNavigation();
-	const pluginRegistry = useService(PluginRegistryToken);
+	const plugin = useService(GitLabPluginToken);
 
-	// Resolve the GitLab plugin from the registry
-	const plugin = pluginRegistry.get(GITLAB_PLUGIN_ID) as GitLabPlugin | undefined;
-
-	const [enabled, setEnabled] = useState(pluginRegistry.isEnabled(GITLAB_PLUGIN_ID));
+	const [enabled, setEnabled] = useState(plugin.isEnabled());
 	const [isToggling, setIsToggling] = useState(false);
 	const [toggleError, setToggleError] = useState<string | null>(null);
 	const [status, setStatus] = useState<ConnectionStatus>({ state: 'checking' });
 
-	const token = plugin?.getAccessToken();
-	const baseUrl = plugin?.getBaseUrl();
+	const token = plugin.getAccessToken();
+	const baseUrl = plugin.getBaseUrl();
 	const tokenFromEnv = !!process.env[GITLAB_TOKEN_ENV_VAR];
 	const urlFromEnv = !!process.env[GITLAB_URL_ENV_VAR];
 
@@ -44,7 +36,7 @@ export function GitLabSettingsScreen() {
 			return;
 		}
 
-		if (!plugin || !token) {
+		if (!token) {
 			setStatus({ state: 'no-token' });
 			return;
 		}
@@ -80,15 +72,15 @@ export function GitLabSettingsScreen() {
 			setToggleError(null);
 			try {
 				if (enabled) {
-					await pluginRegistry.disable(GITLAB_PLUGIN_ID);
+					await plugin.disable();
 				} else {
-					await pluginRegistry.enable(GITLAB_PLUGIN_ID);
+					await plugin.enable();
 				}
 			} catch (error: unknown) {
 				setToggleError(error instanceof Error ? error.message : 'Failed to update plugin');
 			} finally {
 				// Reflect the persisted state, even if initialization failed
-				setEnabled(pluginRegistry.isEnabled(GITLAB_PLUGIN_ID));
+				setEnabled(plugin.isEnabled());
 				setIsToggling(false);
 			}
 		}

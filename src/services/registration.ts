@@ -5,10 +5,9 @@
 import { AdapterRegistry, ClaudeAdapter } from '../agents/index.js';
 import type { IMutableContainer } from '../di/index.js';
 import { Container, getContainer } from '../di/index.js';
-import { ASANA_PLUGIN_ID, AsanaPlugin } from '../plugins/asana/index.js';
+import { AsanaPlugin } from '../plugins/asana/index.js';
 import type { AsanaPluginSettings } from '../plugins/asana/index.js';
 import { GitLabPlugin } from '../plugins/gitlab/index.js';
-import { PluginRegistry } from '../plugins/index.js';
 import {
 	GroveConfigService,
 	GrovesService,
@@ -28,15 +27,16 @@ import { SessionTrackingService } from './SessionTrackingService.js';
 import { TaskService } from './TaskService.js';
 import { WorkspaceService } from './WorkspaceService.js';
 import {
+	AsanaPluginToken,
 	ClaudeSessionServiceToken,
 	ContextServiceToken,
 	FileServiceToken,
+	GitLabPluginToken,
 	GitServiceToken,
 	GroveConfigServiceToken,
 	GroveServiceToken,
 	GrovesServiceToken,
 	LLMServiceToken,
-	PluginRegistryToken,
 	RecentSelectionsServiceToken,
 	RepositoryServiceToken,
 	SessionTrackingServiceToken,
@@ -66,7 +66,7 @@ import {
  * - LLMService: depends on SettingsService
  * - GroveService: depends on SettingsService, GrovesService, GroveConfigService, GitService, ContextService, FileService
  * - SessionTrackingService: depends on SessionsService, GrovesService, AdapterRegistry (ClaudeAdapter)
- * - PluginRegistry: depends on SettingsService (registers AsanaPlugin)
+ * - AsanaPlugin / GitLabPlugin: depend on SettingsService for persisted enablement/config
  *
  * @param container - Container to register services in (defaults to global container)
  * @param workspaceContext - Optional workspace context to use for storage paths
@@ -163,24 +163,21 @@ export function registerServices(
 		);
 	});
 
-	// PluginRegistry depends on SettingsService
-	c.registerSingleton(PluginRegistryToken, (cont) => {
-		const pluginRegistry = new PluginRegistry(cont.resolve(SettingsServiceToken));
-		// Register available plugins
-		const asanaPlugin = new AsanaPlugin();
-		pluginRegistry.register(asanaPlugin);
-		pluginRegistry.register(new GitLabPlugin());
-		// Future: Add more plugins here
-
-		// Hydrate plugins with their persisted, plugin-specific settings so in-memory
-		// instances reflect what the user configured (e.g. the Asana prompt template).
-		const asanaConfig = pluginRegistry.getPluginConfig(ASANA_PLUGIN_ID);
+	// Plugins depend on SettingsService for their persisted enablement/config.
+	c.registerSingleton(AsanaPluginToken, (cont) => {
+		const asanaPlugin = new AsanaPlugin(cont.resolve(SettingsServiceToken));
+		// Hydrate the instance with its persisted, plugin-specific settings so it
+		// reflects what the user configured (e.g. the Asana prompt template).
+		const asanaConfig = asanaPlugin.getConfig();
 		if (asanaConfig?.settings) {
 			asanaPlugin.configure(asanaConfig.settings as AsanaPluginSettings);
 		}
-
-		return pluginRegistry;
+		return asanaPlugin;
 	});
+	c.registerSingleton(
+		GitLabPluginToken,
+		(cont) => new GitLabPlugin(cont.resolve(SettingsServiceToken))
+	);
 }
 
 /**

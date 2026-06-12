@@ -25,7 +25,7 @@ describe('GitLabPlugin', () => {
 	let originalEnv: NodeJS.ProcessEnv;
 
 	beforeEach(() => {
-		plugin = new GitLabPlugin();
+		plugin = new GitLabPlugin({ readSettings: () => ({}), updateSettings: () => undefined });
 		originalEnv = { ...process.env };
 		delete process.env[GITLAB_TOKEN_ENV_VAR];
 		delete process.env[GITLAB_URL_ENV_VAR];

@@ -10,11 +10,10 @@ import { getMonorepoProjects } from '../git/index.js';
 import { useMonorepoProjects } from '../hooks/useMonorepoProjects.js';
 import { useTask } from '../hooks/useTasks.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { ASANA_PLUGIN_ID, AsanaPlugin } from '../plugins/asana/index.js';
 import {
+	AsanaPluginToken,
 	GroveServiceToken,
 	GrovesServiceToken,
-	PluginRegistryToken,
 	RecentSelectionsServiceToken,
 	RepositoryServiceToken,
 	TaskServiceToken,
@@ -46,8 +45,7 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 	const repositoryService = useService(RepositoryServiceToken);
 	const recentSelectionsService = useService(RecentSelectionsServiceToken);
 	const taskService = useService(TaskServiceToken);
-	const pluginRegistry = useService(PluginRegistryToken);
-	const asanaPlugin = pluginRegistry.get(ASANA_PLUGIN_ID) as AsanaPlugin | undefined;
+	const asanaPlugin = useService(AsanaPluginToken);
 
 	const [step, setStep] = useState<AddWorktreeStep>('name');
 	const [worktreeName, setWorktreeName] = useState('');

@@ -9,11 +9,10 @@ import { getRepoProjects } from '../git/index.js';
 import { useMonorepoProjects } from '../hooks/useMonorepoProjects.js';
 import { useTask } from '../hooks/useTasks.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { ASANA_PLUGIN_ID, AsanaPlugin } from '../plugins/asana/index.js';
 import {
+	AsanaPluginToken,
 	GroveServiceToken,
 	LLMServiceToken,
-	PluginRegistryToken,
 	RecentSelectionsServiceToken,
 	RepositoryServiceToken,
 	TaskServiceToken,
@@ -44,8 +43,7 @@ export function CreateGroveScreen() {
 	const repositoryService = useService(RepositoryServiceToken);
 	const recentSelectionsService = useService(RecentSelectionsServiceToken);
 	const taskService = useService(TaskServiceToken);
-	const pluginRegistry = useService(PluginRegistryToken);
-	const asanaPlugin = pluginRegistry.get(ASANA_PLUGIN_ID) as AsanaPlugin | undefined;
+	const asanaPlugin = useService(AsanaPluginToken);
 
 	// Start at 'description' if LLM is configured, otherwise start at 'name' (offline mode)
 	const [step, setStep] = useState<CreateStep>(() =>

@@ -44,7 +44,7 @@ describe('GitLabPlugin merge request status', () => {
 	let originalEnv: NodeJS.ProcessEnv;
 
 	beforeEach(() => {
-		plugin = new GitLabPlugin();
+		plugin = new GitLabPlugin({ readSettings: () => ({}), updateSettings: () => undefined });
 		originalEnv = { ...process.env };
 		process.env[GITLAB_TOKEN_ENV_VAR] = 'test-token';
 		mockFetch.mockReset();

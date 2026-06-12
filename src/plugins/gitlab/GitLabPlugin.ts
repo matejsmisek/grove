@@ -2,7 +2,8 @@
  * GitLab Plugin
  * Integrates Grove with GitLab (repositories, merge requests, issues)
  */
-import type { IPlugin, PluginMetadata } from '../types.js';
+import { BasePlugin } from '../BasePlugin.js';
+import type { PluginMetadata } from '../types.js';
 import {
 	DEFAULT_GITLAB_BASE_URL,
 	GitLabApiClient,
@@ -60,7 +61,7 @@ export class GitLabTokenValidationError extends Error {
 /**
  * GitLab Plugin Implementation
  */
-export class GitLabPlugin implements IPlugin {
+export class GitLabPlugin extends BasePlugin {
 	readonly metadata: PluginMetadata = {
 		id: GITLAB_PLUGIN_ID,
 		name: 'GitLab',
@@ -154,7 +155,7 @@ export class GitLabPlugin implements IPlugin {
 	 * Check if the plugin is available/configured
 	 * Returns true if GROVE_GITLAB_TOKEN env var or accessToken setting is present
 	 */
-	async isAvailable(): Promise<boolean> {
+	protected checkAvailable(): boolean {
 		return !!this.getAccessToken();
 	}
 

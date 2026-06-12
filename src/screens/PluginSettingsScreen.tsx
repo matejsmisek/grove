@@ -6,7 +6,7 @@ import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { ASANA_PLUGIN_ID } from '../plugins/asana/index.js';
 import { GITLAB_PLUGIN_ID } from '../plugins/gitlab/index.js';
-import { PluginRegistryToken } from '../services/tokens.js';
+import { AsanaPluginToken, GitLabPluginToken } from '../services/tokens.js';
 
 interface PluginSettingsScreenProps {
 	selectedPluginId?: string;
@@ -14,9 +14,10 @@ interface PluginSettingsScreenProps {
 
 export function PluginSettingsScreen({ selectedPluginId }: PluginSettingsScreenProps) {
 	const { navigate, replace, goBack, canGoBack } = useNavigation();
-	const pluginRegistry = useService(PluginRegistryToken);
+	const asanaPlugin = useService(AsanaPluginToken);
+	const gitlabPlugin = useService(GitLabPluginToken);
 
-	const plugins = pluginRegistry.getAll();
+	const plugins = [asanaPlugin, gitlabPlugin];
 
 	// Restore the selection when returning from a plugin's settings screen
 	const initialIndex = selectedPluginId
@@ -36,7 +37,7 @@ export function PluginSettingsScreen({ selectedPluginId }: PluginSettingsScreenP
 	// Get current enabled states
 	const pluginStates = plugins.map((plugin) => ({
 		plugin,
-		enabled: pluginRegistry.isEnabled(plugin.metadata.id),
+		enabled: plugin.isEnabled(),
 	}));
 
 	useInput((_input, key) => {

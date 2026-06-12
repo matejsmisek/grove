@@ -22,7 +22,6 @@ import { ClickableTile } from '../components/home/ClickableTile.js';
 import { useService } from '../di/index.js';
 import { useMergeRequestStatus } from '../hooks/useMergeRequestStatus.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { ASANA_PLUGIN_ID, AsanaPlugin } from '../plugins/asana/index.js';
 import { getContextDisplayName } from '../services/WorkspaceService.js';
 import {
 	detectTerminal,
@@ -32,12 +31,12 @@ import {
 	resolveIDEForPath,
 } from '../services/index.js';
 import {
+	AsanaPluginToken,
 	ClaudeSessionServiceToken,
 	GitServiceToken,
 	GroveConfigServiceToken,
 	GroveServiceToken,
 	GrovesServiceToken,
-	PluginRegistryToken,
 	SettingsServiceToken,
 	WorkspaceServiceToken,
 } from '../services/tokens.js';
@@ -484,9 +483,8 @@ export function GroveDetailScreen({
 	const groveService = useService(GroveServiceToken);
 	const settingsService = useService(SettingsServiceToken);
 	const workspaceService = useService(WorkspaceServiceToken);
-	const pluginRegistry = useService(PluginRegistryToken);
-	const asanaEnabled = pluginRegistry.isEnabled(ASANA_PLUGIN_ID);
-	const asanaPlugin = pluginRegistry.get(ASANA_PLUGIN_ID) as AsanaPlugin | undefined;
+	const asanaPlugin = useService(AsanaPluginToken);
+	const asanaEnabled = asanaPlugin.isEnabled();
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
 	const [grovePath, setGrovePath] = useState('');

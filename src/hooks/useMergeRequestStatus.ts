@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 
 import type { MrCellState } from '../components/MergeRequestCell.js';
 import { useService } from '../di/index.js';
-import { GITLAB_PLUGIN_ID, type GitLabPlugin, MR_CACHE_TTL_MS } from '../plugins/gitlab/index.js';
-import { GitServiceToken, PluginRegistryToken } from '../services/tokens.js';
+import { MR_CACHE_TTL_MS } from '../plugins/gitlab/index.js';
+import { GitLabPluginToken, GitServiceToken } from '../services/tokens.js';
 
 /**
  * Resolve (and keep fresh) the GitLab merge request status for a worktree branch.
@@ -24,20 +24,14 @@ export function useMergeRequestStatus(
 	enabled: boolean
 ): MrCellState | undefined {
 	const gitService = useService(GitServiceToken);
-	const pluginRegistry = useService(PluginRegistryToken);
+	const plugin = useService(GitLabPluginToken);
 	const [state, setState] = useState<MrCellState | undefined>(undefined);
 
 	useEffect(() => {
-		const plugin = pluginRegistry.get(GITLAB_PLUGIN_ID) as GitLabPlugin | undefined;
 		const active =
-			enabled &&
-			!!repositoryPath &&
-			!!branch &&
-			!!plugin &&
-			pluginRegistry.isEnabled(GITLAB_PLUGIN_ID) &&
-			!!plugin.getAccessToken();
+			enabled && !!repositoryPath && !!branch && plugin.isEnabled() && !!plugin.getAccessToken();
 
-		if (!active || !plugin || !repositoryPath || !branch) {
+		if (!active || !repositoryPath || !branch) {
 			setState(undefined);
 			return;
 		}
@@ -76,7 +70,7 @@ export function useMergeRequestStatus(
 			cancelled = true;
 			clearInterval(interval);
 		};
-	}, [repositoryPath, branch, enabled, gitService, pluginRegistry]);
+	}, [repositoryPath, branch, enabled, gitService, plugin]);
 
 	return state;
 }

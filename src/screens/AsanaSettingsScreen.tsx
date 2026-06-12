@@ -5,15 +5,13 @@ import { Box, Text, useInput } from 'ink';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
-	ASANA_PLUGIN_ID,
 	ASANA_TOKEN_ENV_VAR,
-	AsanaPlugin,
 	DEFAULT_ASANA_INSTANT_CLAUDE_TEMPLATE,
 	buildAsanaTemplateEditorHeader,
 	stripAsanaTemplateComments,
 } from '../plugins/asana/index.js';
 import type { AsanaUser } from '../plugins/asana/index.js';
-import { PluginRegistryToken } from '../services/tokens.js';
+import { AsanaPluginToken } from '../services/tokens.js';
 import { hasExternalEditor, openExternalEditor } from '../utils/externalEditor.js';
 
 type ConnectionStatus =
@@ -24,29 +22,26 @@ type ConnectionStatus =
 
 export function AsanaSettingsScreen() {
 	const { goBack, canGoBack } = useNavigation();
-	const pluginRegistry = useService(PluginRegistryToken);
+	const plugin = useService(AsanaPluginToken);
 
-	// Resolve the Asana plugin from the registry
-	const plugin = pluginRegistry.get(ASANA_PLUGIN_ID) as AsanaPlugin | undefined;
-
-	const [enabled, setEnabled] = useState(pluginRegistry.isEnabled(ASANA_PLUGIN_ID));
+	const [enabled, setEnabled] = useState(plugin.isEnabled());
 	const [isToggling, setIsToggling] = useState(false);
 	const [toggleError, setToggleError] = useState<string | null>(null);
 	const [status, setStatus] = useState<ConnectionStatus>({ state: 'checking' });
 	const [template, setTemplate] = useState<string | undefined>(
-		() => plugin?.getSettings().instantClaudeTemplate
+		() => plugin.getSettings().instantClaudeTemplate
 	);
 	const [templateMessage, setTemplateMessage] = useState<string | null>(null);
 
-	const token = plugin?.getAccessToken();
+	const token = plugin.getAccessToken();
 	const tokenFromEnv = !!process.env[ASANA_TOKEN_ENV_VAR];
 	const editorAvailable = hasExternalEditor();
 
 	// Persist the instant-Claude template both to settings (durable) and to the live
 	// plugin instance (so the next launch picks it up without a restart).
 	const persistTemplate = (value: string | undefined) => {
-		pluginRegistry.updatePluginSettings(ASANA_PLUGIN_ID, { instantClaudeTemplate: value });
-		plugin?.configure({ instantClaudeTemplate: value });
+		plugin.updatePluginSettings({ instantClaudeTemplate: value });
+		plugin.configure({ instantClaudeTemplate: value });
 		setTemplate(value);
 	};
 
@@ -84,7 +79,7 @@ export function AsanaSettingsScreen() {
 			return;
 		}
 
-		if (!plugin || !token) {
+		if (!token) {
 			setStatus({ state: 'no-token' });
 			return;
 		}
@@ -124,15 +119,15 @@ export function AsanaSettingsScreen() {
 			setToggleError(null);
 			try {
 				if (enabled) {
-					await pluginRegistry.disable(ASANA_PLUGIN_ID);
+					await plugin.disable();
 				} else {
-					await pluginRegistry.enable(ASANA_PLUGIN_ID);
+					await plugin.enable();
 				}
 			} catch (error: unknown) {
 				setToggleError(error instanceof Error ? error.message : 'Failed to update plugin');
 			} finally {
 				// Reflect the persisted state, even if initialization failed
-				setEnabled(pluginRegistry.isEnabled(ASANA_PLUGIN_ID));
+				setEnabled(plugin.isEnabled());
 				setIsToggling(false);
 			}
 		}

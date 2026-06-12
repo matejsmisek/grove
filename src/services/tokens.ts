@@ -3,7 +3,8 @@
  * These tokens are used to register and resolve services from the container
  */
 import { createToken } from '../di/index.js';
-import type { IPluginRegistry } from '../plugins/types.js';
+import type { AsanaPlugin } from '../plugins/asana/index.js';
+import type { GitLabPlugin } from '../plugins/gitlab/index.js';
 import type { IGroveConfigService } from '../storage/GroveConfigService.js';
 import type { IGrovesService } from '../storage/GrovesService.js';
 import type { IRecentSelectionsService } from '../storage/RecentSelectionsService.js';
@@ -42,4 +43,5 @@ export const SessionTrackingServiceToken =
 export const TaskServiceToken = createToken<ITaskService>('TaskService');
 
 // Plugin system tokens
-export const PluginRegistryToken = createToken<IPluginRegistry>('PluginRegistry');
+export const GitLabPluginToken = createToken<GitLabPlugin>('GitLabPlugin');
+export const AsanaPluginToken = createToken<AsanaPlugin>('AsanaPlugin');

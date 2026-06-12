@@ -2,7 +2,8 @@
  * Asana Plugin
  * Integrates Grove with Asana task management
  */
-import type { IPlugin, PluginMetadata } from '../types.js';
+import { BasePlugin } from '../BasePlugin.js';
+import type { PluginMetadata } from '../types.js';
 import { DEFAULT_ASANA_INSTANT_CLAUDE_TEMPLATE, renderAsanaTemplate } from './template.js';
 import type {
 	AsanaApiError,
@@ -68,7 +69,7 @@ export class AsanaApiRequestError extends Error {
 /**
  * Asana Plugin Implementation
  */
-export class AsanaPlugin implements IPlugin {
+export class AsanaPlugin extends BasePlugin {
 	readonly metadata: PluginMetadata = {
 		id: ASANA_PLUGIN_ID,
 		name: 'Asana',
@@ -172,7 +173,7 @@ export class AsanaPlugin implements IPlugin {
 	 * Check if the plugin is available/configured
 	 * Returns true if ASANA_TOKEN env var or accessToken setting is present
 	 */
-	async isAvailable(): Promise<boolean> {
+	protected checkAvailable(): boolean {
 		return !!this.getAccessToken();
 	}
 
