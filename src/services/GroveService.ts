@@ -1,4 +1,3 @@
-import { spawn } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -8,17 +7,14 @@ import type { IGrovesService } from '../storage/GrovesService.js';
 import type { ISettingsService } from '../storage/SettingsService.js';
 import type {
 	GroveMetadata,
-	InitActionsStatus,
 	Repository,
 	RepositorySelection,
 	Worktree,
 	WorktreeReference,
 } from '../storage/types.js';
-import { getDirenvWarning, wrapSpawnWithDirenv } from '../utils/direnv.js';
 import { generateGroveIdentifier, normalizeGroveName, normalizeName } from '../utils/index.js';
 import type { IContextService } from './ContextService.js';
-import type { IFileService } from './FileService.js';
-import type { IGitService } from './GitService.js';
+import type { IWorktreeSetupService } from './WorktreeSetupService.js';
 import type { CloseGroveResult, CloseWorktreeResult } from './types.js';
 
 // Re-export types for convenience
@@ -29,18 +25,14 @@ export type { CloseGroveResult, CloseWorktreeResult, CreateGroveResult } from '.
  * Orchestrates grove lifecycle operations
  */
 export interface IGroveService {
-	/**
-	 * Create a new grove with worktrees for selected repositories
-	 */
+	/** Create a new grove with worktrees for selected repositories */
 	createGrove(
 		name: string,
 		selections: RepositorySelection[],
 		onLog?: (message: string) => void,
 		reference?: WorktreeReference
 	): Promise<GroveMetadata>;
-	/**
-	 * Add a worktree to an existing grove
-	 */
+	/** Add a worktree to an existing grove */
 	addWorktreeToGrove(
 		groveId: string,
 		selection: RepositorySelection,
@@ -49,20 +41,13 @@ export interface IGroveService {
 		forkFromWorktreePath?: string,
 		reference?: WorktreeReference
 	): Promise<GroveMetadata>;
-	/**
-	 * Attach (or replace) an external reference on an existing worktree, persisting it to grove.json.
-	 * @returns The updated grove metadata
-	 */
+	/** Attach (or replace) an external reference on a worktree; returns updated metadata. */
 	setWorktreeReference(
 		groveId: string,
 		worktreePath: string,
 		reference: WorktreeReference
 	): GroveMetadata;
-	/**
-	 * Record (or clear) the background Claude session launched for a worktree,
-	 * persisting it to grove.json. Pass `undefined` for sessionId to clear it.
-	 * @returns The updated grove metadata
-	 */
+	/** Record (or clear, with `undefined`) a worktree's background session; returns updated metadata. */
 	setWorktreeBackgroundSession(
 		groveId: string,
 		worktreePath: string,
@@ -82,9 +67,9 @@ export interface IGroveService {
 }
 
 /**
- * Service for grove lifecycle operations (create, close)
- * Handles the business logic of grove management while delegating
- * storage operations to the storage layer
+ * Service for grove lifecycle operations (create, close).
+ * Owns grove-level orchestration and persistence, delegating the per-worktree
+ * filesystem/git work to WorktreeSetupService.
  *
  * Uses dependency injection for all dependencies
  */
@@ -93,9 +78,8 @@ export class GroveService implements IGroveService {
 		private readonly settingsService: ISettingsService,
 		private readonly grovesService: IGrovesService,
 		private readonly groveConfigService: IGroveConfigService,
-		private readonly gitService: IGitService,
 		private readonly contextService: IContextService,
-		private readonly fileService: IFileService
+		private readonly worktreeSetupService: IWorktreeSetupService
 	) {}
 
 	/**
@@ -115,9 +99,8 @@ export class GroveService implements IGroveService {
 		existingNames: Set<string>,
 		groveSuffix: string
 	): string {
-		// Lowercase the base name for uniform identifiers across grove, folders, worktrees, and branches.
-		// Project paths may be nested (e.g. "packages/core"); flatten separators so the
-		// resulting worktree folder and branch name stay valid.
+		// Lowercase for uniform identifiers across grove/folders/worktrees/branches; flatten
+		// nested project paths (e.g. "packages/core") so the folder and branch name stay valid.
 		const baseName = selection.projectPath
 			? `${selection.repository.name}-${selection.projectPath.replace(/[\\/]+/g, '-')}`.toLowerCase()
 			: selection.repository.name.toLowerCase();
@@ -139,270 +122,34 @@ export class GroveService implements IGroveService {
 	}
 
 	/**
-	 * Execute initActions for a worktree
-	 * @param actions - Array of bash commands to execute
-	 * @param grovePath - Path to the grove directory (where log will be stored)
-	 * @param worktreeName - Name of the worktree (for log file naming)
-	 * @param worktreePath - Path to the worktree directory
-	 * @param projectPath - Optional project path for monorepos
-	 * @param onLog - Optional callback for live log streaming
-	 * @returns Status of initActions execution
+	 * Build the branch name for a grove-creation selection: the configured branch
+	 * base plus a lowercased, flattened project-path suffix for monorepo projects.
 	 */
-	private async executeInitActions(
-		actions: string[],
-		grovePath: string,
-		worktreeName: string,
-		worktreePath: string,
-		projectPath?: string,
-		onLog?: (message: string) => void
-	): Promise<InitActionsStatus> {
-		const logFileName = `grove-init-${worktreeName}.log`;
-		const logFilePath = path.join(grovePath, logFileName);
-		const executedAt = new Date().toISOString();
-
-		// Determine the working directory (project path if monorepo, otherwise worktree root)
-		const workingDir = projectPath ? path.join(worktreePath, projectPath) : worktreePath;
-
-		// Create log file with header
-		const logHeader = `Grove InitActions Execution Log
-Executed at: ${executedAt}
-Working directory: ${workingDir}
-Total actions: ${actions.length}
-
-${'='.repeat(80)}
-
-`;
-		await fs.promises.writeFile(logFilePath, logHeader);
-
-		// Log initialization
-		if (onLog) {
-			onLog(`[${worktreeName}] Starting initActions (${actions.length} commands)...`);
-		}
-
-		// Warn once if the directory uses direnv but its .envrc is not yet allowed
-		// (init actions would run WITHOUT that environment until `direnv allow` is
-		// run), or if a stale direnv environment from another directory is loaded.
-		const direnvWarning = getDirenvWarning(workingDir);
-		if (direnvWarning) {
-			await fs.promises.appendFile(logFilePath, `⚠ ${direnvWarning}\n\n`);
-			if (onLog) {
-				onLog(`[${worktreeName}] ⚠ ${direnvWarning}`);
-			}
-		}
-
-		let successfulActions = 0;
-		let errorMessage: string | undefined;
-
-		// Execute each action sequentially
-		for (let i = 0; i < actions.length; i++) {
-			const action = actions[i];
-			const actionHeader = `[Action ${i + 1}/${actions.length}] ${action}\n${'-'.repeat(80)}\n`;
-
-			// Append action header to log
-			await fs.promises.appendFile(logFilePath, actionHeader);
-
-			// Log command start
-			if (onLog) {
-				onLog(`[${worktreeName}] Running: ${action}`);
-			}
-
-			try {
-				// Execute the command
-				const { success, stdout, stderr, exitCode } = await this.executeCommand(action, workingDir);
-
-				// Append output to log
-				if (stdout) {
-					await fs.promises.appendFile(logFilePath, `STDOUT:\n${stdout}\n`);
-					// Stream stdout to callback
-					if (onLog && stdout.trim()) {
-						onLog(`[${worktreeName}] ${stdout.trim()}`);
-					}
-				}
-				if (stderr) {
-					await fs.promises.appendFile(logFilePath, `STDERR:\n${stderr}\n`);
-				}
-				await fs.promises.appendFile(logFilePath, `Exit code: ${exitCode}\n\n`);
-
-				if (!success) {
-					errorMessage = `Action ${i + 1} failed with exit code ${exitCode}: ${action}`;
-					await fs.promises.appendFile(
-						logFilePath,
-						`\n${'='.repeat(80)}\nEXECUTION STOPPED: ${errorMessage}\n`
-					);
-					if (onLog) {
-						onLog(`[${worktreeName}] ✗ Failed with exit code ${exitCode}`);
-					}
-					break;
-				}
-
-				successfulActions++;
-				if (onLog) {
-					onLog(`[${worktreeName}] ✓ Command completed successfully`);
-				}
-			} catch (error) {
-				const errMsg = error instanceof Error ? error.message : 'Unknown error';
-				errorMessage = `Action ${i + 1} failed: ${errMsg}`;
-				await fs.promises.appendFile(logFilePath, `ERROR: ${errMsg}\n\n`);
-				await fs.promises.appendFile(
-					logFilePath,
-					`\n${'='.repeat(80)}\nEXECUTION STOPPED: ${errorMessage}\n`
-				);
-				if (onLog) {
-					onLog(`[${worktreeName}] ✗ Error: ${errMsg}`);
-				}
-				break;
-			}
-		}
-
-		// Log completion
-		if (onLog) {
-			const status = successfulActions === actions.length ? '✓ SUCCESS' : '✗ FAILED';
-			onLog(`[${worktreeName}] ${status}: ${successfulActions}/${actions.length} actions completed`);
-		}
-
-		// Append summary to log
-		const success = successfulActions === actions.length;
-		const summary = `
-${'='.repeat(80)}
-EXECUTION SUMMARY
-${'='.repeat(80)}
-Total actions: ${actions.length}
-Successful: ${successfulActions}
-Status: ${success ? 'SUCCESS' : 'FAILED'}
-${errorMessage ? `Error: ${errorMessage}` : ''}
-Completed at: ${new Date().toISOString()}
-`;
-		await fs.promises.appendFile(logFilePath, summary);
-
-		return {
-			executed: true,
-			success,
-			executedAt,
-			logFile: logFileName,
-			totalActions: actions.length,
-			successfulActions,
-			errorMessage,
-		};
-	}
-
-	/**
-	 * Execute a single bash command
-	 * @param command - The command to execute
-	 * @param cwd - Working directory
-	 * @returns Execution result
-	 */
-	private async executeCommand(
-		command: string,
-		cwd: string
-	): Promise<{ success: boolean; stdout: string; stderr: string; exitCode: number }> {
-		return new Promise((resolve) => {
-			// Wrap with `direnv exec` when the worktree uses direnv so init actions
-			// run with the same environment an interactive shell would load.
-			const { command: spawnCommand, args } = wrapSpawnWithDirenv(cwd, 'bash', ['-c', command]);
-			const childProcess = spawn(spawnCommand, args, {
-				cwd,
-				stdio: ['ignore', 'pipe', 'pipe'],
-			});
-
-			let stdout = '';
-			let stderr = '';
-
-			childProcess.stdout.on('data', (data) => {
-				stdout += data.toString();
-			});
-
-			childProcess.stderr.on('data', (data) => {
-				stderr += data.toString();
-			});
-
-			childProcess.on('close', (code) => {
-				resolve({
-					success: code === 0,
-					stdout,
-					stderr,
-					exitCode: code ?? 1,
-				});
-			});
-
-			childProcess.on('error', (error) => {
-				resolve({
-					success: false,
-					stdout,
-					stderr: stderr + error.message,
-					exitCode: 1,
-				});
-			});
-		});
-	}
-
-	/**
-	 * Ensure repository is up-to-date before creating worktree
-	 * @param repoPath - Repository root path
-	 * @param onLog - Optional callback for logging
-	 * @returns Object with info about whether we need to reset the worktree after creation
-	 */
-	private async ensureRepoUpToDate(
+	private branchNameForSelection(
 		repoPath: string,
-		onLog?: (message: string) => void
-	): Promise<{ needsReset: boolean; mainBranch: string }> {
-		// Detect main branch (master, main, or current branch)
-		const mainBranch = await this.gitService.detectMainBranch(repoPath);
-
-		if (onLog) {
-			onLog(`Detected main branch: ${mainBranch}`);
-		}
-
-		// Get current branch
-		const currentBranch = await this.gitService.getCurrentBranch(repoPath);
-
-		// Check for uncommitted changes
-		const hasChanges = await this.gitService.hasUncommittedChanges(repoPath);
-
-		// If on main branch with no uncommitted changes, fetch and pull
-		if (currentBranch === mainBranch && !hasChanges) {
-			if (onLog) {
-				onLog(`Repository is on ${mainBranch} with no uncommitted changes, updating...`);
-			}
-
-			// Fetch from remote
-			const fetchResult = await this.gitService.fetch(repoPath);
-			if (!fetchResult.success) {
-				console.warn(`Warning: Failed to fetch from remote: ${fetchResult.stderr}`);
-			}
-
-			// Pull latest changes
-			const pullResult = await this.gitService.pull(repoPath);
-			if (!pullResult.success) {
-				console.warn(`Warning: Failed to pull latest changes: ${pullResult.stderr}`);
-			}
-
-			if (onLog) {
-				onLog(`Repository updated to latest ${mainBranch}`);
-			}
-
-			return { needsReset: false, mainBranch };
-		}
-
-		// If on a different branch or has uncommitted changes, we'll reset after worktree creation
-		if (onLog) {
-			if (currentBranch !== mainBranch) {
-				onLog(`Repository is on ${currentBranch}, will reset worktree to latest ${mainBranch}`);
-			} else {
-				onLog(`Repository has uncommitted changes, will reset worktree to latest ${mainBranch}`);
-			}
-		}
-
-		return { needsReset: true, mainBranch };
+		normalizedGroveName: string,
+		projectPath?: string
+	): string {
+		const branchBase = this.groveConfigService.getBranchNameForSelection(
+			repoPath,
+			normalizedGroveName,
+			projectPath
+		);
+		return branchBase + this.projectBranchSuffix(projectPath);
 	}
 
 	/**
-	 * Create a new grove with worktrees for selected repositories
-	 * @param name - Name of the grove (will be normalized for folder/branch names)
-	 * @param selections - Array of repository selections, each optionally with a project path
-	 * @param onLog - Optional callback for progress logging
-	 * @param reference - Optional external reference (e.g. an Asana task) to attach to each
-	 *   created worktree, recording where the grove originated.
-	 * @returns The created grove metadata
+	 * Lowercased, flattened branch suffix for a monorepo project path (nested paths
+	 * like "packages/core" must not introduce slashes into the branch name).
+	 */
+	private projectBranchSuffix(projectPath?: string): string {
+		return projectPath ? `-${projectPath.replace(/[\\/]+/g, '-').toLowerCase()}` : '';
+	}
+
+	/**
+	 * Create a new grove with worktrees for selected repositories. The grove name is
+	 * normalized for folder/branch names; `reference` (e.g. an Asana task) is attached
+	 * to each created worktree. Returns the created grove metadata.
 	 */
 	async createGrove(
 		name: string,
@@ -412,21 +159,16 @@ Completed at: ${new Date().toISOString()}
 	): Promise<GroveMetadata> {
 		const settings = this.settingsService.readSettings();
 		const groveId = this.generateGroveId();
-		// Generate the unique grove identifier first
 		const groveIdentifier = generateGroveIdentifier(name);
-		// Normalize the grove name for use in folder paths and branch names
 		const normalizedName = normalizeGroveName(name, groveIdentifier);
 		const grovePath = path.join(settings.workingFolder, normalizedName);
 
-		// Check if grove folder already exists
 		if (fs.existsSync(grovePath)) {
 			throw new Error(`Grove folder already exists: ${grovePath}`);
 		}
 
-		// Create grove folder
 		fs.mkdirSync(grovePath, { recursive: true });
 
-		// Create grove metadata
 		const now = new Date().toISOString();
 
 		// Extract unique repositories for CONTEXT.md
@@ -435,7 +177,6 @@ Completed at: ${new Date().toISOString()}
 			uniqueRepos.set(selection.repository.path, selection.repository);
 		}
 
-		// Create CONTEXT.md file
 		this.contextService.createContextFile(grovePath, {
 			name,
 			createdAt: now,
@@ -451,7 +192,6 @@ Completed at: ${new Date().toISOString()}
 			updatedAt: now,
 		};
 
-		// Create worktrees for each selection
 		const worktrees: Worktree[] = [];
 		const errors: string[] = [];
 		const worktreeNames = new Set<string>();
@@ -459,142 +199,37 @@ Completed at: ${new Date().toISOString()}
 		for (const selection of selections) {
 			const repo = selection.repository;
 			const worktreeName = this.generateWorktreeName(selection, worktreeNames, groveIdentifier);
+			const displayName = selection.projectPath ? `${repo.name}/${selection.projectPath}` : repo.name;
 
 			try {
-				// Log worktree creation start
-				const displayName = selection.projectPath ? `${repo.name}/${selection.projectPath}` : repo.name;
 				if (onLog) {
 					onLog(`Creating worktree for ${displayName}...`);
 				}
 
-				// Ensure repository is up-to-date before creating worktree
-				const { needsReset, mainBranch } = await this.ensureRepoUpToDate(repo.path, onLog);
-
-				// Read merged repository/project grove configuration
 				const mergedConfig = this.groveConfigService.readMergedConfig(repo.path, selection.projectPath);
-
-				// Generate branch name for this grove using merged config
-				// Use normalized name for consistency with folder naming
-				// For monorepo projects, the branch suffix is added automatically
-				const branchBase = this.groveConfigService.getBranchNameForSelection(
+				const branchName = this.branchNameForSelection(
 					repo.path,
 					normalizedName,
 					selection.projectPath
 				);
-				// Lowercase and flatten the project path suffix (nested paths like
-				// "packages/core" must not introduce slashes into the branch name)
-				const branchSuffix = selection.projectPath
-					? `-${selection.projectPath.replace(/[\\/]+/g, '-').toLowerCase()}`
-					: '';
-				const branchName = branchBase + branchSuffix;
-
-				// Create worktree path (identifier already included in worktreeName)
 				const worktreePath = path.join(grovePath, worktreeName);
 
-				// Add worktree (creates new branch from HEAD)
-				const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, 'HEAD');
+				// Provision the worktree (branch creation, reset, file copy, init actions)
+				const setup = await this.worktreeSetupService.setupWorktree({
+					repoPath: repo.path,
+					repoName: repo.name,
+					grovePath,
+					worktreeName,
+					worktreePath,
+					branchName,
+					projectPath: selection.projectPath,
+					mergedConfig,
+					onLog,
+				});
+				// Surface any non-fatal per-worktree failures (copy/init actions).
+				errors.push(...setup.errors);
 
-				if (!result.success) {
-					throw new Error(result.stderr || 'Failed to create worktree');
-				}
-
-				// If we need to reset the worktree to the latest main branch, do it now
-				if (needsReset) {
-					if (onLog) {
-						onLog(`Resetting worktree to latest ${mainBranch}...`);
-					}
-
-					// Fetch in the new worktree
-					const fetchResult = await this.gitService.fetch(worktreePath);
-					if (!fetchResult.success) {
-						console.warn(`Warning: Failed to fetch in worktree: ${fetchResult.stderr}`);
-					}
-
-					// Get the SHA of the remote main branch
-					const revParseResult = await this.gitService.revParse(worktreePath, `origin/${mainBranch}`);
-
-					if (revParseResult.success) {
-						const targetCommit = revParseResult.stdout.trim();
-
-						// Reset to the latest remote commit
-						const resetResult = await this.gitService.reset(worktreePath, targetCommit, true);
-
-						if (!resetResult.success) {
-							console.warn(`Warning: Failed to reset worktree: ${resetResult.stderr}`);
-						} else if (onLog) {
-							onLog(`Worktree reset to latest ${mainBranch} (${targetCommit.substring(0, 7)})`);
-						}
-					} else {
-						console.warn(`Warning: Failed to resolve origin/${mainBranch}: ${revParseResult.stderr}`);
-					}
-				}
-
-				// Copy files matching patterns from repository root to worktree
-				if (mergedConfig.rootFileCopyPatterns.length > 0) {
-					const copyResult = await this.fileService.copyFilesFromPatterns(
-						repo.path,
-						worktreePath,
-						mergedConfig.rootFileCopyPatterns
-					);
-
-					if (!copyResult.success && copyResult.errors.length > 0) {
-						console.warn(
-							`Warning: Failed to copy some files from ${repo.name} root:\n${copyResult.errors.join('\n')}`
-						);
-					}
-				}
-
-				// Copy files matching patterns from project folder to worktree (for monorepos)
-				// These patterns are relative to the project folder, not the repo root
-				if (selection.projectPath && mergedConfig.projectFileCopyPatterns.length > 0) {
-					const projectSourcePath = path.join(repo.path, selection.projectPath);
-					const projectDestPath = path.join(worktreePath, selection.projectPath);
-
-					const copyResult = await this.fileService.copyFilesFromPatterns(
-						projectSourcePath,
-						projectDestPath,
-						mergedConfig.projectFileCopyPatterns
-					);
-
-					if (!copyResult.success && copyResult.errors.length > 0) {
-						console.warn(
-							`Warning: Failed to copy some files from ${repo.name}/${selection.projectPath}:\n${copyResult.errors.join('\n')}`
-						);
-					}
-				}
-
-				// Execute initActions if configured
-				// Combine root and project initActions (root first, then project)
-				let initActionsStatus: InitActionsStatus | undefined;
-				const initActions = [...mergedConfig.rootInitActions, ...mergedConfig.projectInitActions];
-				if (initActions.length > 0) {
-					try {
-						initActionsStatus = await this.executeInitActions(
-							initActions,
-							grovePath,
-							worktreeName,
-							worktreePath,
-							selection.projectPath,
-							onLog
-						);
-
-						// If initActions failed, add a warning
-						if (!initActionsStatus.success) {
-							console.warn(
-								`Warning: InitActions failed for ${repo.name}${selection.projectPath ? `/${selection.projectPath}` : ''}: ${initActionsStatus.errorMessage}`
-							);
-						}
-					} catch (error) {
-						const errMsg = error instanceof Error ? error.message : 'Unknown error';
-						console.warn(
-							`Warning: Failed to execute initActions for ${repo.name}${selection.projectPath ? `/${selection.projectPath}` : ''}: ${errMsg}`
-						);
-					}
-				}
-
-				// Determine worktree display name
-				// For single worktree groves, use the grove name
-				// For multiple worktrees, use repo name (or repo/project for monorepos)
+				// For single-worktree groves, use the grove name; for multiple, the repo (or repo/project) name.
 				const worktreeDisplayName =
 					selections.length === 1
 						? name
@@ -602,40 +237,32 @@ Completed at: ${new Date().toISOString()}
 							? `${repo.name}/${selection.projectPath}`
 							: repo.name;
 
-				// Create worktree entry
-				const worktree: Worktree = {
+				worktrees.push({
 					name: worktreeDisplayName,
 					repositoryName: repo.name,
 					repositoryPath: repo.path,
 					worktreePath,
 					branch: branchName,
 					projectPath: selection.projectPath,
-					initActionsStatus,
+					initActionsStatus: setup.initActionsStatus,
 					reference,
-				};
-
-				worktrees.push(worktree);
+				});
 			} catch (error) {
 				const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-				const displayName = selection.projectPath ? `${repo.name}/${selection.projectPath}` : repo.name;
 				errors.push(`${displayName}: ${errorMsg}`);
 			}
 		}
 
-		// If selections were provided but no worktrees were created, that's an error
+		// If selections were provided but no worktrees were created, that's an error.
 		// Empty selections (empty grove) is allowed - worktrees can be added later
 		if (selections.length > 0 && worktrees.length === 0) {
 			fs.rmSync(grovePath, { recursive: true, force: true });
 			throw new Error(`Failed to create any worktrees:\n${errors.join('\n')}`);
 		}
 
-		// Update metadata with created worktrees
 		metadata.worktrees = worktrees;
 
-		// Save grove metadata to grove.json
 		this.grovesService.writeGroveMetadata(grovePath, metadata);
-
-		// Add to groves index
 		this.grovesService.addGroveToIndex({
 			id: groveId,
 			name,
@@ -655,16 +282,11 @@ Completed at: ${new Date().toISOString()}
 	}
 
 	/**
-	 * Add a worktree to an existing grove
-	 * @param groveId - ID of the grove to add the worktree to
-	 * @param selection - Repository selection (with optional project path for monorepos)
-	 * @param worktreeName - Custom name for the worktree (will be used for folder and branch)
-	 * @param onLog - Optional callback for progress logging
-	 * @param forkFromWorktreePath - When set, branch the new worktree off the branch of the
-	 *   worktree at this path (instead of the repository's main branch). Used by the "Fork" flow.
-	 *   Skips the reset-to-main behaviour and records the parent for tree display.
-	 * @param reference - Optional external reference (e.g. an Asana task) to attach to the worktree.
-	 * @returns Updated grove metadata
+	 * Add a worktree to an existing grove. `worktreeName` is normalized for the folder
+	 * and branch. When `forkFromWorktreePath` is set, the new worktree branches off that
+	 * worktree's branch (instead of the repo's main branch), skips the reset-to-main
+	 * behaviour, and records the parent for tree display. `reference` (e.g. an Asana
+	 * task) is attached to the worktree. Returns the updated grove metadata.
 	 */
 	async addWorktreeToGrove(
 		groveId: string,
@@ -674,13 +296,11 @@ Completed at: ${new Date().toISOString()}
 		forkFromWorktreePath?: string,
 		reference?: WorktreeReference
 	): Promise<GroveMetadata> {
-		// Get grove reference
 		const groveRef = this.grovesService.getGroveById(groveId);
 		if (!groveRef) {
 			throw new Error('Grove not found');
 		}
 
-		// Read existing grove metadata
 		const metadata = this.grovesService.readGroveMetadata(groveRef.path);
 		if (!metadata) {
 			throw new Error('Grove metadata not found');
@@ -703,19 +323,15 @@ Completed at: ${new Date().toISOString()}
 		// Get grove identifier from metadata, or generate for backward compatibility with existing groves
 		let groveIdentifier = metadata.identifier;
 		if (!groveIdentifier) {
-			// Generate identifier from grove name for backward compatibility
 			groveIdentifier = generateGroveIdentifier(metadata.name);
-			// Save it to metadata for future use
 			metadata.identifier = groveIdentifier;
 		}
 
-		// Normalize worktree name for use in folder and branch
-		// Uses same normalization as grove names: lowercase, remove special chars, collapse hyphens
+		// Normalize worktree name (same normalization as grove names), then append the
+		// grove identifier for consistency with other worktrees in the grove.
 		const baseWorktreeName = normalizeName(worktreeName, 40, 'worktree');
-		// Append grove identifier for consistency with other worktrees in the grove
 		const normalizedWorktreeName = `${baseWorktreeName}-${groveIdentifier}`;
 
-		// Check if worktree name already exists in this grove
 		const existingWorktreeNames = new Set(
 			metadata.worktrees.map((w) => path.basename(w.worktreePath))
 		);
@@ -723,147 +339,46 @@ Completed at: ${new Date().toISOString()}
 			throw new Error(`Worktree with name "${normalizedWorktreeName}" already exists in this grove`);
 		}
 
+		const displayName = selection.projectPath ? `${repo.name}/${selection.projectPath}` : repo.name;
+
 		try {
-			// Log worktree creation start
-			const displayName = selection.projectPath ? `${repo.name}/${selection.projectPath}` : repo.name;
 			if (onLog) {
 				onLog(`Creating worktree for ${displayName}...`);
 			}
 
-			// Ensure repository is up-to-date before creating worktree.
-			// When forking, the new worktree branches off an existing worktree's branch, so we
-			// skip both the main-branch update and the reset-to-main behaviour.
-			let needsReset = false;
-			let mainBranch = '';
-			if (forkFromBranch) {
-				if (onLog) {
-					onLog(`Forking from branch ${forkFromBranch}...`);
-				}
-			} else {
-				({ needsReset, mainBranch } = await this.ensureRepoUpToDate(repo.path, onLog));
-			}
-
-			// Read merged repository/project grove configuration
 			const mergedConfig = this.groveConfigService.readMergedConfig(repo.path, selection.projectPath);
 
-			// Generate branch name using the custom worktree name
-			// Use the branchNameTemplate from config but replace with our custom name
+			// Generate branch name using the custom worktree name and the configured template.
 			const branchTemplate = mergedConfig.branchNameTemplate || '${GROVE_NAME}';
 			const branchBase = this.groveConfigService.applyBranchNameTemplate(
 				branchTemplate,
 				normalizedWorktreeName
 			);
-			// Lowercase and flatten the project path suffix (nested paths like
-			// "packages/core" must not introduce slashes into the branch name)
-			const branchSuffix = selection.projectPath
-				? `-${selection.projectPath.replace(/[\\/]+/g, '-').toLowerCase()}`
-				: '';
-			const branchName = branchBase + branchSuffix;
+			const branchName = branchBase + this.projectBranchSuffix(selection.projectPath);
 
-			// Create worktree path
 			const worktreePath = path.join(grovePath, normalizedWorktreeName);
 
-			// Add worktree. When forking, branch off the source worktree's branch; otherwise
-			// branch off HEAD (and reset to main below if needed).
-			const baseRef = forkFromBranch ?? 'HEAD';
-			const result = await this.gitService.addWorktree(repo.path, worktreePath, branchName, baseRef);
-
-			if (!result.success) {
-				throw new Error(result.stderr || 'Failed to create worktree');
-			}
-
-			// If we need to reset the worktree to the latest main branch, do it now
-			if (needsReset) {
-				if (onLog) {
-					onLog(`Resetting worktree to latest ${mainBranch}...`);
-				}
-
-				// Fetch in the new worktree
-				const fetchResult = await this.gitService.fetch(worktreePath);
-				if (!fetchResult.success) {
-					console.warn(`Warning: Failed to fetch in worktree: ${fetchResult.stderr}`);
-				}
-
-				// Get the SHA of the remote main branch
-				const revParseResult = await this.gitService.revParse(worktreePath, `origin/${mainBranch}`);
-
-				if (revParseResult.success) {
-					const targetCommit = revParseResult.stdout.trim();
-
-					// Reset to the latest remote commit
-					const resetResult = await this.gitService.reset(worktreePath, targetCommit, true);
-
-					if (!resetResult.success) {
-						console.warn(`Warning: Failed to reset worktree: ${resetResult.stderr}`);
-					} else if (onLog) {
-						onLog(`Worktree reset to latest ${mainBranch} (${targetCommit.substring(0, 7)})`);
-					}
-				} else {
-					console.warn(`Warning: Failed to resolve origin/${mainBranch}: ${revParseResult.stderr}`);
+			// Provision the worktree. When forking, branch off the source worktree's branch;
+			// otherwise branch off HEAD (and reset to main below if needed).
+			const setup = await this.worktreeSetupService.setupWorktree({
+				repoPath: repo.path,
+				repoName: repo.name,
+				grovePath,
+				worktreeName: normalizedWorktreeName,
+				worktreePath,
+				branchName,
+				projectPath: selection.projectPath,
+				mergedConfig,
+				forkFromBranch,
+				onLog,
+			});
+			// Surface any non-fatal per-worktree failures (copy/init actions) in the log.
+			if (onLog) {
+				for (const err of setup.errors) {
+					onLog(err);
 				}
 			}
 
-			// Copy files matching patterns from repository root to worktree
-			if (mergedConfig.rootFileCopyPatterns.length > 0) {
-				const copyResult = await this.fileService.copyFilesFromPatterns(
-					repo.path,
-					worktreePath,
-					mergedConfig.rootFileCopyPatterns
-				);
-
-				if (!copyResult.success && copyResult.errors.length > 0) {
-					console.warn(
-						`Warning: Failed to copy some files from ${repo.name} root:\n${copyResult.errors.join('\n')}`
-					);
-				}
-			}
-
-			// Copy files matching patterns from project folder to worktree (for monorepos)
-			if (selection.projectPath && mergedConfig.projectFileCopyPatterns.length > 0) {
-				const projectSourcePath = path.join(repo.path, selection.projectPath);
-				const projectDestPath = path.join(worktreePath, selection.projectPath);
-
-				const copyResult = await this.fileService.copyFilesFromPatterns(
-					projectSourcePath,
-					projectDestPath,
-					mergedConfig.projectFileCopyPatterns
-				);
-
-				if (!copyResult.success && copyResult.errors.length > 0) {
-					console.warn(
-						`Warning: Failed to copy some files from ${repo.name}/${selection.projectPath}:\n${copyResult.errors.join('\n')}`
-					);
-				}
-			}
-
-			// Execute initActions if configured
-			let initActionsStatus: InitActionsStatus | undefined;
-			const initActions = [...mergedConfig.rootInitActions, ...mergedConfig.projectInitActions];
-			if (initActions.length > 0) {
-				try {
-					initActionsStatus = await this.executeInitActions(
-						initActions,
-						grovePath,
-						normalizedWorktreeName,
-						worktreePath,
-						selection.projectPath,
-						onLog
-					);
-
-					if (!initActionsStatus.success) {
-						console.warn(
-							`Warning: InitActions failed for ${repo.name}${selection.projectPath ? `/${selection.projectPath}` : ''}: ${initActionsStatus.errorMessage}`
-						);
-					}
-				} catch (error) {
-					const errMsg = error instanceof Error ? error.message : 'Unknown error';
-					console.warn(
-						`Warning: Failed to execute initActions for ${repo.name}${selection.projectPath ? `/${selection.projectPath}` : ''}: ${errMsg}`
-					);
-				}
-			}
-
-			// Create worktree entry
 			const worktree: Worktree = {
 				name: worktreeName,
 				repositoryName: repo.name,
@@ -871,40 +386,33 @@ Completed at: ${new Date().toISOString()}
 				worktreePath,
 				branch: branchName,
 				projectPath: selection.projectPath,
-				initActionsStatus,
+				initActionsStatus: setup.initActionsStatus,
 				forkedFromPath: forkFromWorktreePath,
 				reference,
 			};
 
-			// Add worktree to metadata
 			metadata.worktrees.push(worktree);
 			metadata.updatedAt = new Date().toISOString();
 
-			// Save updated grove metadata
 			this.grovesService.writeGroveMetadata(grovePath, metadata);
-
-			// Update grove in index
 			this.grovesService.updateGroveInIndex(groveId, { updatedAt: metadata.updatedAt });
 
 			return metadata;
 		} catch (error) {
 			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-			const displayName = selection.projectPath ? `${repo.name}/${selection.projectPath}` : repo.name;
 			throw new Error(`Failed to add worktree for ${displayName}: ${errorMsg}`);
 		}
 	}
 
 	/**
-	 * Attach (or replace) an external reference on an existing worktree.
-	 * @param groveId - ID of the grove containing the worktree
-	 * @param worktreePath - Path of the worktree to update
-	 * @param reference - The external reference to store under the worktree
-	 * @returns The updated grove metadata
+	 * Look up a worktree in a grove, apply `mutate` to it, then persist the updated
+	 * metadata (bumping `updatedAt` and the index). Throws if the grove, its
+	 * metadata, or the worktree cannot be found.
 	 */
-	setWorktreeReference(
+	private updateWorktree(
 		groveId: string,
 		worktreePath: string,
-		reference: WorktreeReference
+		mutate: (worktree: Worktree) => void
 	): GroveMetadata {
 		const groveRef = this.grovesService.getGroveById(groveId);
 		if (!groveRef) {
@@ -921,7 +429,7 @@ Completed at: ${new Date().toISOString()}
 			throw new Error('Worktree not found in grove');
 		}
 
-		worktree.reference = reference;
+		mutate(worktree);
 		metadata.updatedAt = new Date().toISOString();
 
 		this.grovesService.writeGroveMetadata(groveRef.path, metadata);
@@ -931,11 +439,22 @@ Completed at: ${new Date().toISOString()}
 	}
 
 	/**
+	 * Attach (or replace) an external reference on an existing worktree.
+	 * @returns The updated grove metadata
+	 */
+	setWorktreeReference(
+		groveId: string,
+		worktreePath: string,
+		reference: WorktreeReference
+	): GroveMetadata {
+		return this.updateWorktree(groveId, worktreePath, (worktree) => {
+			worktree.reference = reference;
+		});
+	}
+
+	/**
 	 * Record (or clear) the background Claude session launched for a worktree.
-	 * @param groveId - ID of the grove containing the worktree
-	 * @param worktreePath - Path of the worktree to update
-	 * @param sessionId - Short session ID to store, or undefined to clear it
-	 * @param sessionName - Optional display name given to the session
+	 * Pass `undefined` for sessionId to clear it.
 	 * @returns The updated grove metadata
 	 */
 	setWorktreeBackgroundSession(
@@ -944,42 +463,21 @@ Completed at: ${new Date().toISOString()}
 		sessionId: string | undefined,
 		sessionName?: string
 	): GroveMetadata {
-		const groveRef = this.grovesService.getGroveById(groveId);
-		if (!groveRef) {
-			throw new Error('Grove not found');
-		}
-
-		const metadata = this.grovesService.readGroveMetadata(groveRef.path);
-		if (!metadata) {
-			throw new Error('Grove metadata not found');
-		}
-
-		const worktree = metadata.worktrees.find((w) => w.worktreePath === worktreePath);
-		if (!worktree) {
-			throw new Error('Worktree not found in grove');
-		}
-
-		if (sessionId) {
-			worktree.bgSessionId = sessionId;
-			worktree.bgSessionName = sessionName;
-		} else {
-			delete worktree.bgSessionId;
-			delete worktree.bgSessionName;
-		}
-		metadata.updatedAt = new Date().toISOString();
-
-		this.grovesService.writeGroveMetadata(groveRef.path, metadata);
-		this.grovesService.updateGroveInIndex(groveId, { updatedAt: metadata.updatedAt });
-
-		return metadata;
+		return this.updateWorktree(groveId, worktreePath, (worktree) => {
+			if (sessionId) {
+				worktree.bgSessionId = sessionId;
+				worktree.bgSessionName = sessionName;
+			} else {
+				delete worktree.bgSessionId;
+				delete worktree.bgSessionName;
+			}
+		});
 	}
 
 	/**
 	 * Read the init-actions execution log for a worktree. The log lives in the grove
 	 * directory (next to CONTEXT.md) under the file name recorded on the worktree's
 	 * initActionsStatus.
-	 * @param groveId - ID of the grove containing the worktree
-	 * @param worktreePath - Path of the worktree whose log to read
 	 * @returns The full log file contents
 	 * @throws if the grove or worktree is missing, no init actions ran, or the log file can't be read
 	 */
@@ -1013,23 +511,19 @@ Completed at: ${new Date().toISOString()}
 	}
 
 	/**
-	 * Close a grove - removes worktrees and deletes the grove folder
-	 * @param groveId - ID of the grove to close
-	 * @returns Success status and any error messages
+	 * Close a grove: remove its worktrees and delete the grove folder. Returns the
+	 * success status and any error messages.
 	 */
 	async closeGrove(groveId: string): Promise<CloseGroveResult> {
-		// Remove from groves index first to get the grove reference
 		const groveRef = this.grovesService.removeGroveFromIndex(groveId);
 
 		if (!groveRef) {
 			return { success: false, errors: [], message: 'Grove not found' };
 		}
 
-		// Read grove metadata to get worktree info
 		const metadata = this.grovesService.readGroveMetadata(groveRef.path);
 		const errors: string[] = [];
 
-		// Remove all worktrees using GitService
 		if (metadata && metadata.worktrees.length > 0) {
 			for (const worktree of metadata.worktrees) {
 				// Skip worktrees that have already been closed - their working
@@ -1037,25 +531,10 @@ Completed at: ${new Date().toISOString()}
 				if (worktree.closed) {
 					continue;
 				}
-
-				try {
-					const result = await this.gitService.removeWorktree(
-						worktree.repositoryPath,
-						worktree.worktreePath,
-						true
-					);
-
-					if (!result.success) {
-						errors.push(`Failed to remove worktree ${worktree.repositoryName}: ${result.stderr}`);
-					}
-				} catch (error) {
-					const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-					errors.push(`Error removing worktree ${worktree.repositoryName}: ${errorMsg}`);
-				}
+				errors.push(...(await this.worktreeSetupService.teardownWorktree(worktree)));
 			}
 		}
 
-		// Delete the grove folder
 		if (fs.existsSync(groveRef.path)) {
 			try {
 				fs.rmSync(groveRef.path, { recursive: true, force: true });
@@ -1078,26 +557,20 @@ Completed at: ${new Date().toISOString()}
 	}
 
 	/**
-	 * Close a single worktree within a grove
-	 * Removes the git worktree from disk and marks it as closed in grove metadata
-	 * @param groveId - ID of the grove containing the worktree
-	 * @param worktreePath - Path of the worktree to close
-	 * @returns Success status and any error messages
+	 * Close a single worktree within a grove: remove the git worktree from disk and
+	 * mark it closed in grove metadata. Returns the success status and any errors.
 	 */
 	async closeWorktree(groveId: string, worktreePath: string): Promise<CloseWorktreeResult> {
-		// Get grove reference
 		const groveRef = this.grovesService.getGroveById(groveId);
 		if (!groveRef) {
 			return { success: false, errors: [], message: 'Grove not found' };
 		}
 
-		// Read grove metadata
 		const metadata = this.grovesService.readGroveMetadata(groveRef.path);
 		if (!metadata) {
 			return { success: false, errors: [], message: 'Grove metadata not found' };
 		}
 
-		// Find the worktree in metadata
 		const worktree = metadata.worktrees.find((w) => w.worktreePath === worktreePath);
 		if (!worktree) {
 			return { success: false, errors: [], message: 'Worktree not found in grove' };
@@ -1107,33 +580,15 @@ Completed at: ${new Date().toISOString()}
 			return { success: false, errors: [], message: 'Worktree is already closed' };
 		}
 
-		const errors: string[] = [];
-
-		// Remove the git worktree
-		try {
-			const result = await this.gitService.removeWorktree(
-				worktree.repositoryPath,
-				worktree.worktreePath,
-				true
-			);
-
-			if (!result.success) {
-				errors.push(`Failed to remove worktree ${worktree.repositoryName}: ${result.stderr}`);
-			}
-		} catch (error) {
-			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-			errors.push(`Error removing worktree ${worktree.repositoryName}: ${errorMsg}`);
-		}
+		const errors = await this.worktreeSetupService.teardownWorktree(worktree);
 
 		// Mark worktree as closed in metadata (keep the entry)
 		worktree.closed = true;
 		worktree.closedAt = new Date().toISOString();
 		metadata.updatedAt = new Date().toISOString();
 
-		// Save updated grove metadata
 		this.grovesService.writeGroveMetadata(groveRef.path, metadata);
 
-		// Delete the worktree folder if it still exists
 		if (fs.existsSync(worktree.worktreePath)) {
 			try {
 				fs.rmSync(worktree.worktreePath, { recursive: true, force: true });

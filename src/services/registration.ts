@@ -30,6 +30,7 @@ import { SessionTemplateService } from './SessionTemplateService.js';
 import { SessionTrackingService } from './SessionTrackingService.js';
 import { TaskService } from './TaskService.js';
 import { WorkspaceService } from './WorkspaceService.js';
+import { WorktreeSetupService } from './WorktreeSetupService.js';
 import {
 	AsanaPluginToken,
 	BackgroundSessionServiceToken,
@@ -51,6 +52,7 @@ import {
 	SettingsServiceToken,
 	TaskServiceToken,
 	WorkspaceServiceToken,
+	WorktreeSetupServiceToken,
 } from './tokens.js';
 
 /**
@@ -74,7 +76,8 @@ import {
  * - BackgroundSessionService: depends on SessionTemplateService, SessionLauncherService
  * - ClaudeSessionService: depends on SessionsService
  * - LLMService: depends on SettingsService
- * - GroveService: depends on SettingsService, GrovesService, GroveConfigService, GitService, ContextService, FileService
+ * - WorktreeSetupService: depends on GitService, FileService
+ * - GroveService: depends on SettingsService, GrovesService, GroveConfigService, ContextService, WorktreeSetupService
  * - SessionTrackingService: depends on SessionsService, GrovesService, AdapterRegistry (ClaudeAdapter)
  * - AsanaPlugin / GitLabPlugin: depend on SettingsService for persisted enablement/config
  *
@@ -173,7 +176,15 @@ export function registerServices(
 	// LLMService depends on SettingsService
 	c.registerSingleton(LLMServiceToken, (cont) => new LLMService(cont.resolve(SettingsServiceToken)));
 
-	// Register GroveService with all its dependencies
+	// WorktreeSetupService provisions/tears down individual worktrees; depends on
+	// GitService and FileService.
+	c.registerSingleton(
+		WorktreeSetupServiceToken,
+		(cont) => new WorktreeSetupService(cont.resolve(GitServiceToken), cont.resolve(FileServiceToken))
+	);
+
+	// GroveService orchestrates grove lifecycle, delegating per-worktree work to
+	// WorktreeSetupService.
 	c.registerSingleton(
 		GroveServiceToken,
 		(cont) =>
@@ -181,9 +192,8 @@ export function registerServices(
 				cont.resolve(SettingsServiceToken),
 				cont.resolve(GrovesServiceToken),
 				cont.resolve(GroveConfigServiceToken),
-				cont.resolve(GitServiceToken),
 				cont.resolve(ContextServiceToken),
-				cont.resolve(FileServiceToken)
+				cont.resolve(WorktreeSetupServiceToken)
 			)
 	);
 

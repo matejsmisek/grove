@@ -23,6 +23,7 @@ import type { ISessionTemplateService } from './SessionTemplateService.js';
 import type { ISessionTrackingService } from './SessionTrackingService.js';
 import type { ITaskService } from './TaskService.js';
 import type { IWorkspaceService } from './WorkspaceService.js';
+import type { IWorktreeSetupService } from './WorktreeSetupService.js';
 
 // Storage service tokens
 export const SettingsServiceToken = createToken<ISettingsService>('SettingsService');
@@ -38,6 +39,7 @@ export const GitServiceToken = createToken<IGitService>('GitService');
 export const ContextServiceToken = createToken<IContextService>('ContextService');
 export const FileServiceToken = createToken<IFileService>('FileService');
 export const GroveServiceToken = createToken<IGroveService>('GroveService');
+export const WorktreeSetupServiceToken = createToken<IWorktreeSetupService>('WorktreeSetupService');
 export const ClaudeSessionServiceToken = createToken<IClaudeSessionService>('ClaudeSessionService');
 export const SessionTemplateServiceToken =
 	createToken<ISessionTemplateService>('SessionTemplateService');

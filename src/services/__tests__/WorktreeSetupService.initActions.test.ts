@@ -2,13 +2,9 @@ import { Volume } from 'memfs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockFs } from '../../__tests__/helpers.js';
-import type { IGroveConfigService } from '../../storage/GroveConfigService.js';
-import type { IGrovesService } from '../../storage/GrovesService.js';
-import type { ISettingsService } from '../../storage/SettingsService.js';
-import type { IContextService } from '../ContextService.js';
 import type { IFileService } from '../FileService.js';
 import type { IGitService } from '../GitService.js';
-import { GroveService } from '../GroveService.js';
+import { WorktreeSetupService } from '../WorktreeSetupService.js';
 
 let vol: Volume;
 
@@ -39,7 +35,7 @@ type CommandResult = { success: boolean; stdout: string; stderr: string; exitCod
 
 // Drive the private executeInitActions + stub the (spawn-based) command runner.
 function callExecuteInitActions(
-	service: GroveService,
+	service: WorktreeSetupService,
 	actions: string[],
 	grovePath: string,
 	worktreeName: string,
@@ -64,8 +60,8 @@ function callExecuteInitActions(
 	).executeInitActions(actions, grovePath, worktreeName, worktreePath);
 }
 
-describe('GroveService.executeInitActions (async log writes)', () => {
-	let service: GroveService;
+describe('WorktreeSetupService.executeInitActions (async log writes)', () => {
+	let service: WorktreeSetupService;
 	const grovePath = '/groves/g1';
 	const logPath = `${grovePath}/grove-init-wt.log`;
 
@@ -74,14 +70,7 @@ describe('GroveService.executeInitActions (async log writes)', () => {
 		vol = mockFs.vol;
 		vol.mkdirSync(grovePath, { recursive: true });
 
-		service = new GroveService(
-			{} as unknown as ISettingsService,
-			{} as unknown as IGrovesService,
-			{} as unknown as IGroveConfigService,
-			{} as unknown as IGitService,
-			{} as unknown as IContextService,
-			{} as unknown as IFileService
-		);
+		service = new WorktreeSetupService({} as unknown as IGitService, {} as unknown as IFileService);
 	});
 
 	afterEach(() => {

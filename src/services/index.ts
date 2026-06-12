@@ -12,6 +12,7 @@ export { GitService } from './GitService.js';
 export { GroveService } from './GroveService.js';
 export { SessionLauncherService } from './SessionLauncherService.js';
 export { SessionTemplateService } from './SessionTemplateService.js';
+export { WorktreeSetupService } from './WorktreeSetupService.js';
 export { SessionTrackingService, type ISessionTrackingService } from './SessionTrackingService.js';
 export { TaskService } from './TaskService.js';
 export { WorkspaceService, getContextDisplayName } from './WorkspaceService.js';
@@ -40,6 +41,7 @@ export type { IGitService } from './GitService.js';
 export type { IGroveService } from './GroveService.js';
 export type { ISessionLauncherService } from './SessionLauncherService.js';
 export type { ISessionTemplateService } from './SessionTemplateService.js';
+export type { IWorktreeSetupService } from './WorktreeSetupService.js';
 export type { ILLMService } from './LLMService.js';
 export type {
 	ITaskService,
@@ -102,6 +104,7 @@ export {
 	SettingsServiceToken,
 	TaskServiceToken,
 	WorkspaceServiceToken,
+	WorktreeSetupServiceToken,
 } from './tokens.js';
 
 // Service registration

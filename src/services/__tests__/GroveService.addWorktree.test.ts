@@ -15,6 +15,7 @@ import type { IContextService } from '../ContextService.js';
 import type { IFileService } from '../FileService.js';
 import type { IGitService } from '../GitService.js';
 import { GroveService } from '../GroveService.js';
+import { WorktreeSetupService } from '../WorktreeSetupService.js';
 
 let vol: Volume;
 
@@ -174,9 +175,8 @@ describe('GroveService.addWorktreeToGrove', () => {
 			mockSettingsService,
 			mockGrovesService,
 			mockGroveConfigService,
-			mockGitService,
 			mockContextService,
-			mockFileService
+			new WorktreeSetupService(mockGitService, mockFileService)
 		);
 
 		vi.mocked(mockGrovesService.getGroveById).mockReturnValue(createMockGroveRef());
