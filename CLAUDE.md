@@ -24,7 +24,7 @@ A **grove** is a collection of git worktrees from one or more repositories, orga
 - **External Tool Integration**: Open worktrees in terminal, IDE (VS Code, JetBrains, PyCharm, Vim), or Claude CLI
 - **Grove Configuration**: Per-repo `.grove.json` for custom branch naming, file patterns, IDE selection, and init actions
 - **InitActions**: Execute bash commands automatically after worktree creation
-- **Interactive UI**: 12-screen terminal interface built with React and Ink
+- **Interactive UI**: ~30-screen terminal interface built with React and Ink
 - **Persistent Storage**: JSON-based storage in `~/.grove` for all data
 
 ### Technology Stack
@@ -47,10 +47,13 @@ Grove follows a modular, dependency-injection-based architecture with clear sepa
 3. **Services Layer** (`src/services/`) - Business logic (GitService, GroveService, etc.)
 4. **Git Layer** (`src/git/`) - Git repository utilities and validation
 5. **Navigation Layer** (`src/navigation/`) - Type-safe screen routing with history
-6. **Screens Layer** (`src/screens/`) - 12 full-page UI screens
-7. **Components Layer** (`src/components/`) - Reusable UI components
-8. **Commands Layer** (`src/commands/`) - CLI command handlers
+6. **Screens Layer** (`src/screens/`) - ~30 full-page UI screens (see `src/navigation/types.ts`)
+7. **Components Layer** (`src/components/`) - Reusable UI components, including the home dashboard (`src/components/home/`)
+8. **Commands Layer** (`src/commands/`) - CLI command handlers and argument parsing
 9. **Utils Layer** (`src/utils/`) - General utility functions
+10. **Plugins Layer** (`src/plugins/`) - Optional integrations (GitLab, Asana) sharing a `BasePlugin`
+11. **Hooks Layer** (`src/hooks/`) - Reusable React hooks (task tracking, merge-request status, etc.)
+12. **Agents Layer** (`src/agents/`) - Agent adapter registry for Claude (and future) CLI sessions
 
 ### Key Architectural Patterns
 
@@ -491,7 +494,7 @@ Always commit both `package.json` and `package-lock.json`.
 ### Project Status
 
 - **Version**: 1.0.0, active development
-- **Architecture**: Mature modular structure (~8,200 lines)
+- **Architecture**: Mature modular structure (~26,000 lines of source, ~35,000 with tests)
 - **Testing**: Comprehensive service/storage coverage with Vitest
 - **Git Integration**: ✅ Full worktree operations
 - **Grove Management**: ✅ Complete lifecycle (create, view, close)
@@ -585,7 +588,7 @@ To understand specific parts of Grove:
 
 ---
 
-**Last Updated**: 2026-01-07
-**Document Version**: 4.0.0
+**Last Updated**: 2026-06-12
+**Document Version**: 4.1.0
 **Codebase State**: Active development with mature feature set and testing framework
-**Lines of Code**: ~8,200 lines
+**Lines of Code**: ~26,000 lines of source (~35,000 with tests)
