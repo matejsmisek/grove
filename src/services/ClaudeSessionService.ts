@@ -13,11 +13,7 @@ import {
 	listClaudeAgentSessions,
 	shortSessionId,
 } from '../utils/claudeAgents.js';
-import {
-	getDirenvAllowWarning,
-	prefixCommandWithDirenv,
-	wrapSpawnWithDirenv,
-} from '../utils/direnv.js';
+import { getDirenvWarning, prefixCommandWithDirenv, wrapSpawnWithDirenv } from '../utils/direnv.js';
 import { hasExternalEditor, openExternalEditor } from '../utils/externalEditor.js';
 import {
 	fillPromptTemplate,
@@ -646,7 +642,7 @@ launch --title "cmd" bash
 				};
 			}
 
-			return { sessionId, warning: getDirenvAllowWarning(workingDir) };
+			return { sessionId, warning: getDirenvWarning(workingDir) };
 		} catch (error) {
 			return {
 				errorMessage: `Failed to launch background session: ${error instanceof Error ? error.message : String(error)}`,
@@ -715,7 +711,7 @@ launch --title "cmd" bash
 			const tmpSessionId = crypto.randomBytes(8).toString('hex');
 			const tmpDir = this.getTmpDir();
 
-			const direnvWarning = getDirenvAllowWarning(workingDir);
+			const direnvWarning = getDirenvWarning(workingDir);
 			if (terminal === 'konsole') {
 				return this.launchKonsole(sessionContent, tmpDir, tmpSessionId, direnvWarning);
 			} else {
@@ -867,7 +863,7 @@ launch --title "cmd" bash
 			const sessionId = crypto.randomBytes(8).toString('hex');
 			const tmpDir = this.getTmpDir();
 
-			const direnvWarning = getDirenvAllowWarning(workingDir);
+			const direnvWarning = getDirenvWarning(workingDir);
 			if (terminal === 'konsole') {
 				return this.launchKonsole(sessionContent, tmpDir, sessionId, direnvWarning);
 			} else {
@@ -1026,7 +1022,7 @@ launch --title "cmd" bash
 			const sessionId = crypto.randomBytes(8).toString('hex');
 			const tmpDir = this.getTmpDir();
 
-			const direnvWarning = getDirenvAllowWarning(workingDir);
+			const direnvWarning = getDirenvWarning(workingDir);
 			if (terminal === 'konsole') {
 				return this.launchKonsole(sessionContent, tmpDir, sessionId, direnvWarning);
 			} else {
@@ -1088,7 +1084,7 @@ launch --title "cmd" bash
 			const tmpSessionId = crypto.randomBytes(8).toString('hex');
 			const tmpDir = this.getTmpDir();
 
-			const direnvWarning = getDirenvAllowWarning(workingDir);
+			const direnvWarning = getDirenvWarning(workingDir);
 			if (terminalType === 'konsole') {
 				return this.launchKonsole(sessionContent, tmpDir, tmpSessionId, direnvWarning);
 			} else {

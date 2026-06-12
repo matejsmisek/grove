@@ -45,6 +45,15 @@ export interface DirenvDirStatus {
 	 * command WITHOUT loading the environment until `direnv allow` is run.
 	 */
 	allowed: boolean;
+	/**
+	 * Absolute path of the `.envrc`/`.env` currently LOADED in the inherited
+	 * environment (direnv's `DIRENV_DIFF`), if any. This can differ from `rcPath`
+	 * — or be set while `hasEnvrc` is false — when the process was spawned
+	 * carrying a parent shell's direnv environment (rather than entered via the
+	 * direnv shell hook). That is a STALE environment leaking into `dir`; see
+	 * `hasStaleDirenvEnv` / `getStaleDirenvWarning`.
+	 */
+	loadedRcPath?: string;
 }
 
 /**
@@ -69,24 +78,41 @@ export function getDirenvDirStatus(dir: string): DirenvDirStatus {
 
 		const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
 
-		// direnv prints "Found RC path <path>" when an .envrc/.env is resolved for
-		// the directory (here or in a parent), and "Loaded RC path <path>" when one
-		// is already loaded in the current shell. Either means the directory uses
-		// direnv. Older versions ignore the unsupported --json flag, so we parse the
-		// stable text format.
-		const rcMatch = output.match(/(?:Found|Loaded) RC path\s+(.+)/i);
-		if (!rcMatch) {
+		// `direnv status` prints two distinct families of lines, and they mean
+		// different things:
+		//   "Found RC path <p>"  — an .envrc/.env that RESOLVES for `dir` (walking
+		//                          up the tree). This is the ONLY reliable signal
+		//                          that THIS directory uses direnv.
+		//   "Loaded RC path <p>" — whatever is currently LOADED in the inherited
+		//                          environment (direnv's DIRENV_DIFF). When the
+		//                          process was spawned carrying a parent shell's
+		//                          direnv env, this is a DIFFERENT directory and
+		//                          must NOT be read as `dir` using direnv.
+		// Older versions ignore the unsupported --json flag, so we parse the stable
+		// text format.
+		const foundPath = output.match(/Found RC path\s+(.+)/i);
+		const loadedPath = output.match(/Loaded RC path\s+(.+)/i);
+
+		const hasEnvrc = Boolean(foundPath);
+		const loadedRcPath = loadedPath ? loadedPath[1].trim() : undefined;
+
+		// Nothing resolves for the directory and nothing is loaded — direnv plays
+		// no part here.
+		if (!hasEnvrc && !loadedRcPath) {
 			return none;
 		}
 
-		const allowedMatch = output.match(/(?:Found|Loaded) RC allowed\s+(\S+)/i);
-		// 2.32 prints true/false; tolerate a numeric "0" (allowed) from other builds.
+		// `allowed` reflects the directory's OWN resolved file ("Found RC allowed"),
+		// not the inherited/loaded one. 2.32 prints true/false; tolerate a numeric
+		// "0" (allowed) from other builds.
+		const allowedMatch = output.match(/Found RC allowed\s+(\S+)/i);
 		const allowed = allowedMatch ? /^(true|0)$/i.test(allowedMatch[1]) : false;
 
 		return {
-			hasEnvrc: true,
-			rcPath: rcMatch[1].trim(),
+			hasEnvrc,
+			rcPath: foundPath ? foundPath[1].trim() : undefined,
 			allowed,
+			loadedRcPath,
 		};
 	} catch {
 		return none;
@@ -94,11 +120,30 @@ export function getDirenvDirStatus(dir: string): DirenvDirStatus {
 }
 
 /**
- * Whether commands launched in `dir` should be wrapped with `direnv exec`.
- * True when direnv is installed and an `.envrc`/`.env` resolves for the directory.
+ * Whether `dir` has its OWN direnv config — i.e. an `.envrc`/`.env` resolves for
+ * the directory (here or in a parent). Note this is about the directory itself,
+ * not about whatever environment the current process happens to carry; for the
+ * launch-wrapping decision use `shouldRunUnderDirenv`.
  */
 export function dirNeedsDirenv(dir: string): boolean {
 	return getDirenvDirStatus(dir).hasEnvrc;
+}
+
+/**
+ * Whether commands launched in `dir` should run under `direnv exec`. True when
+ * direnv is installed and EITHER:
+ *   - `dir` uses direnv (`hasEnvrc`) — so `direnv exec` LOADS the right env; or
+ *   - a direnv environment is currently loaded from elsewhere (`loadedRcPath`) —
+ *     so `direnv exec <dir>` reverts the inherited `DIRENV_DIFF` and SCRUBS that
+ *     stale environment instead of letting it leak into the launched command.
+ *
+ * Running `direnv exec <dir>` is safe in both cases: when `dir` has no `.envrc`
+ * the inherited diff is reverted to the original environment; when it has one the
+ * correct environment is loaded.
+ */
+export function shouldRunUnderDirenv(dir: string): boolean {
+	const status = getDirenvDirStatus(dir);
+	return status.hasEnvrc || Boolean(status.loadedRcPath);
 }
 
 /**
@@ -107,14 +152,15 @@ export function dirNeedsDirenv(dir: string): boolean {
  *
  * Uses the argv form (no shell), so directory paths containing spaces are handled
  * safely. Wrapping is harmless even when the `.envrc` is not yet allowed: direnv
- * warns and runs the command without the environment rather than failing.
+ * warns and runs the command without the environment rather than failing. It also
+ * scrubs a stale inherited environment (see `shouldRunUnderDirenv`).
  */
 export function wrapSpawnWithDirenv(
 	dir: string,
 	command: string,
 	args: string[]
 ): { command: string; args: string[] } {
-	if (!dirNeedsDirenv(dir)) {
+	if (!shouldRunUnderDirenv(dir)) {
 		return { command, args };
 	}
 	return { command: 'direnv', args: ['exec', dir, command, ...args] };
@@ -127,7 +173,7 @@ export function wrapSpawnWithDirenv(
  * is left unquoted to match how `${WORKING_DIR}` is used in those templates.
  */
 export function prefixCommandWithDirenv(dir: string, command: string): string {
-	if (!dirNeedsDirenv(dir)) {
+	if (!shouldRunUnderDirenv(dir)) {
 		return command;
 	}
 	return `direnv exec ${dir} ${command}`;
@@ -149,6 +195,52 @@ export function getDirenvAllowWarning(dir: string): string | undefined {
 		return `direnv: ${status.rcPath ?? '.envrc'} is not allowed — its environment will NOT be loaded. Run \`direnv allow\` in that directory.`;
 	}
 	return undefined;
+}
+
+/**
+ * Whether the current process carries a STALE direnv environment relative to
+ * `dir` — i.e. an `.envrc`/`.env` is loaded in the inherited environment but it
+ * was loaded for a DIFFERENT directory than `dir` resolves to (or `dir` resolves
+ * to none at all).
+ *
+ * This happens when a process is spawned — rather than entered via direnv's
+ * interactive shell hook — inheriting the parent shell's `DIRENV_DIFF`: another
+ * directory's environment (`PATH`, secrets, `GIT_COMMON_DIR`, …) leaks into a
+ * directory that does not use it. `shouldRunUnderDirenv` returns true in this
+ * case so the launch wrapper scrubs the stale environment via `direnv exec`.
+ */
+export function hasStaleDirenvEnv(dir: string): boolean {
+	const status = getDirenvDirStatus(dir);
+	if (!status.loadedRcPath) {
+		return false;
+	}
+	return !status.hasEnvrc || status.loadedRcPath !== status.rcPath;
+}
+
+/**
+ * A user-facing warning when `dir` carries a stale inherited direnv environment
+ * (see `hasStaleDirenvEnv`). Returns undefined when there is nothing to warn
+ * about (no loaded env, or the loaded env is exactly `dir`'s own `.envrc`).
+ */
+export function getStaleDirenvWarning(dir: string): string | undefined {
+	const status = getDirenvDirStatus(dir);
+	if (!status.loadedRcPath || (status.hasEnvrc && status.loadedRcPath === status.rcPath)) {
+		return undefined;
+	}
+	if (!status.hasEnvrc) {
+		return `direnv: a stale environment loaded from ${status.loadedRcPath} is active, but this directory has no .envrc of its own — it will be scrubbed by \`direnv exec\` before launch.`;
+	}
+	return `direnv: a stale environment loaded from ${status.loadedRcPath} is active, but this directory resolves to ${status.rcPath} — it will be reloaded by \`direnv exec\` before launch.`;
+}
+
+/**
+ * Combined user-facing direnv warning for a launch in `dir`: surfaces a stale
+ * inherited environment and/or an unallowed `.envrc`. Returns undefined when
+ * there is nothing to warn about.
+ */
+export function getDirenvWarning(dir: string): string | undefined {
+	const warnings = [getStaleDirenvWarning(dir), getDirenvAllowWarning(dir)].filter(Boolean);
+	return warnings.length > 0 ? warnings.join('\n') : undefined;
 }
 
 /** Reset the memoized availability probe. Intended for tests only. */

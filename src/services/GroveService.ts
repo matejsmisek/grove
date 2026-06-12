@@ -14,7 +14,7 @@ import type {
 	Worktree,
 	WorktreeReference,
 } from '../storage/types.js';
-import { getDirenvAllowWarning, wrapSpawnWithDirenv } from '../utils/direnv.js';
+import { getDirenvWarning, wrapSpawnWithDirenv } from '../utils/direnv.js';
 import { generateGroveIdentifier, normalizeGroveName, normalizeName } from '../utils/index.js';
 import type { IContextService } from './ContextService.js';
 import type { IFileService } from './FileService.js';
@@ -179,9 +179,10 @@ ${'='.repeat(80)}
 			onLog(`[${worktreeName}] Starting initActions (${actions.length} commands)...`);
 		}
 
-		// Warn once if the directory uses direnv but its .envrc is not yet allowed:
-		// init actions will run WITHOUT that environment until `direnv allow` is run.
-		const direnvWarning = getDirenvAllowWarning(workingDir);
+		// Warn once if the directory uses direnv but its .envrc is not yet allowed
+		// (init actions would run WITHOUT that environment until `direnv allow` is
+		// run), or if a stale direnv environment from another directory is loaded.
+		const direnvWarning = getDirenvWarning(workingDir);
 		if (direnvWarning) {
 			fs.appendFileSync(logFilePath, `⚠ ${direnvWarning}\n\n`);
 			if (onLog) {
