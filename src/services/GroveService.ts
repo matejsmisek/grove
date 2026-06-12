@@ -172,7 +172,7 @@ Total actions: ${actions.length}
 ${'='.repeat(80)}
 
 `;
-		fs.writeFileSync(logFilePath, logHeader);
+		await fs.promises.writeFile(logFilePath, logHeader);
 
 		// Log initialization
 		if (onLog) {
@@ -184,7 +184,7 @@ ${'='.repeat(80)}
 		// run), or if a stale direnv environment from another directory is loaded.
 		const direnvWarning = getDirenvWarning(workingDir);
 		if (direnvWarning) {
-			fs.appendFileSync(logFilePath, `⚠ ${direnvWarning}\n\n`);
+			await fs.promises.appendFile(logFilePath, `⚠ ${direnvWarning}\n\n`);
 			if (onLog) {
 				onLog(`[${worktreeName}] ⚠ ${direnvWarning}`);
 			}
@@ -199,7 +199,7 @@ ${'='.repeat(80)}
 			const actionHeader = `[Action ${i + 1}/${actions.length}] ${action}\n${'-'.repeat(80)}\n`;
 
 			// Append action header to log
-			fs.appendFileSync(logFilePath, actionHeader);
+			await fs.promises.appendFile(logFilePath, actionHeader);
 
 			// Log command start
 			if (onLog) {
@@ -212,20 +212,23 @@ ${'='.repeat(80)}
 
 				// Append output to log
 				if (stdout) {
-					fs.appendFileSync(logFilePath, `STDOUT:\n${stdout}\n`);
+					await fs.promises.appendFile(logFilePath, `STDOUT:\n${stdout}\n`);
 					// Stream stdout to callback
 					if (onLog && stdout.trim()) {
 						onLog(`[${worktreeName}] ${stdout.trim()}`);
 					}
 				}
 				if (stderr) {
-					fs.appendFileSync(logFilePath, `STDERR:\n${stderr}\n`);
+					await fs.promises.appendFile(logFilePath, `STDERR:\n${stderr}\n`);
 				}
-				fs.appendFileSync(logFilePath, `Exit code: ${exitCode}\n\n`);
+				await fs.promises.appendFile(logFilePath, `Exit code: ${exitCode}\n\n`);
 
 				if (!success) {
 					errorMessage = `Action ${i + 1} failed with exit code ${exitCode}: ${action}`;
-					fs.appendFileSync(logFilePath, `\n${'='.repeat(80)}\nEXECUTION STOPPED: ${errorMessage}\n`);
+					await fs.promises.appendFile(
+						logFilePath,
+						`\n${'='.repeat(80)}\nEXECUTION STOPPED: ${errorMessage}\n`
+					);
 					if (onLog) {
 						onLog(`[${worktreeName}] ✗ Failed with exit code ${exitCode}`);
 					}
@@ -239,8 +242,11 @@ ${'='.repeat(80)}
 			} catch (error) {
 				const errMsg = error instanceof Error ? error.message : 'Unknown error';
 				errorMessage = `Action ${i + 1} failed: ${errMsg}`;
-				fs.appendFileSync(logFilePath, `ERROR: ${errMsg}\n\n`);
-				fs.appendFileSync(logFilePath, `\n${'='.repeat(80)}\nEXECUTION STOPPED: ${errorMessage}\n`);
+				await fs.promises.appendFile(logFilePath, `ERROR: ${errMsg}\n\n`);
+				await fs.promises.appendFile(
+					logFilePath,
+					`\n${'='.repeat(80)}\nEXECUTION STOPPED: ${errorMessage}\n`
+				);
 				if (onLog) {
 					onLog(`[${worktreeName}] ✗ Error: ${errMsg}`);
 				}
@@ -266,7 +272,7 @@ Status: ${success ? 'SUCCESS' : 'FAILED'}
 ${errorMessage ? `Error: ${errorMessage}` : ''}
 Completed at: ${new Date().toISOString()}
 `;
-		fs.appendFileSync(logFilePath, summary);
+		await fs.promises.appendFile(logFilePath, summary);
 
 		return {
 			executed: true,
