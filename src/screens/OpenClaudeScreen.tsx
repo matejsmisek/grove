@@ -5,8 +5,8 @@ import { Box, Text, useInput } from 'ink';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
-	ClaudeSessionServiceToken,
 	GrovesServiceToken,
+	SessionLauncherServiceToken,
 	SettingsServiceToken,
 } from '../services/tokens.js';
 import type { ClaudeTerminalType, Worktree } from '../storage/types.js';
@@ -24,7 +24,7 @@ const TERMINAL_DISPLAY_NAMES: Record<ClaudeTerminalType, string> = {
 
 export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 	const { goBack, navigate } = useNavigation();
-	const claudeSessionService = useService(ClaudeSessionServiceToken);
+	const sessionLauncherService = useService(SessionLauncherServiceToken);
 	const grovesService = useService(GrovesServiceToken);
 	const settingsService = useService(SettingsServiceToken);
 	const [loading, setLoading] = useState(true);
@@ -42,7 +42,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 
 		const load = async () => {
 			// Check if supported terminals are available
-			const terminals = await claudeSessionService.detectAvailableTerminals();
+			const terminals = await sessionLauncherService.detectAvailableTerminals();
 			if (cancelled) return;
 			if (terminals.length === 0) {
 				setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
@@ -103,7 +103,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 				const workingDir = worktree.projectPath
 					? `${worktree.worktreePath}/${worktree.projectPath}`
 					: worktree.worktreePath;
-				const result = await claudeSessionService.openSession(
+				const result = await sessionLauncherService.openSession(
 					workingDir,
 					worktree.repositoryPath,
 					worktree.projectPath,
@@ -131,7 +131,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 		return () => {
 			cancelled = true;
 		};
-	}, [groveId, goBack, claudeSessionService, settingsService, grovesService]);
+	}, [groveId, goBack, sessionLauncherService, settingsService, grovesService]);
 
 	const handleSelectTerminal = (terminal: ClaudeTerminalType) => {
 		setSelectedTerminal(terminal);
@@ -144,7 +144,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 		const workingDir = worktree.projectPath
 			? `${worktree.worktreePath}/${worktree.projectPath}`
 			: worktree.worktreePath;
-		const result = await claudeSessionService.openSession(
+		const result = await sessionLauncherService.openSession(
 			workingDir,
 			worktree.repositoryPath,
 			worktree.projectPath,

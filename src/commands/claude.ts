@@ -1,7 +1,7 @@
 import path from 'path';
 
 import { getContainer } from '../di/index.js';
-import { ClaudeSessionServiceToken, GrovesServiceToken } from '../services/tokens.js';
+import { GrovesServiceToken, SessionLauncherServiceToken } from '../services/tokens.js';
 import type { GroveMetadata, GroveReference, Worktree } from '../storage/types.js';
 
 /**
@@ -60,7 +60,7 @@ export async function openClaude(groveId?: string): Promise<ClaudeResult> {
 		// Get services from DI container
 		const container = getContainer();
 		const grovesService = container.resolve(GrovesServiceToken);
-		const claudeSessionService = container.resolve(ClaudeSessionServiceToken);
+		const sessionLauncherService = container.resolve(SessionLauncherServiceToken);
 
 		// Get all known groves from the index
 		const allGroves = grovesService.getAllGroves();
@@ -146,7 +146,7 @@ export async function openClaude(groveId?: string): Promise<ClaudeResult> {
 			: targetWorktree.worktreePath;
 
 		// Open Claude session
-		const result = await claudeSessionService.openSession(
+		const result = await sessionLauncherService.openSession(
 			workingDir,
 			targetWorktree.repositoryPath,
 			targetWorktree.projectPath,

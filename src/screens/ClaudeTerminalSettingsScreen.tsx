@@ -4,7 +4,11 @@ import { Box, Text, useInput } from 'ink';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { ClaudeSessionServiceToken, SettingsServiceToken } from '../services/tokens.js';
+import {
+	SessionLauncherServiceToken,
+	SessionTemplateServiceToken,
+	SettingsServiceToken,
+} from '../services/tokens.js';
 import type {
 	ClaudeSessionTemplate,
 	ClaudeSessionTemplates,
@@ -19,7 +23,8 @@ const TERMINAL_DISPLAY_NAMES: Record<ClaudeTerminalType, string> = {
 
 export function ClaudeTerminalSettingsScreen() {
 	const { goBack, canGoBack } = useNavigation();
-	const claudeSessionService = useService(ClaudeSessionServiceToken);
+	const sessionLauncherService = useService(SessionLauncherServiceToken);
+	const sessionTemplateService = useService(SessionTemplateServiceToken);
 	const settingsService = useService(SettingsServiceToken);
 	const settings = settingsService.readSettings();
 
@@ -31,7 +36,7 @@ export function ClaudeTerminalSettingsScreen() {
 	// Detect installed terminals once on mount (async, non-blocking).
 	useEffect(() => {
 		let cancelled = false;
-		claudeSessionService.detectAvailableTerminals().then((found) => {
+		sessionLauncherService.detectAvailableTerminals().then((found) => {
 			if (!cancelled) {
 				setAvailableTerminals(found);
 			}
@@ -39,7 +44,7 @@ export function ClaudeTerminalSettingsScreen() {
 		return () => {
 			cancelled = true;
 		};
-	}, [claudeSessionService]);
+	}, [sessionLauncherService]);
 
 	const handleSelectTerminal = (terminalType: ClaudeTerminalType) => {
 		settingsService.updateSettings({ selectedClaudeTerminal: terminalType });
@@ -48,7 +53,7 @@ export function ClaudeTerminalSettingsScreen() {
 	};
 
 	const handleConfigureTemplate = (terminalType: ClaudeTerminalType) => {
-		const currentTemplate = claudeSessionService.getEffectiveTemplate(terminalType);
+		const currentTemplate = sessionTemplateService.getEffectiveTemplate(terminalType);
 
 		// Add header comment to help users
 		const header = `# ${TERMINAL_DISPLAY_NAMES[terminalType]} Template

@@ -18,17 +18,21 @@ import {
 } from '../storage/index.js';
 import type { WorkspaceContext } from '../storage/types.js';
 import { detectDirenvAvailable } from '../utils/direnv.js';
+import { BackgroundSessionService } from './BackgroundSessionService.js';
 import { ClaudeSessionService } from './ClaudeSessionService.js';
 import { ContextService } from './ContextService.js';
 import { FileService } from './FileService.js';
 import { GitService } from './GitService.js';
 import { GroveService } from './GroveService.js';
 import { LLMService } from './LLMService.js';
+import { SessionLauncherService } from './SessionLauncherService.js';
+import { SessionTemplateService } from './SessionTemplateService.js';
 import { SessionTrackingService } from './SessionTrackingService.js';
 import { TaskService } from './TaskService.js';
 import { WorkspaceService } from './WorkspaceService.js';
 import {
 	AsanaPluginToken,
+	BackgroundSessionServiceToken,
 	ClaudeSessionServiceToken,
 	ContextServiceToken,
 	FileServiceToken,
@@ -40,6 +44,8 @@ import {
 	LLMServiceToken,
 	RecentSelectionsServiceToken,
 	RepositoryServiceToken,
+	SessionLauncherServiceToken,
+	SessionTemplateServiceToken,
 	SessionTrackingServiceToken,
 	SessionsServiceToken,
 	SettingsServiceToken,
@@ -63,7 +69,10 @@ import {
  * - ContextService: no dependencies
  * - FileService: no dependencies
  * - TaskService: no dependencies
- * - ClaudeSessionService: depends on SettingsService, GroveConfigService
+ * - SessionTemplateService: depends on SettingsService, GroveConfigService
+ * - SessionLauncherService: depends on SessionTemplateService, SettingsService
+ * - BackgroundSessionService: depends on SessionTemplateService, SessionLauncherService
+ * - ClaudeSessionService: depends on SessionsService
  * - LLMService: depends on SettingsService
  * - GroveService: depends on SettingsService, GrovesService, GroveConfigService, GitService, ContextService, FileService
  * - SessionTrackingService: depends on SessionsService, GrovesService, AdapterRegistry (ClaudeAdapter)
@@ -121,16 +130,44 @@ export function registerServices(
 	// TaskService manages background jobs (no dependencies)
 	c.registerSingleton(TaskServiceToken, () => new TaskService());
 
-	// ClaudeSessionService depends on SettingsService, GroveConfigService and
-	// SessionsService (the hook-populated registry it reconciles against).
+	// SessionTemplateService resolves session/prompt templates; depends on
+	// SettingsService and GroveConfigService.
+	c.registerSingleton(
+		SessionTemplateServiceToken,
+		(cont) =>
+			new SessionTemplateService(
+				cont.resolve(SettingsServiceToken),
+				cont.resolve(GroveConfigServiceToken)
+			)
+	);
+
+	// SessionLauncherService launches interactive terminal sessions; depends on
+	// SessionTemplateService and SettingsService.
+	c.registerSingleton(
+		SessionLauncherServiceToken,
+		(cont) =>
+			new SessionLauncherService(
+				cont.resolve(SessionTemplateServiceToken),
+				cont.resolve(SettingsServiceToken)
+			)
+	);
+
+	// BackgroundSessionService dispatches `claude --bg` sessions; depends on
+	// SessionTemplateService and SessionLauncherService (to attach after dispatch).
+	c.registerSingleton(
+		BackgroundSessionServiceToken,
+		(cont) =>
+			new BackgroundSessionService(
+				cont.resolve(SessionTemplateServiceToken),
+				cont.resolve(SessionLauncherServiceToken)
+			)
+	);
+
+	// ClaudeSessionService tracks sessions; depends on SessionsService (the
+	// hook-populated registry it reconciles against).
 	c.registerSingleton(
 		ClaudeSessionServiceToken,
-		(cont) =>
-			new ClaudeSessionService(
-				cont.resolve(SettingsServiceToken),
-				cont.resolve(GroveConfigServiceToken),
-				cont.resolve(SessionsServiceToken)
-			)
+		(cont) => new ClaudeSessionService(cont.resolve(SessionsServiceToken))
 	);
 
 	// LLMService depends on SettingsService

@@ -5,8 +5,8 @@ import { Box, Text, useInput } from 'ink';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
-	ClaudeSessionServiceToken,
 	GrovesServiceToken,
+	SessionLauncherServiceToken,
 	SessionsServiceToken,
 	SettingsServiceToken,
 } from '../services/tokens.js';
@@ -77,7 +77,7 @@ function getSessionDisplayName(session: AgentSession, maxLength: number = 60): s
 
 export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreenProps) {
 	const { goBack, navigate } = useNavigation();
-	const claudeSessionService = useService(ClaudeSessionServiceToken);
+	const sessionLauncherService = useService(SessionLauncherServiceToken);
 	const grovesService = useService(GrovesServiceToken);
 	const sessionsService = useService(SessionsServiceToken);
 	const settingsService = useService(SettingsServiceToken);
@@ -104,7 +104,7 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 
 		const load = async () => {
 			// Check if supported terminals are available
-			const terminals = await claudeSessionService.detectAvailableTerminals();
+			const terminals = await sessionLauncherService.detectAvailableTerminals();
 			if (cancelled) return;
 			if (terminals.length === 0) {
 				setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
@@ -185,7 +185,7 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 				const worktree = session.worktreePath
 					? metadata.worktrees.find((w) => w.worktreePath === session.worktreePath)
 					: undefined;
-				const result = await claudeSessionService.resumeSession(
+				const result = await sessionLauncherService.resumeSession(
 					session.sessionId,
 					session.workspacePath,
 					terminalToUse!,
@@ -215,7 +215,7 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 		groveId,
 		worktreePath,
 		goBack,
-		claudeSessionService,
+		sessionLauncherService,
 		sessionsService,
 		settingsService,
 		grovesService,
@@ -225,7 +225,7 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 		setSelectedTerminal(terminal);
 		if (sessions.length === 1) {
 			const session = sessions[0];
-			const result = await claudeSessionService.resumeSession(
+			const result = await sessionLauncherService.resumeSession(
 				session.sessionId,
 				session.workspacePath,
 				terminal,
@@ -244,7 +244,7 @@ export function ResumeClaudeScreen({ groveId, worktreePath }: ResumeClaudeScreen
 	};
 
 	const handleSelectSession = async (session: AgentSession) => {
-		const result = await claudeSessionService.resumeSession(
+		const result = await sessionLauncherService.resumeSession(
 			session.sessionId,
 			session.workspacePath,
 			selectedTerminal!,

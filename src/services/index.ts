@@ -4,11 +4,14 @@
  */
 
 // Service implementations
+export { BackgroundSessionService } from './BackgroundSessionService.js';
 export { ClaudeSessionService } from './ClaudeSessionService.js';
 export { ContextService } from './ContextService.js';
 export { FileService } from './FileService.js';
 export { GitService } from './GitService.js';
 export { GroveService } from './GroveService.js';
+export { SessionLauncherService } from './SessionLauncherService.js';
+export { SessionTemplateService } from './SessionTemplateService.js';
 export { SessionTrackingService, type ISessionTrackingService } from './SessionTrackingService.js';
 export { TaskService } from './TaskService.js';
 export { WorkspaceService, getContextDisplayName } from './WorkspaceService.js';
@@ -29,11 +32,14 @@ export {
 export type { IDEResult, ResolvedIDEConfig } from './IDEService.js';
 
 // Service interfaces (co-located with implementations)
+export type { IBackgroundSessionService } from './BackgroundSessionService.js';
 export type { IClaudeSessionService } from './ClaudeSessionService.js';
 export type { IContextService } from './ContextService.js';
 export type { IFileService } from './FileService.js';
 export type { IGitService } from './GitService.js';
 export type { IGroveService } from './GroveService.js';
+export type { ISessionLauncherService } from './SessionLauncherService.js';
+export type { ISessionTemplateService } from './SessionTemplateService.js';
 export type { ILLMService } from './LLMService.js';
 export type {
 	ITaskService,
@@ -79,6 +85,7 @@ export type { ClaudeTerminalType } from '../storage/types.js';
 
 // Service tokens
 export {
+	BackgroundSessionServiceToken,
 	ClaudeSessionServiceToken,
 	ContextServiceToken,
 	FileServiceToken,
@@ -88,7 +95,9 @@ export {
 	GrovesServiceToken,
 	RecentSelectionsServiceToken,
 	RepositoryServiceToken,
+	SessionLauncherServiceToken,
 	SessionsServiceToken,
+	SessionTemplateServiceToken,
 	SessionTrackingServiceToken,
 	SettingsServiceToken,
 	TaskServiceToken,

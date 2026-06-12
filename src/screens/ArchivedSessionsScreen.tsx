@@ -5,8 +5,8 @@ import { Box, Text, useInput } from 'ink';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
-	ClaudeSessionServiceToken,
 	GrovesServiceToken,
+	SessionLauncherServiceToken,
 	SessionsServiceToken,
 	SettingsServiceToken,
 } from '../services/tokens.js';
@@ -47,7 +47,7 @@ function getSessionDisplayName(session: AgentSession): string {
  */
 export function ArchivedSessionsScreen({ groveId, worktreePath }: ArchivedSessionsScreenProps) {
 	const { goBack } = useNavigation();
-	const claudeSessionService = useService(ClaudeSessionServiceToken);
+	const sessionLauncherService = useService(SessionLauncherServiceToken);
 	const grovesService = useService(GrovesServiceToken);
 	const sessionsService = useService(SessionsServiceToken);
 	const settingsService = useService(SettingsServiceToken);
@@ -88,7 +88,7 @@ export function ArchivedSessionsScreen({ groveId, worktreePath }: ArchivedSessio
 	useEffect(() => {
 		let cancelled = false;
 		setSessions(loadSessions());
-		claudeSessionService.detectAvailableTerminals().then((found) => {
+		sessionLauncherService.detectAvailableTerminals().then((found) => {
 			if (!cancelled) {
 				setAvailableTerminals(found);
 				setLoading(false);
@@ -97,7 +97,7 @@ export function ArchivedSessionsScreen({ groveId, worktreePath }: ArchivedSessio
 		return () => {
 			cancelled = true;
 		};
-	}, [loadSessions, claudeSessionService]);
+	}, [loadSessions, sessionLauncherService]);
 
 	// Determine which terminal to use, or null when the user must pick one.
 	const resolveTerminal = (): ClaudeTerminalType | null => {
@@ -113,7 +113,7 @@ export function ArchivedSessionsScreen({ groveId, worktreePath }: ArchivedSessio
 
 	const resume = async (session: AgentSession, terminal: ClaudeTerminalType) => {
 		const workingDir = session.workspacePath || worktreePath;
-		const result = await claudeSessionService.resumeSession(
+		const result = await sessionLauncherService.resumeSession(
 			session.sessionId,
 			workingDir,
 			terminal,

@@ -32,11 +32,13 @@ import {
 } from '../services/index.js';
 import {
 	AsanaPluginToken,
+	BackgroundSessionServiceToken,
 	ClaudeSessionServiceToken,
 	GitServiceToken,
 	GroveConfigServiceToken,
 	GroveServiceToken,
 	GrovesServiceToken,
+	SessionLauncherServiceToken,
 	SettingsServiceToken,
 	WorkspaceServiceToken,
 } from '../services/tokens.js';
@@ -478,6 +480,8 @@ export function GroveDetailScreen({
 	const { goBack, navigate, replace } = useNavigation();
 	const gitService = useService(GitServiceToken);
 	const claudeSessionService = useService(ClaudeSessionServiceToken);
+	const sessionLauncherService = useService(SessionLauncherServiceToken);
+	const backgroundSessionService = useService(BackgroundSessionServiceToken);
 	const groveConfigService = useService(GroveConfigServiceToken);
 	const grovesService = useService(GrovesServiceToken);
 	const groveService = useService(GroveServiceToken);
@@ -747,7 +751,7 @@ export function GroveDetailScreen({
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
 		beginLaunch(`Launching Claude in ${selected.repositoryName}…`, async () => {
-			const result = await claudeSessionService.launchStandardSession(
+			const result = await backgroundSessionService.launchStandardSession(
 				targetPath,
 				selected.repositoryPath,
 				selected.projectPath,
@@ -771,7 +775,7 @@ export function GroveDetailScreen({
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
 		beginLaunch(`Opening prompt editor for ${selected.repositoryName}…`, async () => {
-			const result = await claudeSessionService.launchInstantSession(
+			const result = await backgroundSessionService.launchInstantSession(
 				targetPath,
 				selected.repositoryPath,
 				selected.projectPath,
@@ -805,7 +809,7 @@ export function GroveDetailScreen({
 			.then((task) => {
 				const promptBody = asanaPlugin.buildInstantClaudePrompt(task);
 				beginLaunch(`Opening prompt editor for ${selected.repositoryName}…`, async () => {
-					const result = await claudeSessionService.launchInstantSessionFromReference(
+					const result = await backgroundSessionService.launchInstantSessionFromReference(
 						targetPath,
 						selected.repositoryPath,
 						promptBody,
@@ -831,7 +835,7 @@ export function GroveDetailScreen({
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
 		beginLaunch(`Attaching to Claude in ${selected.repositoryName}…`, async () => {
-			const result = await claudeSessionService.attachSession(
+			const result = await sessionLauncherService.attachSession(
 				shortSessionId(session.sessionId ?? ''),
 				targetPath,
 				selected.repositoryPath,
@@ -853,14 +857,14 @@ export function GroveDetailScreen({
 		const targetPath = getWorktreePath(selected);
 		const settings = settingsService.readSettings();
 		const terminal =
-			settings.selectedClaudeTerminal ?? (await claudeSessionService.detectTerminal()) ?? undefined;
+			settings.selectedClaudeTerminal ?? (await sessionLauncherService.detectTerminal()) ?? undefined;
 		if (!terminal) {
 			returnToDetail();
 			setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
 			return;
 		}
 		beginLaunch(`Resuming Claude session in ${selected.repositoryName}…`, async () => {
-			const result = await claudeSessionService.resumeSession(
+			const result = await sessionLauncherService.resumeSession(
 				session.sessionId ?? '',
 				targetPath,
 				terminal,
