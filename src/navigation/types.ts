@@ -51,6 +51,12 @@ export type NavigationContextType = {
 	navigate: <T extends keyof Routes>(screen: T, params: Routes[T]) => void;
 	replace: <T extends keyof Routes>(screen: T, params: Routes[T]) => void;
 	goBack: () => void;
+	/**
+	 * Return to the grove list ("home"), unwinding the back-stack to the existing
+	 * `home` entry and discarding any screens stacked above it. Used after deleting
+	 * the current grove so goBack() never replays its now-stale screens.
+	 */
+	goHome: () => void;
 	canGoBack: boolean;
 	history: NavigationState[];
 };

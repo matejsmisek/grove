@@ -13,7 +13,7 @@ interface CloseGroveScreenProps {
 }
 
 export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
-	const { goBack, navigate } = useNavigation();
+	const { goBack, goHome } = useNavigation();
 	const gitService = useService(GitServiceToken);
 	const groveService = useService(GroveServiceToken);
 	const grovesService = useService(GrovesServiceToken);
@@ -130,7 +130,7 @@ export function CloseGroveScreen({ groveId }: CloseGroveScreenProps) {
 				}
 			}}
 			onCancel={goBack}
-			onSuccess={() => navigate('home', {})}
+			onSuccess={goHome}
 		/>
 	);
 }
