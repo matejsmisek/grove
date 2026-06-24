@@ -2,10 +2,13 @@ import path from 'path';
 
 import { getContainer } from '../di/index.js';
 import {
+	AsanaPluginToken,
 	GroveServiceToken,
 	GrovesServiceToken,
 	RepositoryServiceToken,
 } from '../services/tokens.js';
+import type { WorktreeReference } from '../storage/index.js';
+import { parseAsanaTaskUrl } from '../utils/index.js';
 
 /**
  * Result of add-worktree command
@@ -46,16 +49,19 @@ function parseRepositoryArg(repoArg: string): { repoName: string; projectPath?: 
  *   (a monorepo). Selecting a different repository is rejected.
  *
  * @param groveId - ID of the grove to add the worktree to
- * @param worktreeName - Name for the new worktree
+ * @param worktreeName - Name for the new worktree (ignored when `asanaUrl` is set)
  * @param repoArg - Repository argument (reponame or reponame.project); optional in fork mode
  * @param forkFromWorktreeId - Name (or folder) of the worktree to fork from
+ * @param asanaUrl - Asana task URL to create the worktree from; resolves the worktree name from
+ *   the task and records it as the worktree's external reference, mirroring the UI flow.
  * @returns Result with worktree path on success
  */
 export async function addWorktree(
 	groveId: string,
 	worktreeName: string,
 	repoArg?: string,
-	forkFromWorktreeId?: string
+	forkFromWorktreeId?: string,
+	asanaUrl?: string
 ): Promise<AddWorktreeResult> {
 	try {
 		// Get services from DI container
@@ -63,6 +69,22 @@ export async function addWorktree(
 		const repositoryService = container.resolve(RepositoryServiceToken);
 		const groveService = container.resolve(GroveServiceToken);
 		const grovesService = container.resolve(GrovesServiceToken);
+
+		// When an Asana task URL is given, resolve the worktree name from the task and
+		// attach it as an external reference (the same data the UI's "Create from Asana"
+		// flow produces). The fetched name then flows through the standard logic below.
+		let reference: WorktreeReference | undefined;
+		if (asanaUrl) {
+			const parsed = parseAsanaTaskUrl(asanaUrl);
+			if (!parsed) {
+				return { success: false, message: `'${asanaUrl}' is not a recognizable Asana task URL.` };
+			}
+
+			const asanaPlugin = container.resolve(AsanaPluginToken);
+			const task = await asanaPlugin.getTask(parsed.gid);
+			worktreeName = task.name;
+			reference = { type: 'asana', id: parsed.gid, url: task.url };
+		}
 
 		const repositories = repositoryService.getAllRepositories();
 
@@ -175,7 +197,8 @@ export async function addWorktree(
 			(message) => {
 				console.log('  ', message);
 			},
-			forkFromWorktreePath
+			forkFromWorktreePath,
+			reference
 		);
 
 		// Find the newly added worktree (it's the last one)

@@ -27,6 +27,12 @@ export type ParsedCommand =
 			name: string;
 			repository?: string;
 			forkFromWorktreeId?: string;
+			/**
+			 * Asana task URL the worktree is created from. When set, the worktree name is
+			 * resolved from the task (the `name` positional is omitted) and the task is
+			 * recorded as the worktree's external reference, mirroring the UI flow.
+			 */
+			asanaUrl?: string;
 	  }
 	| { cmd: 'claude'; groveId?: string }
 	| { cmd: 'list'; json: boolean }
@@ -161,8 +167,24 @@ function parseCreate(createArgs: string[]): ParsedCommand {
 /**
  * Parse `add-worktree <grove-id> <name> <repository>` and the `--fork` form
  * `add-worktree <grove-id> <name> --fork <worktree-id> [repository]`.
+ *
+ * The `--asana <url>` form derives the worktree name from the Asana task, so no
+ * `<name>` positional is given: `add-worktree <grove-id> --asana <url> <repository>`
+ * (and `--asana <url> --fork <worktree-id> [repository]`).
  */
 function parseAddWorktree(addArgs: string[]): ParsedCommand {
+	// Extract the optional --asana <url> flag. When present the worktree name is
+	// resolved from the task, so the name positional is omitted.
+	const asanaIndex = addArgs.indexOf('--asana');
+	let asanaUrl: string | undefined;
+	if (asanaIndex !== -1) {
+		asanaUrl = addArgs[asanaIndex + 1];
+		if (!asanaUrl) {
+			return { cmd: 'error', lines: ['✗ --asana requires a task URL'] };
+		}
+		addArgs = addArgs.filter((_, i) => i !== asanaIndex && i !== asanaIndex + 1);
+	}
+
 	// Extract the optional --fork <worktree-id> flag.
 	const forkIndex = addArgs.indexOf('--fork');
 	let forkFromWorktreeId: string | undefined;
@@ -176,6 +198,26 @@ function parseAddWorktree(addArgs: string[]): ParsedCommand {
 	}
 
 	const groveId = positional[0];
+
+	if (asanaUrl) {
+		// Asana mode: the name comes from the task, so positionals are just the grove id
+		// and (optionally, in fork mode) the repository. The repository is required in
+		// the non-fork form and optional in the fork form, matching the manual flow.
+		const repository = positional[1];
+
+		if (!groveId || (!forkFromWorktreeId && !repository)) {
+			return {
+				cmd: 'error',
+				lines: [
+					'✗ Usage: grove add-worktree <grove-id> --asana <url> <repository>',
+					'  grove add-worktree <grove-id> --asana <url> --fork <worktree-id> [repository]',
+					'  repository format: reponame or reponame.projectfolder',
+				],
+			};
+		}
+
+		return { cmd: 'add-worktree', groveId, name: '', repository, forkFromWorktreeId, asanaUrl };
+	}
 
 	if (forkFromWorktreeId) {
 		// Fork mode: repository is optional. With >= 2 tokens after the grove id the

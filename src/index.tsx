@@ -142,6 +142,9 @@ if (command.cmd === 'help') {
 	console.log(
 		'  add-worktree <grove-id> <name> --fork <wt-id> [repo]  Fork a worktree (same repo, branch off its branch)'
 	);
+	console.log(
+		'  add-worktree <grove-id> --asana <url> <repository>    Add a worktree named from an Asana task'
+	);
 	console.log('  claude [grove-id]                             Open Claude CLI for a grove');
 	console.log('  list [--json]                                 List all groves and their worktrees');
 	console.log(
@@ -206,7 +209,8 @@ if (command.cmd === 'help') {
 		command.groveId,
 		command.name,
 		command.repository,
-		command.forkFromWorktreeId
+		command.forkFromWorktreeId,
+		command.asanaUrl
 	);
 
 	if (result.success) {

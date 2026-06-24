@@ -173,6 +173,62 @@ describe('parseArgs', () => {
 				});
 			});
 		});
+
+		describe('--asana', () => {
+			const url = 'https://app.asana.com/0/123/456';
+
+			it('parses grove id, asana url, and repository (name omitted)', () => {
+				expect(parseArgs(['add-worktree', 'grove-1', '--asana', url, 'my-repo'])).toEqual({
+					cmd: 'add-worktree',
+					groveId: 'grove-1',
+					name: '',
+					repository: 'my-repo',
+					forkFromWorktreeId: undefined,
+					asanaUrl: url,
+				});
+			});
+
+			it('combines --asana with --fork, repository optional', () => {
+				expect(parseArgs(['add-worktree', 'grove-1', '--asana', url, '--fork', 'src-wt'])).toEqual({
+					cmd: 'add-worktree',
+					groveId: 'grove-1',
+					name: '',
+					repository: undefined,
+					forkFromWorktreeId: 'src-wt',
+					asanaUrl: url,
+				});
+			});
+
+			it('combines --asana with --fork and an explicit repository', () => {
+				expect(
+					parseArgs(['add-worktree', 'grove-1', '--asana', url, '--fork', 'src-wt', 'my-repo'])
+				).toEqual({
+					cmd: 'add-worktree',
+					groveId: 'grove-1',
+					name: '',
+					repository: 'my-repo',
+					forkFromWorktreeId: 'src-wt',
+					asanaUrl: url,
+				});
+			});
+
+			it('errors when --asana has no url', () => {
+				expect(parseArgs(['add-worktree', 'grove-1', '--asana'])).toMatchObject({
+					cmd: 'error',
+					lines: ['✗ --asana requires a task URL'],
+				});
+			});
+
+			it('errors when the non-fork asana form is missing a repository', () => {
+				const result = parseArgs(['add-worktree', 'grove-1', '--asana', url]);
+				expect(result).toMatchObject({
+					cmd: 'error',
+					lines: expect.arrayContaining([
+						'✗ Usage: grove add-worktree <grove-id> --asana <url> <repository>',
+					]),
+				});
+			});
+		});
 	});
 
 	describe('claude', () => {
