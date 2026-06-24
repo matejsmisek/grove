@@ -12,6 +12,7 @@ import {
 	initWorkspace,
 	listGroves,
 	openClaude,
+	openClaudeFromAsana,
 	parseArgs,
 	registerRepository,
 	setupAgentHooks,
@@ -146,6 +147,9 @@ if (command.cmd === 'help') {
 		'  add-worktree <grove-id> --asana <url> <repository>    Add a worktree named from an Asana task'
 	);
 	console.log('  claude [grove-id]                             Open Claude CLI for a grove');
+	console.log(
+		'  claude-asana [worktree-id] [--asana <url>]    Launch background Claude from an Asana task (no editor)'
+	);
 	console.log('  list [--json]                                 List all groves and their worktrees');
 	console.log(
 		'  status [--json]                               Show grove/worktree info for the current directory'
@@ -231,6 +235,16 @@ if (command.cmd === 'help') {
 	}
 } else if (command.cmd === 'claude') {
 	const result = await openClaude(command.groveId);
+
+	if (result.success) {
+		console.log('✓', result.message);
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		process.exit(1);
+	}
+} else if (command.cmd === 'claude-asana') {
+	const result = await openClaudeFromAsana(command.worktreeId, command.asanaUrl);
 
 	if (result.success) {
 		console.log('✓', result.message);

@@ -267,6 +267,13 @@ export interface WorktreeReference {
  */
 export interface Worktree {
 	/**
+	 * Stable, globally-unique identifier for this worktree (32-char random hex),
+	 * analogous to the grove id and independent of the display name. Assigned at
+	 * creation; legacy grove.json files written before this field existed are
+	 * backfilled (and persisted) on read in GrovesService.readGroveMetadata().
+	 */
+	id: string;
+	/**
 	 * Display name for this worktree. Legacy grove.json files written before this
 	 * field existed are backfilled on read in GrovesService.readGroveMetadata().
 	 */

@@ -3,6 +3,7 @@ export { initWorkspace } from './workspace.js';
 export { createGrove } from './create.js';
 export { addWorktree } from './addWorktree.js';
 export { openClaude } from './claude.js';
+export { openClaudeFromAsana } from './claudeAsana.js';
 export {
 	handleSessionAttention,
 	handleSessionEnd,
@@ -20,5 +21,6 @@ export type { StatusResult } from './status.js';
 export type { CreateResult } from './create.js';
 export type { AddWorktreeResult } from './addWorktree.js';
 export type { ClaudeResult } from './claude.js';
+export type { ClaudeAsanaResult } from './claudeAsana.js';
 export type { SessionCommandResult } from './sessions.js';
 export type { SetupHooksResult } from './setupHooks.js';

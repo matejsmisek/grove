@@ -395,6 +395,110 @@ describe('GrovesService', () => {
 
 			expect(metadata?.worktrees[0].name).toBe('custom-name');
 		});
+
+		it('should back-generate a missing worktree id and persist it', () => {
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
+
+			// Legacy grove.json written before `id` existed on Worktree.
+			const legacyMetadata = {
+				id: 'legacy-grove',
+				name: 'Legacy Grove',
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+				worktrees: [
+					{
+						name: 'my-repo',
+						repositoryName: 'my-repo',
+						repositoryPath: '/path/to/my-repo',
+						worktreePath: path.join(grovePath, 'my-repo.worktree'),
+						branch: 'feature',
+					},
+				],
+			};
+
+			vol.writeFileSync(
+				path.join(grovePath, 'grove.json'),
+				JSON.stringify(legacyMetadata, null, '\t')
+			);
+
+			const metadata = service.readGroveMetadata(grovePath);
+			const generatedId = metadata?.worktrees[0].id;
+
+			// A 32-char hex id was generated.
+			expect(generatedId).toMatch(/^[0-9a-f]{32}$/);
+
+			// It was persisted: the id is present in the file on disk.
+			const onDisk = JSON.parse(
+				vol.readFileSync(path.join(grovePath, 'grove.json'), 'utf-8') as string
+			) as GroveMetadata;
+			expect(onDisk.worktrees[0].id).toBe(generatedId);
+		});
+
+		it('should keep the backfilled worktree id stable across reads', () => {
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
+
+			const legacyMetadata = {
+				id: 'legacy-grove',
+				name: 'Legacy Grove',
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+				worktrees: [
+					{
+						name: 'my-repo',
+						repositoryName: 'my-repo',
+						repositoryPath: '/path/to/my-repo',
+						worktreePath: path.join(grovePath, 'my-repo.worktree'),
+						branch: 'feature',
+					},
+				],
+			};
+
+			vol.writeFileSync(
+				path.join(grovePath, 'grove.json'),
+				JSON.stringify(legacyMetadata, null, '\t')
+			);
+
+			const first = service.readGroveMetadata(grovePath)?.worktrees[0].id;
+			// Drop the parse cache so the second read re-parses from disk.
+			clearJsonFileCache();
+			const second = service.readGroveMetadata(grovePath)?.worktrees[0].id;
+
+			expect(first).toBeDefined();
+			expect(second).toBe(first);
+		});
+
+		it('should preserve an existing worktree id', () => {
+			const grovePath = '/grove-folder';
+			vol.mkdirSync(grovePath, { recursive: true });
+
+			const metadataWithId: GroveMetadata = {
+				id: 'grove',
+				name: 'Grove',
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+				worktrees: [
+					{
+						id: 'fixed-worktree-id',
+						name: 'my-repo',
+						repositoryName: 'my-repo',
+						repositoryPath: '/path/to/my-repo',
+						worktreePath: path.join(grovePath, 'my-repo.worktree'),
+						branch: 'feature',
+					},
+				],
+			};
+
+			vol.writeFileSync(
+				path.join(grovePath, 'grove.json'),
+				JSON.stringify(metadataWithId, null, '\t')
+			);
+
+			const metadata = service.readGroveMetadata(grovePath);
+
+			expect(metadata?.worktrees[0].id).toBe('fixed-worktree-id');
+		});
 	});
 
 	describe('writeGroveMetadata', () => {

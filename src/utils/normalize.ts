@@ -14,6 +14,19 @@ export function generateGroveIdentifier(name: string): string {
 }
 
 /**
+ * Generate a stable, globally-unique worktree identifier (32-char random hex).
+ *
+ * Unlike {@link generateGroveIdentifier} this is random (not name-derived), so it
+ * stays stable if the worktree is renamed and never collides across worktrees. It
+ * mirrors the grove id format (`crypto.randomBytes(16).toString('hex')`).
+ *
+ * @returns A 32-character hexadecimal identifier
+ */
+export function generateWorktreeId(): string {
+	return crypto.randomBytes(16).toString('hex');
+}
+
+/**
  * Normalize a name for use in folder paths and branch names
  *
  * This function:

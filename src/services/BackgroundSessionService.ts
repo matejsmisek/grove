@@ -38,6 +38,8 @@ export interface IBackgroundSessionService {
 	 * Launch an "Instant Claude" background session like {@link launchInstantSession},
 	 * but seed the prompt by replacing the template's `{prompt}` placeholder with
 	 * `promptBody` (e.g. the contents of a linked Asana task) instead of removing it.
+	 * When `skipEditor` is true the prompt is dispatched as-is, without opening
+	 * `$EDITOR` first (used by the headless CLI launch).
 	 */
 	launchInstantSessionFromReference(
 		workingDir: string,
@@ -45,7 +47,8 @@ export interface IBackgroundSessionService {
 		promptBody: string,
 		projectPath?: string,
 		groveName?: string,
-		worktreeName?: string
+		worktreeName?: string,
+		skipEditor?: boolean
 	): Promise<ClaudeSessionResult>;
 	/**
 	 * Launch a standard Claude session as a background session (`claude --bg`, no
@@ -84,7 +87,8 @@ export class BackgroundSessionService implements IBackgroundSessionService {
 	private resolvePromptText(
 		repositoryPath: string,
 		projectPath?: string,
-		placeholderReplacement?: string
+		placeholderReplacement?: string,
+		skipEditor = false
 	): string | null {
 		const template = this.templateService.getPromptTemplateForRepo(repositoryPath, projectPath) ?? '';
 		const prepared =
@@ -92,7 +96,7 @@ export class BackgroundSessionService implements IBackgroundSessionService {
 				? preparePromptTemplate(template)
 				: fillPromptTemplate(template, placeholderReplacement);
 
-		if (hasExternalEditor()) {
+		if (!skipEditor && hasExternalEditor()) {
 			const edited = openExternalEditor(prepared.content, {
 				extension: '.md',
 				prefix: 'grove-prompt-',
@@ -177,7 +181,8 @@ export class BackgroundSessionService implements IBackgroundSessionService {
 		promptBody: string,
 		projectPath?: string,
 		groveName?: string,
-		worktreeName?: string
+		worktreeName?: string,
+		skipEditor = false
 	): Promise<ClaudeSessionResult> {
 		return this.launchInstant(
 			workingDir,
@@ -185,7 +190,8 @@ export class BackgroundSessionService implements IBackgroundSessionService {
 			projectPath,
 			groveName,
 			worktreeName,
-			promptBody
+			promptBody,
+			skipEditor
 		);
 	}
 
@@ -202,7 +208,8 @@ export class BackgroundSessionService implements IBackgroundSessionService {
 		projectPath?: string,
 		groveName?: string,
 		worktreeName?: string,
-		promptBody?: string
+		promptBody?: string,
+		skipEditor = false
 	): Promise<ClaudeSessionResult> {
 		if (!(await commandExists('claude'))) {
 			return {
@@ -211,7 +218,7 @@ export class BackgroundSessionService implements IBackgroundSessionService {
 			};
 		}
 
-		const prompt = this.resolvePromptText(repositoryPath, projectPath, promptBody);
+		const prompt = this.resolvePromptText(repositoryPath, projectPath, promptBody, skipEditor);
 		if (!prompt) {
 			return {
 				success: false,

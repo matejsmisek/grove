@@ -12,7 +12,12 @@ import type {
 	Worktree,
 	WorktreeReference,
 } from '../storage/types.js';
-import { generateGroveIdentifier, normalizeGroveName, normalizeName } from '../utils/index.js';
+import {
+	generateGroveIdentifier,
+	generateWorktreeId,
+	normalizeGroveName,
+	normalizeName,
+} from '../utils/index.js';
 import type { IContextService } from './ContextService.js';
 import type { IWorktreeSetupService } from './WorktreeSetupService.js';
 import type { CloseGroveResult, CloseWorktreeResult } from './types.js';
@@ -238,6 +243,7 @@ export class GroveService implements IGroveService {
 							: repo.name;
 
 				worktrees.push({
+					id: generateWorktreeId(),
 					name: worktreeDisplayName,
 					repositoryName: repo.name,
 					repositoryPath: repo.path,
@@ -380,6 +386,7 @@ export class GroveService implements IGroveService {
 			}
 
 			const worktree: Worktree = {
+				id: generateWorktreeId(),
 				name: worktreeName,
 				repositoryName: repo.name,
 				repositoryPath: repo.path,

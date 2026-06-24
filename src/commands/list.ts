@@ -20,6 +20,7 @@ export interface GroveListEntry {
  * Worktree data for list output
  */
 export interface WorktreeListEntry {
+	id: string;
 	name?: string;
 	repositoryName: string;
 	branch: string;
@@ -41,6 +42,7 @@ export interface ListGrovesResult {
  */
 function mapWorktree(wt: Worktree): WorktreeListEntry {
 	const entry: WorktreeListEntry = {
+		id: wt.id,
 		repositoryName: wt.repositoryName,
 		branch: wt.branch,
 		worktreePath: wt.worktreePath,
@@ -79,6 +81,7 @@ function formatGroveText(grove: GroveListEntry): string[] {
 	for (const wt of grove.worktrees) {
 		const displayName = wt.name || wt.repositoryName;
 		lines.push(`    - ${displayName}`);
+		lines.push(`      ID:      ${wt.id}`);
 		lines.push(`      Branch:  ${wt.branch}`);
 		lines.push(`      Path:    ${wt.worktreePath}`);
 		lines.push(`      Project: ${wt.projectPath}`);

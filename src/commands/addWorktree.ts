@@ -1,5 +1,3 @@
-import path from 'path';
-
 import { getContainer } from '../di/index.js';
 import {
 	AsanaPluginToken,
@@ -102,21 +100,17 @@ export async function addWorktree(
 				return { success: false, message: `Grove metadata for '${groveId}' not found` };
 			}
 
-			// Match the source worktree by its name or by its folder basename.
-			const source = metadata.worktrees.find(
-				(w) =>
-					!w.closed &&
-					(w.name === forkFromWorktreeId || path.basename(w.worktreePath) === forkFromWorktreeId)
-			);
+			// Match the source worktree by its unique id (see `grove list` for ids).
+			const source = metadata.worktrees.find((w) => !w.closed && w.id === forkFromWorktreeId);
 
 			if (!source) {
 				const available = metadata.worktrees
 					.filter((w) => !w.closed)
-					.map((w) => w.name)
+					.map((w) => `${w.id} (${w.name})`)
 					.join(', ');
 				return {
 					success: false,
-					message: `Worktree '${forkFromWorktreeId}' not found in grove. Available: ${available || 'none'}`,
+					message: `Worktree with id '${forkFromWorktreeId}' not found in grove. Available: ${available || 'none'}`,
 				};
 			}
 
@@ -207,7 +201,7 @@ export async function addWorktree(
 		return {
 			success: true,
 			message: `Worktree '${worktreeName}' added to grove '${metadata.name}'`,
-			worktreeId: newWorktree?.name,
+			worktreeId: newWorktree?.id,
 			worktreeName: worktreeName,
 			worktreePath: newWorktree?.worktreePath,
 		};

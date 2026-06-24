@@ -17,7 +17,10 @@ export interface ClaudeResult {
  * Compares cwd against all known grove paths from the groves index
  * Works at any depth within a grove folder
  */
-function findGroveForPath(resolvedCwd: string, groves: GroveReference[]): GroveReference | null {
+export function findGroveForPath(
+	resolvedCwd: string,
+	groves: GroveReference[]
+): GroveReference | null {
 	// Ensure cwd ends with separator for accurate prefix matching
 	const cwdWithSep = resolvedCwd.endsWith(path.sep) ? resolvedCwd : resolvedCwd + path.sep;
 
@@ -35,7 +38,7 @@ function findGroveForPath(resolvedCwd: string, groves: GroveReference[]): GroveR
  * Find which worktree matches the current directory
  * Returns the worktree if we're inside one, null otherwise
  */
-function findCurrentWorktree(resolvedCwd: string, metadata: GroveMetadata): Worktree | null {
+export function findCurrentWorktree(resolvedCwd: string, metadata: GroveMetadata): Worktree | null {
 	const cwdWithSep = resolvedCwd.endsWith(path.sep) ? resolvedCwd : resolvedCwd + path.sep;
 
 	for (const worktree of metadata.worktrees) {

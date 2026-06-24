@@ -241,6 +241,53 @@ describe('parseArgs', () => {
 		});
 	});
 
+	describe('claude-asana', () => {
+		const url = 'https://app.asana.com/0/123/456';
+
+		it('parses without a worktree id or url (cwd detection)', () => {
+			expect(parseArgs(['claude-asana'])).toEqual({
+				cmd: 'claude-asana',
+				worktreeId: undefined,
+				asanaUrl: undefined,
+			});
+		});
+
+		it('parses with a worktree id', () => {
+			expect(parseArgs(['claude-asana', 'wt-abc'])).toEqual({
+				cmd: 'claude-asana',
+				worktreeId: 'wt-abc',
+				asanaUrl: undefined,
+			});
+		});
+
+		it('parses with a worktree id and an --asana url', () => {
+			expect(parseArgs(['claude-asana', 'wt-abc', '--asana', url])).toEqual({
+				cmd: 'claude-asana',
+				worktreeId: 'wt-abc',
+				asanaUrl: url,
+			});
+		});
+
+		it('parses an --asana url with no worktree id (cwd detection)', () => {
+			expect(parseArgs(['claude-asana', '--asana', url])).toEqual({
+				cmd: 'claude-asana',
+				worktreeId: undefined,
+				asanaUrl: url,
+			});
+		});
+
+		it('errors when --asana has no url', () => {
+			expect(parseArgs(['claude-asana', '--asana'])).toMatchObject({
+				cmd: 'error',
+				lines: ['✗ --asana requires a task URL'],
+			});
+		});
+
+		it('is not confused with the claude command', () => {
+			expect(parseArgs(['claude'])).toEqual({ cmd: 'claude', groveId: undefined });
+		});
+	});
+
 	describe('list', () => {
 		it('parses list', () => {
 			expect(parseArgs(['list'])).toEqual({ cmd: 'list', json: false });

@@ -35,6 +35,7 @@ export type ParsedCommand =
 			asanaUrl?: string;
 	  }
 	| { cmd: 'claude'; groveId?: string }
+	| { cmd: 'claude-asana'; worktreeId?: string; asanaUrl?: string }
 	| { cmd: 'list'; json: boolean }
 	| { cmd: 'status'; json: boolean }
 	| { cmd: 'register' }
@@ -82,6 +83,10 @@ export function parseArgs(argv: string[]): ParsedCommand {
 
 	if (argv[0] === 'add-worktree') {
 		return parseAddWorktree(argv.slice(1));
+	}
+
+	if (argv[0] === 'claude-asana') {
+		return parseClaudeAsana(argv.slice(1));
 	}
 
 	if (argv[0] === 'claude') {
@@ -257,4 +262,26 @@ function parseAddWorktree(addArgs: string[]): ParsedCommand {
 	const repository = positional[positional.length - 1];
 	const worktreeName = positional.slice(1, -1).join(' ');
 	return { cmd: 'add-worktree', groveId, name: worktreeName, repository };
+}
+
+/**
+ * Parse `claude-asana [worktree-id] [--asana <url>]`. Launches a background Claude
+ * session seeded from an Asana task. The worktree id is optional (the worktree is
+ * detected from cwd when omitted); worktree ids are globally unique, so no grove needs
+ * to be named. `--asana <url>` overrides the worktree's stored Asana reference.
+ */
+function parseClaudeAsana(asanaArgs: string[]): ParsedCommand {
+	let positional = asanaArgs;
+
+	const asanaIndex = positional.indexOf('--asana');
+	let asanaUrl: string | undefined;
+	if (asanaIndex !== -1) {
+		asanaUrl = positional[asanaIndex + 1];
+		if (!asanaUrl) {
+			return { cmd: 'error', lines: ['✗ --asana requires a task URL'] };
+		}
+		positional = positional.filter((_, i) => i !== asanaIndex && i !== asanaIndex + 1);
+	}
+
+	return { cmd: 'claude-asana', worktreeId: positional[0], asanaUrl };
 }

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import { generateWorktreeId } from '../utils/normalize.js';
 import { JsonStore } from './JsonStore.js';
 import type { ISettingsService } from './SettingsService.js';
 import { invalidateJsonFileCache, readJsonFileCached } from './jsonFileCache.js';
@@ -166,11 +167,33 @@ export class GrovesService implements IGrovesService {
 			// Backfill the (now-required) display name for legacy grove.json files
 			// written before `name` existed. The derivation matches the read-time
 			// fallbacks that previously lived in the consuming screens.
+			//
+			// Also back-generate the (now-required) stable worktree id for any worktree
+			// that predates it. Unlike the name backfill, missing ids are persisted so
+			// the generated id is stable across loads (the random value would otherwise
+			// differ on every read). This effectively migrates tracked worktrees on the
+			// first load after upgrading.
+			let needsIdPersist = false;
 			for (const worktree of metadata.worktrees ?? []) {
 				if (!worktree.name) {
 					worktree.name = worktree.projectPath
 						? `${worktree.repositoryName}/${worktree.projectPath}`
 						: worktree.repositoryName;
+				}
+				if (!worktree.id) {
+					worktree.id = generateWorktreeId();
+					needsIdPersist = true;
+				}
+			}
+
+			if (needsIdPersist) {
+				// Persist the freshly generated ids. Guarded so a write failure never
+				// turns a successful read into a failure — the in-memory ids are still
+				// returned and a later write will retry the migration.
+				try {
+					this.writeGroveMetadata(grovePath, metadata);
+				} catch (writeError) {
+					console.error('Error persisting backfilled worktree ids:', writeError);
 				}
 			}
 
@@ -227,6 +250,7 @@ export class GrovesService implements IGrovesService {
 
 		// Create worktree entry
 		const worktree: Worktree = {
+			id: generateWorktreeId(),
 			name: repositoryName,
 			repositoryName,
 			repositoryPath,
