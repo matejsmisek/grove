@@ -7,7 +7,6 @@ import { AddWorktreeScreen } from '../screens/AddWorktreeScreen.js';
 import { ArchivedSessionsScreen } from '../screens/ArchivedSessionsScreen.js';
 import { AsanaSettingsScreen } from '../screens/AsanaSettingsScreen.js';
 import { ChatScreen } from '../screens/ChatScreen.js';
-import { ClaudeTerminalSettingsScreen } from '../screens/ClaudeTerminalSettingsScreen.js';
 import { CloseGroveScreen } from '../screens/CloseGroveScreen.js';
 import { CloseMergedWorktreesScreen } from '../screens/CloseMergedWorktreesScreen.js';
 import { CloseWorktreeScreen } from '../screens/CloseWorktreeScreen.js';
@@ -29,6 +28,7 @@ import { RepositoriesScreen } from '../screens/RepositoriesScreen.js';
 import { ResumeClaudeScreen } from '../screens/ResumeClaudeScreen.js';
 import { SettingsScreen } from '../screens/SettingsScreen.js';
 import { SetupWizardScreen } from '../screens/SetupWizardScreen.js';
+import { TerminalSettingsScreen } from '../screens/TerminalSettingsScreen.js';
 import { WorkingFolderScreen } from '../screens/WorkingFolderScreen.js';
 import { WorkspaceSwitcherScreen } from '../screens/WorkspaceSwitcherScreen.js';
 import type { NavigationState } from './types.js';
@@ -106,8 +106,8 @@ export function Router() {
 			);
 		case 'ideSettings':
 			return <IDESettingsScreen />;
-		case 'claudeTerminalSettings':
-			return <ClaudeTerminalSettingsScreen />;
+		case 'terminalSettings':
+			return <TerminalSettingsScreen />;
 		case 'promptTemplateSettings':
 			return <PromptTemplateSettingsScreen />;
 		case 'llmSettings':

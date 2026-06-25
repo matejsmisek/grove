@@ -24,11 +24,11 @@ import { useMergeRequestStatus } from '../hooks/useMergeRequestStatus.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { getContextDisplayName } from '../services/WorkspaceService.js';
 import {
-	detectTerminal,
 	getIDEDisplayName,
 	openIDEInPath,
 	openTerminalInPath,
 	resolveIDEForPath,
+	resolveTerminalId,
 } from '../services/index.js';
 import {
 	AsanaPluginToken,
@@ -856,11 +856,10 @@ export function GroveDetailScreen({
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
 		const settings = settingsService.readSettings();
-		const terminal =
-			settings.selectedClaudeTerminal ?? (await sessionLauncherService.detectTerminal()) ?? undefined;
+		const terminal = await resolveTerminalId(settings);
 		if (!terminal) {
 			returnToDetail();
-			setError('No supported terminal found. This feature requires KDE Konsole or Kitty.');
+			setError('No supported terminal found. Configure one in Settings → Terminal.');
 			return;
 		}
 		beginLaunch(`Resuming Claude session in ${selected.repositoryName}…`, async () => {
@@ -906,20 +905,18 @@ export function GroveDetailScreen({
 	const handleOpenInTerminal = async () => {
 		const settings = settingsService.readSettings();
 
-		// Resolve terminal config, respecting Claude terminal preference
-		const terminalConfig = settings.selectedClaudeTerminal
-			? ((await detectTerminal(settings.selectedClaudeTerminal)) ?? settings.terminal)
-			: settings.terminal;
+		// Resolve the user's default terminal (or first detected).
+		const terminalId = await resolveTerminalId(settings);
 
-		if (!terminalConfig) {
+		if (!terminalId) {
 			returnToDetail();
-			setError('No terminal configured. Please restart Grove to detect available terminals.');
+			setError('No terminal configured. Choose one in Settings → Terminal.');
 			return;
 		}
 
 		const selectedWorktree = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selectedWorktree);
-		const result = openTerminalInPath(targetPath, terminalConfig);
+		const result = openTerminalInPath(targetPath, terminalId, settings.terminalConfigs?.[terminalId]);
 		returnToDetail();
 		if (result.success) {
 			setResultMessage(`Opened terminal in ${selectedWorktree.repositoryName}`);

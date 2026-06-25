@@ -31,8 +31,8 @@ export function SettingsScreen({ section }: SettingsScreenProps) {
 			action: () => navigate('ideSettings', {}),
 		},
 		{
-			label: 'Claude Terminal Settings',
-			action: () => navigate('claudeTerminalSettings', {}),
+			label: 'Terminal Settings',
+			action: () => navigate('terminalSettings', {}),
 		},
 		{
 			label: 'Claude Prompt Template',

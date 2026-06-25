@@ -16,7 +16,12 @@ export { WorktreeSetupService } from './WorktreeSetupService.js';
 export { SessionTrackingService, type ISessionTrackingService } from './SessionTrackingService.js';
 export { TaskService } from './TaskService.js';
 export { WorkspaceService, getContextDisplayName } from './WorkspaceService.js';
-export { detectAvailableTerminals, detectTerminal, openTerminalInPath } from './TerminalService.js';
+export {
+	detectAvailableTerminals,
+	getTerminalDisplayName,
+	openTerminalInPath,
+	resolveTerminalId,
+} from './TerminalService.js';
 export type { TerminalResult } from './TerminalService.js';
 export {
 	ALL_IDE_TYPES,

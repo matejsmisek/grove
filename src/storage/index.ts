@@ -24,6 +24,8 @@ export type {
 	Settings,
 	StorageConfig,
 	TerminalConfig,
+	TerminalId,
+	TerminalSettings,
 	WorkspaceConfig,
 	WorkspaceContext,
 	WorkspaceReference,

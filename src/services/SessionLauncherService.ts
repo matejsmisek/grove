@@ -5,6 +5,8 @@ import path from 'path';
 
 import type { ISettingsService } from '../storage/SettingsService.js';
 import type { ClaudeTerminalType } from '../storage/types.js';
+import { detectAvailableTerminalIds, getAdapter, isAdapterAvailable } from '../terminals/index.js';
+import type { ClaudeLaunchContext } from '../terminals/index.js';
 import { commandExists } from '../utils/commandExists.js';
 import { getDirenvWarning, prefixCommandWithDirenv } from '../utils/direnv.js';
 import type { ISessionTemplateService } from './SessionTemplateService.js';
@@ -74,14 +76,7 @@ export class SessionLauncherService implements ISessionLauncherService {
 	 * Detect all available supported terminals (konsole or kitty)
 	 */
 	async detectAvailableTerminals(): Promise<ClaudeTerminalType[]> {
-		const terminals: ClaudeTerminalType[] = [];
-		if (await commandExists('konsole')) {
-			terminals.push('konsole');
-		}
-		if (await commandExists('kitty')) {
-			terminals.push('kitty');
-		}
-		return terminals;
+		return detectAvailableTerminalIds();
 	}
 
 	/**
@@ -183,15 +178,16 @@ export class SessionLauncherService implements ISessionLauncherService {
 
 		try {
 			// Use the effective (global) template since we don't have repo info here.
+			const agentCommand = prefixCommandWithDirenv(workingDir, `claude --resume ${sessionId}`);
 			const template = this.templateService.getEffectiveTemplate(terminalType);
-			const sessionContent = this.templateService.applyTemplate(
+			const renderedTemplate = this.templateService.applyTemplate(
 				template,
 				workingDir,
-				prefixCommandWithDirenv(workingDir, `claude --resume ${sessionId}`),
+				agentCommand,
 				groveName,
 				worktreeName
 			);
-			return this.launchTerminalSession(terminalType, sessionContent, workingDir);
+			return this.launchTerminalSession(terminalType, agentCommand, renderedTemplate, workingDir);
 		} catch (error) {
 			return {
 				success: false,
@@ -230,15 +226,16 @@ export class SessionLauncherService implements ISessionLauncherService {
 		const failureLabel = mode === 'attach' ? 'attach to' : mode === 'continue' ? 'continue' : 'open';
 
 		try {
+			const agentCommand = prefixCommandWithDirenv(workingDir, claudeCommand);
 			const template = this.templateService.getTemplateForRepo(terminal!, repositoryPath, projectPath);
-			const sessionContent = this.templateService.applyTemplate(
+			const renderedTemplate = this.templateService.applyTemplate(
 				template,
 				workingDir,
-				prefixCommandWithDirenv(workingDir, claudeCommand),
+				agentCommand,
 				groveName,
 				worktreeName
 			);
-			return this.launchTerminalSession(terminal!, sessionContent, workingDir);
+			return this.launchTerminalSession(terminal!, agentCommand, renderedTemplate, workingDir);
 		} catch (error) {
 			return {
 				success: false,
@@ -258,8 +255,8 @@ export class SessionLauncherService implements ISessionLauncherService {
 			return terminalType;
 		}
 		const settings = this.settingsService.readSettings();
-		if (settings.selectedClaudeTerminal) {
-			return settings.selectedClaudeTerminal;
+		if (settings.selectedTerminal) {
+			return settings.selectedTerminal;
 		}
 		return (await this.detectTerminal()) ?? undefined;
 	}
@@ -274,10 +271,11 @@ export class SessionLauncherService implements ISessionLauncherService {
 		if (!terminal) {
 			return {
 				success: false,
-				message: 'No supported terminal found. This feature requires KDE Konsole or Kitty.',
+				message: 'No supported terminal found. Configure one in Settings → Terminal.',
 			};
 		}
-		if (!(await commandExists(terminal))) {
+		const adapter = getAdapter(terminal);
+		if (!adapter || !(await isAdapterAvailable(adapter))) {
 			return {
 				success: false,
 				message: `Selected terminal '${terminal}' is not available on this system.`,
@@ -316,38 +314,55 @@ export class SessionLauncherService implements ISessionLauncherService {
 	}
 
 	/**
-	 * Write the rendered session content to a temp session file and launch the
-	 * terminal (konsole tabs file or kitty session file). The temp file is removed
-	 * after a short delay once the terminal has had a chance to read it.
+	 * Launch a Claude session in the given terminal by delegating to its adapter.
+	 * Editable-template terminals (konsole/kitty) receive the rendered template and
+	 * write a temp session file (removed shortly after); other terminals compose
+	 * the launch from the resolved tabs. `agentCommand` is the direnv-wrapped
+	 * Claude command for the first tab.
 	 */
 	private launchTerminalSession(
 		terminal: ClaudeTerminalType,
-		sessionContent: string,
+		agentCommand: string,
+		renderedTemplate: string,
 		workingDir: string
 	): ClaudeSessionResult {
+		const adapter = getAdapter(terminal);
+		if (!adapter) {
+			return {
+				success: false,
+				message: `Unknown terminal '${terminal}'.`,
+			};
+		}
+
 		this.ensureTmpDir();
 
 		const tmpDir = this.getTmpDir();
-		const sessionId = crypto.randomBytes(8).toString('hex');
+		const sessionToken = crypto.randomBytes(8).toString('hex');
 		const warning = getDirenvWarning(workingDir);
 
-		const isKonsole = terminal === 'konsole';
-		const sessionFile = path.join(
+		const ctx: ClaudeLaunchContext = {
+			workingDir,
+			tabs: [
+				{ title: 'claude', command: agentCommand },
+				{ title: 'cmd', command: 'bash' },
+			],
+			renderedTemplate: adapter.editableTemplate ? renderedTemplate : undefined,
 			tmpDir,
-			isKonsole ? `konsole-tabs-${sessionId}.txt` : `kitty-session-${sessionId}.conf`
-		);
+			sessionToken,
+			custom: this.settingsService.readSettings().terminalConfigs?.[terminal],
+		};
 
-		// Write the session file
-		fs.writeFileSync(sessionFile, sessionContent, 'utf-8');
+		const spec = adapter.launchClaude(ctx);
 
-		// Launch the terminal with the session file
-		const command = isKonsole ? 'konsole' : 'kitty';
-		const args = isKonsole
-			? ['--tabs-from-file', sessionFile, '-e', 'bash', '-c', 'exit']
-			: ['--session', sessionFile];
-		const proc = spawn(command, args, {
+		// Write the temp session file (file-based terminals) before launching.
+		if (spec.sessionFile) {
+			fs.writeFileSync(spec.sessionFile.path, spec.sessionFile.content, 'utf-8');
+		}
+
+		const proc = spawn(spec.command, spec.args, {
 			detached: true,
 			stdio: 'ignore',
+			shell: spec.shell,
 		});
 
 		proc.on('error', (err) => {
@@ -356,16 +371,19 @@ export class SessionLauncherService implements ISessionLauncherService {
 
 		proc.unref();
 
-		// Delete the temp file after a short delay to allow the terminal to read it
-		setTimeout(() => {
-			try {
-				if (fs.existsSync(sessionFile)) {
-					fs.unlinkSync(sessionFile);
+		// Delete the temp file after a short delay to allow the terminal to read it.
+		if (spec.sessionFile) {
+			const filePath = spec.sessionFile.path;
+			setTimeout(() => {
+				try {
+					if (fs.existsSync(filePath)) {
+						fs.unlinkSync(filePath);
+					}
+				} catch {
+					// Ignore deletion errors
 				}
-			} catch {
-				// Ignore deletion errors
-			}
-		}, 2000);
+			}, 2000);
+		}
 
 		return {
 			success: true,

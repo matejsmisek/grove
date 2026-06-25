@@ -28,7 +28,7 @@ import {
 	SessionsServiceToken,
 	WorkspaceService,
 	WorkspaceServiceToken,
-	detectTerminal,
+	detectAvailableTerminals,
 	initializeServices,
 } from './services/index.js';
 import { AgentType, SettingsService } from './storage/index.js';
@@ -117,10 +117,10 @@ if (workspaceContext.type === 'workspace' || workspaceContext.type === 'repo') {
 // Detect terminal on startup if not already configured.
 // On a first run the setup wizard handles terminal selection, so skip it here.
 const settings = settingsService.readSettings();
-if (!isFirstRun && !settings.terminal) {
-	const terminalConfig = await detectTerminal(settings.selectedClaudeTerminal);
-	if (terminalConfig) {
-		settingsService.updateSettings({ terminal: terminalConfig });
+if (!isFirstRun && !settings.selectedTerminal) {
+	const [detected] = await detectAvailableTerminals();
+	if (detected) {
+		settingsService.updateSettings({ selectedTerminal: detected });
 	}
 }
 

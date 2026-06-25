@@ -1,168 +1,78 @@
 import { spawn } from 'child_process';
 import os from 'os';
 
-import type { TerminalConfig } from '../storage/types.js';
+import type { Settings, TerminalId, TerminalSettings } from '../storage/types.js';
+import {
+	detectAvailableTerminalIds,
+	getAdapter,
+	getTerminalDisplayName,
+} from '../terminals/index.js';
 
 export interface TerminalResult {
 	success: boolean;
 	message: string;
 }
 
-/**
- * Terminal definitions for each platform
- * Each entry contains the command and args template
- * {path} will be replaced with the actual directory path
- */
-interface TerminalDefinition {
-	command: string;
-	args: string[];
-}
-
-const LINUX_TERMINALS: TerminalDefinition[] = [
-	// GNOME Terminal
-	{ command: 'gnome-terminal', args: ['--working-directory', '{path}'] },
-	// KDE Konsole
-	{ command: 'konsole', args: ['--workdir', '{path}'] },
-	// XFCE Terminal
-	{ command: 'xfce4-terminal', args: ['--working-directory', '{path}'] },
-	// LXTerminal
-	{ command: 'lxterminal', args: ['--working-directory={path}'] },
-	// MATE Terminal
-	{ command: 'mate-terminal', args: ['--working-directory', '{path}'] },
-	// Tilix
-	{ command: 'tilix', args: ['--working-directory', '{path}'] },
-	// Terminator
-	{ command: 'terminator', args: ['--working-directory', '{path}'] },
-	// Alacritty
-	{ command: 'alacritty', args: ['--working-directory', '{path}'] },
-	// Kitty
-	{ command: 'kitty', args: ['--directory', '{path}'] },
-	// URxvt (no working directory flag, uses cd)
-	{ command: 'urxvt', args: ['-cd', '{path}'] },
-	// XTerm (fallback)
-	{ command: 'xterm', args: ['-e', 'cd "{path}" && $SHELL'] },
-];
-
-const MACOS_TERMINAL: TerminalDefinition = {
-	command: 'open',
-	args: ['-a', 'Terminal', '{path}'],
-};
-
-const WINDOWS_TERMINAL: TerminalDefinition = {
-	command: 'cmd',
-	args: ['/c', 'start', 'cmd', '/k', 'cd /d "{path}"'],
-};
+export { getTerminalDisplayName };
 
 /**
- * Check if a command exists in the system PATH (async, non-blocking)
+ * Detect every terminal installed on the current platform, in preference order.
+ * The first entry is the auto-detected default. Backed by the terminal adapter
+ * registry (`src/terminals/`).
  */
-function commandExists(command: string): Promise<boolean> {
-	return new Promise((resolve) => {
-		const checkCmd = os.platform() === 'win32' ? 'where' : 'which';
-		const proc = spawn(checkCmd, [command], { stdio: 'ignore' });
-		proc.on('close', (code) => resolve(code === 0));
-		proc.on('error', () => resolve(false));
-	});
+export function detectAvailableTerminals(): Promise<TerminalId[]> {
+	return detectAvailableTerminalIds();
 }
 
 /**
- * Detect the available terminal on the system
- * If preferredCommand is provided, that terminal will be tried first before
- * falling back to the default detection order.
+ * Resolve which terminal id to use: the user's `selectedTerminal`, otherwise the
+ * first auto-detected terminal. Returns undefined when none is available.
  */
-export async function detectTerminal(preferredCommand?: string): Promise<TerminalConfig | null> {
-	const platform = os.platform();
-
-	switch (platform) {
-		case 'darwin': {
-			// macOS always has Terminal.app
-			return {
-				command: MACOS_TERMINAL.command,
-				args: MACOS_TERMINAL.args,
-			};
-		}
-		case 'linux': {
-			// Build ordered list, prioritizing the preferred terminal
-			let terminals = LINUX_TERMINALS;
-			if (preferredCommand) {
-				const preferred = LINUX_TERMINALS.find((t) => t.command === preferredCommand);
-				if (preferred) {
-					terminals = [preferred, ...LINUX_TERMINALS.filter((t) => t.command !== preferredCommand)];
-				}
-			}
-
-			// Try each terminal in order of preference
-			for (const terminal of terminals) {
-				if (await commandExists(terminal.command)) {
-					return {
-						command: terminal.command,
-						args: terminal.args,
-					};
-				}
-			}
-			return null;
-		}
-		case 'win32': {
-			// Windows always has cmd
-			return {
-				command: WINDOWS_TERMINAL.command,
-				args: WINDOWS_TERMINAL.args,
-			};
-		}
-		default:
-			return null;
+export async function resolveTerminalId(settings: Settings): Promise<TerminalId | undefined> {
+	if (settings.selectedTerminal) {
+		return settings.selectedTerminal;
 	}
+	const detected = await detectAvailableTerminalIds();
+	return detected[0];
 }
 
 /**
- * Detect every terminal available on the system, in preference order.
- * Used by the setup wizard to let the user pick from installed terminals.
- * The first entry is the auto-detected default.
- */
-export async function detectAvailableTerminals(): Promise<TerminalConfig[]> {
-	const platform = os.platform();
-
-	switch (platform) {
-		case 'darwin':
-			return [{ command: MACOS_TERMINAL.command, args: MACOS_TERMINAL.args }];
-		case 'win32':
-			return [{ command: WINDOWS_TERMINAL.command, args: WINDOWS_TERMINAL.args }];
-		case 'linux': {
-			const available: TerminalConfig[] = [];
-			for (const terminal of LINUX_TERMINALS) {
-				if (await commandExists(terminal.command)) {
-					available.push({ command: terminal.command, args: terminal.args });
-				}
-			}
-			return available;
-		}
-		default:
-			return [];
-	}
-}
-
-/**
- * Open a terminal window in the specified directory using saved config
+ * Open a plain terminal window in the specified directory using the given
+ * terminal id. `custom` config is required only for the `custom` terminal id.
  */
 export function openTerminalInPath(
 	path: string,
-	config: TerminalConfig | undefined
+	terminalId: TerminalId | undefined,
+	custom?: TerminalSettings
 ): TerminalResult {
-	if (!config) {
+	if (!terminalId) {
 		return {
 			success: false,
-			message: 'No terminal configured. Please restart Grove to detect available terminals.',
+			message: 'No terminal configured. Choose one in Settings → Terminal.',
+		};
+	}
+
+	const adapter = getAdapter(terminalId);
+	if (!adapter) {
+		return {
+			success: false,
+			message: `Unknown terminal '${terminalId}'. Choose one in Settings → Terminal.`,
 		};
 	}
 
 	try {
-		// Replace {path} placeholder in args
-		const args = config.args.map((arg) => arg.replace('{path}', path));
+		const spec = adapter.openTerminal(path, custom);
+		if (!spec.command) {
+			return {
+				success: false,
+				message: 'No command configured for the custom terminal.',
+			};
+		}
 
-		const proc = spawn(config.command, args, {
+		const proc = spawn(spec.command, spec.args, {
 			detached: true,
 			stdio: 'ignore',
-			shell: os.platform() === 'win32',
+			shell: spec.shell ?? os.platform() === 'win32',
 		});
 
 		proc.on('error', (err) => {
@@ -173,7 +83,7 @@ export function openTerminalInPath(
 
 		return {
 			success: true,
-			message: `Opened terminal in ${path}`,
+			message: `Opened ${getTerminalDisplayName(terminalId)} in ${path}`,
 		};
 	} catch (error) {
 		return {

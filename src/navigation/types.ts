@@ -22,7 +22,7 @@ export type Routes = {
 	workingFolder: Record<string, never>;
 	repositories: Record<string, never>;
 	ideSettings: Record<string, never>;
-	claudeTerminalSettings: Record<string, never>;
+	terminalSettings: Record<string, never>;
 	promptTemplateSettings: Record<string, never>;
 	llmSettings: Record<string, never>;
 	pluginSettings: { selectedPluginId?: string };

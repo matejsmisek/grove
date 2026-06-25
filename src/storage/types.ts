@@ -37,9 +37,51 @@ export interface IDEConfig {
 export type IDEConfigs = Partial<Record<IDEType, IDEConfig>>;
 
 /**
- * Supported terminal types for Claude sessions
+ * Identifier of a supported terminal emulator. Backs both the "open terminal"
+ * and "launch/attach Claude" features via the terminal adapter registry
+ * (`src/terminals/`). `custom` is an escape hatch for an unlisted terminal,
+ * configured via {@link TerminalSettings.customCommand}.
  */
-export type ClaudeTerminalType = 'konsole' | 'kitty';
+export type TerminalId =
+	| 'konsole'
+	| 'kitty'
+	| 'gnome-terminal'
+	| 'iterm2'
+	| 'terminal-app'
+	| 'alacritty'
+	| 'ghostty'
+	| 'wezterm'
+	| 'xfce4-terminal'
+	| 'tilix'
+	| 'terminator'
+	| 'mate-terminal'
+	| 'lxterminal'
+	| 'urxvt'
+	| 'xterm'
+	| 'windows-terminal'
+	| 'cmd'
+	| 'custom';
+
+/**
+ * Supported terminal types for Claude sessions.
+ * @deprecated Use {@link TerminalId}. Retained as an alias so existing
+ * signatures keep compiling; the union now spans every supported terminal.
+ */
+export type ClaudeTerminalType = TerminalId;
+
+/**
+ * Per-terminal settings. The Claude session template lives here as a sub-setting
+ * of the terminal (only meaningful for terminals with an editable template, e.g.
+ * konsole/kitty). `customCommand`/`customArgs` apply only to the `custom` id.
+ */
+export interface TerminalSettings {
+	/** Custom Claude session/layout template content (placeholders as below). */
+	claudeSessionTemplate?: string;
+	/** Command for the `custom` terminal id. */
+	customCommand?: string;
+	/** Args for the `custom` terminal id; use {path} for the directory. */
+	customArgs?: string[];
+}
 
 /**
  * Template for Claude session/tabs file
@@ -80,8 +122,22 @@ export interface Settings {
 	 */
 	workingFolder: string;
 	/**
+	 * The terminal the user launches by default — single source of truth for both
+	 * "open terminal" and "launch/attach Claude". Workspace-overridable (inherits
+	 * from global like {@link selectedIDE}). Resolved against the terminal adapter
+	 * registry (`src/terminals/`).
+	 */
+	selectedTerminal?: TerminalId;
+	/**
+	 * Per-terminal overrides keyed by terminal id. Holds the Claude session
+	 * template (as a sub-setting of the terminal) and the custom command/args for
+	 * the `custom` id.
+	 */
+	terminalConfigs?: Partial<Record<TerminalId, TerminalSettings>>;
+	/**
 	 * Terminal configuration detected on first startup.
-	 * If not set, terminal opening will not work.
+	 * @deprecated Superseded by {@link selectedTerminal} + {@link terminalConfigs};
+	 * read only for one-time migration, then removed.
 	 */
 	terminal?: TerminalConfig;
 	/**
@@ -96,19 +152,13 @@ export interface Settings {
 	ideConfigs?: IDEConfigs;
 	/**
 	 * Currently selected terminal type for "Open in Claude" feature.
-	 * If not set, Claude opening will auto-detect available terminal.
+	 * @deprecated Superseded by {@link selectedTerminal}; read only for migration.
 	 */
 	selectedClaudeTerminal?: ClaudeTerminalType;
 	/**
 	 * Custom Claude session templates for different terminal types.
-	 * Templates support placeholders:
-	 * - ${WORKING_DIR}: Working directory path
-	 * - ${AGENT_COMMAND}: Agent command (e.g., 'claude' or 'claude --resume <id>')
-	 * - ${GROVE_NAME}: Full grove name
-	 * - ${GROVE_NAME_SHORT}: Shortened grove name (max 15 chars)
-	 * - ${WORKTREE_NAME}: Full worktree name
-	 * - ${WORKTREE_NAME_SHORT}: Shortened worktree name (max 15 chars)
-	 * If not set for a terminal type, default template will be used.
+	 * @deprecated Superseded by {@link terminalConfigs}[id].claudeSessionTemplate;
+	 * read only for one-time migration, then removed.
 	 */
 	claudeSessionTemplates?: ClaudeSessionTemplates;
 	/**

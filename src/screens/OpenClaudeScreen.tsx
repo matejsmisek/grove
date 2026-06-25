@@ -4,23 +4,19 @@ import { Box, Text, useInput } from 'ink';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
+import { getTerminalDisplayName } from '../services/index.js';
 import {
 	GrovesServiceToken,
 	SessionLauncherServiceToken,
 	SettingsServiceToken,
 } from '../services/tokens.js';
-import type { ClaudeTerminalType, Worktree } from '../storage/types.js';
+import type { TerminalId, Worktree } from '../storage/types.js';
 
 interface OpenClaudeScreenProps {
 	groveId: string;
 }
 
 type ViewMode = 'selectTerminal' | 'selectWorktree';
-
-const TERMINAL_DISPLAY_NAMES: Record<ClaudeTerminalType, string> = {
-	konsole: 'KDE Konsole',
-	kitty: 'Kitty',
-};
 
 export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 	const { goBack, navigate } = useNavigation();
@@ -34,8 +30,8 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 	const [error, setError] = useState<string | null>(null);
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
 	const [viewMode, setViewMode] = useState<ViewMode>('selectWorktree');
-	const [availableTerminals, setAvailableTerminals] = useState<ClaudeTerminalType[]>([]);
-	const [selectedTerminal, setSelectedTerminal] = useState<ClaudeTerminalType | null>(null);
+	const [availableTerminals, setAvailableTerminals] = useState<TerminalId[]>([]);
+	const [selectedTerminal, setSelectedTerminal] = useState<TerminalId | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -54,10 +50,10 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 
 			// Check if user has a selected terminal in settings
 			const settings = settingsService.readSettings();
-			const userSelectedTerminal = settings.selectedClaudeTerminal;
+			const userSelectedTerminal = settings.selectedTerminal;
 
 			// Determine which terminal to use
-			let terminalToUse: ClaudeTerminalType | null = null;
+			let terminalToUse: TerminalId | null = null;
 			if (userSelectedTerminal && terminals.includes(userSelectedTerminal)) {
 				terminalToUse = userSelectedTerminal;
 			} else if (terminals.length === 1) {
@@ -133,7 +129,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 		};
 	}, [groveId, goBack, sessionLauncherService, settingsService, grovesService]);
 
-	const handleSelectTerminal = (terminal: ClaudeTerminalType) => {
+	const handleSelectTerminal = (terminal: TerminalId) => {
 		setSelectedTerminal(terminal);
 		setViewMode('selectWorktree');
 		setSelectedIndex(0); // Reset selection for worktree
@@ -191,7 +187,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 				}
 			} else if (input === 's' && viewMode === 'selectTerminal') {
 				// Open terminal settings
-				navigate('claudeTerminalSettings', {});
+				navigate('terminalSettings', {});
 			}
 		},
 		{ isActive: !loading && !error && !resultMessage }
@@ -245,7 +241,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 					<Box key={terminal}>
 						<Text color={selectedIndex === index ? 'cyan' : undefined}>
 							{selectedIndex === index ? '❯ ' : '  '}
-							{TERMINAL_DISPLAY_NAMES[terminal]}
+							{getTerminalDisplayName(terminal)}
 						</Text>
 					</Box>
 				))}

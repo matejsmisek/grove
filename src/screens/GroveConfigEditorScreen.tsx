@@ -7,14 +7,16 @@ import { useService } from '../di/index.js';
 import { getMonorepoProjects } from '../git/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { ALL_IDE_TYPES, getIDEDisplayName } from '../services/index.js';
+import { getTerminalDisplayName } from '../services/index.js';
 import { GroveConfigServiceToken, RepositoryServiceToken } from '../services/tokens.js';
 import type {
 	ClaudeSessionTemplates,
-	ClaudeTerminalType,
 	FileCopyPatternEntry,
 	GroveRepoConfig,
 	Repository,
+	TerminalId,
 } from '../storage/types.js';
+import { allAdapters } from '../terminals/index.js';
 import { openExternalEditor } from '../utils/externalEditor.js';
 import { PROMPT_PLACEHOLDER } from '../utils/promptTemplate.js';
 
@@ -22,12 +24,11 @@ import { PROMPT_PLACEHOLDER } from '../utils/promptTemplate.js';
 const BRANCH_TEMPLATE_VARIABLES = ['GROVE_NAME'] as const;
 const CLAUDE_TEMPLATE_VARIABLES = ['WORKING_DIR', 'AGENT_COMMAND'] as const;
 
-// Available terminal types for Claude templates
-const CLAUDE_TERMINAL_TYPES: ClaudeTerminalType[] = ['konsole', 'kitty'];
-const TERMINAL_DISPLAY_NAMES: Record<ClaudeTerminalType, string> = {
-	konsole: 'KDE Konsole',
-	kitty: 'Kitty',
-};
+// Terminals offering an editable Claude session template (the only ones a
+// per-repo template applies to).
+const CLAUDE_TERMINAL_TYPES: TerminalId[] = allAdapters()
+	.filter((a) => a.editableTemplate)
+	.map((a) => a.id);
 
 type ViewMode =
 	| 'fileList'
@@ -485,7 +486,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 						const templates = config.claudeSessionTemplates || {};
 						const currentTemplate = templates[terminalType]?.content || '';
 
-						const header = `# ${TERMINAL_DISPLAY_NAMES[terminalType]} Template for .grove.json
+						const header = `# ${getTerminalDisplayName(terminalType)} Template for .grove.json
 # Available variables:
 #   \${WORKING_DIR} - Working directory path
 #   \${AGENT_COMMAND} - Claude command (claude or claude --resume <id>)
@@ -961,7 +962,7 @@ export function GroveConfigEditorScreen({ repositoryPath }: GroveConfigEditorScr
 								bold={index === selectedIndex}
 							>
 								{index === selectedIndex ? '> ' : '  '}
-								{TERMINAL_DISPLAY_NAMES[terminalType]}
+								{getTerminalDisplayName(terminalType)}
 								{hasTemplate && <Text color="green"> (configured)</Text>}
 							</Text>
 						);

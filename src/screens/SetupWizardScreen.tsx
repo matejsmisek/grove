@@ -14,10 +14,11 @@ import {
 	detectAvailableTerminals,
 	getDefaultIDEConfig,
 	getIDEDisplayName,
+	getTerminalDisplayName,
 	isCommandAvailable,
 } from '../services/index.js';
 import { SettingsServiceToken } from '../services/tokens.js';
-import type { Settings, TerminalConfig } from '../storage/types.js';
+import type { Settings, TerminalId } from '../storage/types.js';
 
 type WizardStep = 'folder' | 'terminal' | 'ide';
 
@@ -48,7 +49,7 @@ export function SetupWizardScreen() {
 	const [folderPhase, setFolderPhase] = useState<'input' | 'direnv'>('input');
 
 	// Step 2: terminal
-	const [terminals, setTerminals] = useState<TerminalConfig[] | null>(null);
+	const [terminals, setTerminals] = useState<TerminalId[] | null>(null);
 	const [terminalIndex, setTerminalIndex] = useState(0);
 
 	// Step 3: IDE - default to jetbrains-auto
@@ -102,7 +103,7 @@ export function SetupWizardScreen() {
 		};
 		const selectedTerminal = terminals?.[terminalIndex];
 		if (selectedTerminal) {
-			updates.terminal = selectedTerminal;
+			updates.selectedTerminal = selectedTerminal;
 		}
 		settingsService.updateSettings(updates);
 		replace('home', {});
@@ -240,10 +241,10 @@ export function SetupWizardScreen() {
 						terminals.map((terminal, index) => {
 							const isSelected = index === terminalIndex;
 							return (
-								<Box key={terminal.command}>
+								<Box key={terminal}>
 									<Text color={isSelected ? 'cyan' : undefined} bold={isSelected}>
 										{isSelected ? '> ' : '  '}
-										{terminal.command}
+										{getTerminalDisplayName(terminal)}
 										{index === 0 && <Text color="green"> (detected default)</Text>}
 									</Text>
 								</Box>

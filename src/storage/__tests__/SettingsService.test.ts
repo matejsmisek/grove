@@ -137,17 +137,14 @@ describe('SettingsService', () => {
 		it('should read settings from file', () => {
 			const customSettings: Settings = {
 				workingFolder: '/custom/path',
-				terminal: {
-					command: 'gnome-terminal',
-					args: ['--working-directory={{path}}'],
-				},
+				selectedTerminal: 'gnome-terminal',
 			};
 
 			service.writeSettings(customSettings);
 			const settings = service.readSettings();
 
 			expect(settings.workingFolder).toBe('/custom/path');
-			expect(settings.terminal?.command).toBe('gnome-terminal');
+			expect(settings.selectedTerminal).toBe('gnome-terminal');
 		});
 
 		it('should merge with defaults for missing fields', () => {
@@ -225,10 +222,7 @@ describe('SettingsService', () => {
 		it('should update specific fields without overwriting others', () => {
 			const initialSettings: Settings = {
 				workingFolder: '/initial/path',
-				terminal: {
-					command: 'gnome-terminal',
-					args: [],
-				},
+				selectedTerminal: 'gnome-terminal',
 			};
 
 			service.writeSettings(initialSettings);
@@ -238,7 +232,7 @@ describe('SettingsService', () => {
 			});
 
 			expect(updated.workingFolder).toBe('/updated/path');
-			expect(updated.terminal?.command).toBe('gnome-terminal');
+			expect(updated.selectedTerminal).toBe('gnome-terminal');
 		});
 
 		it('should create settings file if it does not exist', () => {
@@ -284,7 +278,7 @@ describe('SettingsService', () => {
 		it('should inherit unset keys from the global settings file', () => {
 			writeGlobalSettings({
 				selectedIDE: 'phpstorm',
-				terminal: { command: 'gnome-terminal', args: [] },
+				selectedTerminal: 'gnome-terminal',
 			});
 
 			const workspaceService = createWorkspaceService();
@@ -292,7 +286,7 @@ describe('SettingsService', () => {
 
 			// Inherited from global
 			expect(settings.selectedIDE).toBe('phpstorm');
-			expect(settings.terminal?.command).toBe('gnome-terminal');
+			expect(settings.selectedTerminal).toBe('gnome-terminal');
 			// Context-specific working folder, not the global one
 			expect(settings.workingFolder).toBe(workspaceGrovesFolder);
 		});
@@ -315,7 +309,7 @@ describe('SettingsService', () => {
 		it('should keep the workspace settings file sparse (no baked-in global keys)', () => {
 			writeGlobalSettings({
 				selectedIDE: 'phpstorm',
-				terminal: { command: 'gnome-terminal', args: [] },
+				selectedTerminal: 'gnome-terminal',
 			});
 
 			const workspaceService = createWorkspaceService();
@@ -327,7 +321,7 @@ describe('SettingsService', () => {
 
 			// Only the working folder default and the explicit override are persisted
 			expect(workspaceStored.selectedIDE).toBe('vscode');
-			expect(workspaceStored.terminal).toBeUndefined();
+			expect(workspaceStored.selectedTerminal).toBeUndefined();
 			expect(Object.keys(workspaceStored).sort()).toEqual(['selectedIDE', 'workingFolder']);
 		});
 
@@ -335,13 +329,13 @@ describe('SettingsService', () => {
 			writeGlobalSettings({ selectedIDE: 'phpstorm' });
 
 			const workspaceService = createWorkspaceService();
-			// Workspace overrides something unrelated, leaving terminal unset
+			// Workspace overrides something unrelated, leaving selectedTerminal unset
 			workspaceService.updateSettings({ workingFolder: '/workspace/custom' });
 
 			// Global terminal is added afterwards
-			writeGlobalSettings({ selectedIDE: 'phpstorm', terminal: { command: 'kitty', args: [] } });
+			writeGlobalSettings({ selectedIDE: 'phpstorm', selectedTerminal: 'kitty' });
 
-			expect(workspaceService.readSettings().terminal?.command).toBe('kitty');
+			expect(workspaceService.readSettings().selectedTerminal).toBe('kitty');
 		});
 
 		it('should read the global file directly in the global context', () => {
@@ -402,6 +396,73 @@ describe('SettingsService', () => {
 
 			// A fresh global service sees the same value.
 			expect(new SettingsService().getMouseControlEnabled()).toBe(false);
+		});
+	});
+
+	describe('migrateTerminalSettings', () => {
+		it('is a no-op when already migrated (no legacy keys)', () => {
+			const { settings, changed } = SettingsService.migrateTerminalSettings({
+				workingFolder: '/w',
+				selectedTerminal: 'kitty',
+			});
+			expect(changed).toBe(false);
+			expect(settings.selectedTerminal).toBe('kitty');
+		});
+
+		it('maps selectedClaudeTerminal to selectedTerminal and drops the legacy key', () => {
+			const { settings, changed } = SettingsService.migrateTerminalSettings({
+				workingFolder: '/w',
+				selectedClaudeTerminal: 'kitty',
+			});
+			expect(changed).toBe(true);
+			expect(settings.selectedTerminal).toBe('kitty');
+			expect(settings.selectedClaudeTerminal).toBeUndefined();
+		});
+
+		it('maps a known legacy terminal command to its terminal id', () => {
+			const { settings } = SettingsService.migrateTerminalSettings({
+				workingFolder: '/w',
+				terminal: { command: 'gnome-terminal', args: ['--working-directory', '{path}'] },
+			});
+			expect(settings.selectedTerminal).toBe('gnome-terminal');
+			expect(settings.terminal).toBeUndefined();
+		});
+
+		it('falls back to custom for an unknown legacy terminal command', () => {
+			const { settings } = SettingsService.migrateTerminalSettings({
+				workingFolder: '/w',
+				terminal: { command: 'weird-term', args: ['-d', '{path}'] },
+			});
+			expect(settings.selectedTerminal).toBe('custom');
+			expect(settings.terminalConfigs?.custom?.customCommand).toBe('weird-term');
+			expect(settings.terminalConfigs?.custom?.customArgs).toEqual(['-d', '{path}']);
+			expect(settings.terminal).toBeUndefined();
+		});
+
+		it('moves claudeSessionTemplates under terminalConfigs[id].claudeSessionTemplate', () => {
+			const { settings } = SettingsService.migrateTerminalSettings({
+				workingFolder: '/w',
+				selectedClaudeTerminal: 'konsole',
+				claudeSessionTemplates: {
+					konsole: { content: 'title: Claude' },
+					kitty: { content: 'launch claude' },
+				},
+			});
+			expect(settings.selectedTerminal).toBe('konsole');
+			expect(settings.terminalConfigs?.konsole?.claudeSessionTemplate).toBe('title: Claude');
+			expect(settings.terminalConfigs?.kitty?.claudeSessionTemplate).toBe('launch claude');
+			expect(settings.claudeSessionTemplates).toBeUndefined();
+		});
+
+		it('prefers an existing selectedTerminal over legacy values but still strips legacy keys', () => {
+			const { settings, changed } = SettingsService.migrateTerminalSettings({
+				workingFolder: '/w',
+				selectedTerminal: 'alacritty',
+				selectedClaudeTerminal: 'kitty',
+			});
+			expect(changed).toBe(true);
+			expect(settings.selectedTerminal).toBe('alacritty');
+			expect(settings.selectedClaudeTerminal).toBeUndefined();
 		});
 	});
 });

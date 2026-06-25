@@ -1,6 +1,7 @@
 import type { IGroveConfigService } from '../storage/GroveConfigService.js';
 import type { ISettingsService } from '../storage/SettingsService.js';
 import type { ClaudeTerminalType } from '../storage/types.js';
+import { getAdapter } from '../terminals/index.js';
 
 /**
  * Session template service interface
@@ -49,19 +50,7 @@ export class SessionTemplateService implements ISessionTemplateService {
 	 * Get the default template for a terminal type
 	 */
 	getDefaultTemplate(terminalType: ClaudeTerminalType): string {
-		if (terminalType === 'konsole') {
-			return `title: Claude ;; workdir: \${WORKING_DIR} ;; command: \${AGENT_COMMAND}
-title: cmd ;; workdir: \${WORKING_DIR} ;; command: bash
-`;
-		} else {
-			// kitty
-			return `layout tall
-cd \${WORKING_DIR}
-layout tall:bias=65;full_size=1
-launch --title "claude" \${AGENT_COMMAND}
-launch --title "cmd" bash
-`;
-		}
+		return getAdapter(terminalType)?.defaultTemplate ?? '';
 	}
 
 	/**
@@ -70,12 +59,9 @@ launch --title "cmd" bash
 	 */
 	getEffectiveTemplate(terminalType: ClaudeTerminalType): string {
 		const settings = this.settingsService.readSettings();
-		const templates = settings.claudeSessionTemplates;
-		if (templates) {
-			const template = templates[terminalType];
-			if (template) {
-				return template.content;
-			}
+		const custom = settings.terminalConfigs?.[terminalType]?.claudeSessionTemplate;
+		if (custom) {
+			return custom;
 		}
 		return this.getDefaultTemplate(terminalType);
 	}

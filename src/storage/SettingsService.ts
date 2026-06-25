@@ -2,9 +2,16 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import { commandToTerminalId } from '../terminals/registry.js';
 import { getGlobalGroveFolder } from '../utils/globalGroveDir.js';
 import { JsonStore } from './JsonStore.js';
-import type { Settings, StorageConfig, WorkspaceContext } from './types.js';
+import type {
+	Settings,
+	StorageConfig,
+	TerminalId,
+	TerminalSettings,
+	WorkspaceContext,
+} from './types.js';
 
 /**
  * Settings service interface
@@ -179,7 +186,7 @@ export class SettingsService implements ISettingsService {
 	 */
 	readSettings(): Settings {
 		if (this.isGlobalContext()) {
-			return this.store.read();
+			return this.readMigrated(this.store);
 		}
 
 		// Workspace/repo: inherit from global, override with context-specific
@@ -187,9 +194,98 @@ export class SettingsService implements ISettingsService {
 		// workingFolder) merged over the context file, so spreading it last keeps
 		// the context's own working folder and any explicit overrides.
 		return {
-			...this.globalStore.read(),
-			...this.store.read(),
+			...this.readMigrated(this.globalStore),
+			...this.readMigrated(this.store),
 		};
+	}
+
+	/**
+	 * Read a settings store, applying the one-time terminal-settings migration and
+	 * persisting the result back to the same file when it changed anything.
+	 */
+	private readMigrated(store: JsonStore<Settings>): Settings {
+		const raw = store.read();
+		const { settings, changed } = SettingsService.migrateTerminalSettings(raw);
+		if (changed) {
+			store.write(settings);
+		}
+		return settings;
+	}
+
+	/**
+	 * One-time migration from the legacy split terminal settings
+	 * (`terminal` + `selectedClaudeTerminal` + `claudeSessionTemplates`) to the
+	 * unified model (`selectedTerminal` + `terminalConfigs`). Idempotent: once the
+	 * legacy keys are gone and `selectedTerminal` is set it is a no-op.
+	 */
+	static migrateTerminalSettings(input: Settings): { settings: Settings; changed: boolean } {
+		const hasLegacy =
+			input.selectedClaudeTerminal !== undefined ||
+			input.terminal !== undefined ||
+			input.claudeSessionTemplates !== undefined;
+		if (input.selectedTerminal === undefined && !hasLegacy) {
+			return { settings: input, changed: false };
+		}
+
+		const next: Settings = { ...input };
+		let changed = false;
+
+		// selectedClaudeTerminal / terminal.command -> selectedTerminal
+		if (next.selectedTerminal === undefined) {
+			if (next.selectedClaudeTerminal) {
+				next.selectedTerminal = next.selectedClaudeTerminal;
+				changed = true;
+			} else if (next.terminal?.command) {
+				const id = commandToTerminalId(next.terminal.command);
+				if (id) {
+					next.selectedTerminal = id;
+				} else {
+					next.selectedTerminal = 'custom';
+					next.terminalConfigs = {
+						...next.terminalConfigs,
+						custom: {
+							...next.terminalConfigs?.custom,
+							customCommand: next.terminal.command,
+							customArgs: next.terminal.args,
+						},
+					};
+				}
+				changed = true;
+			}
+		}
+
+		// claudeSessionTemplates -> terminalConfigs[id].claudeSessionTemplate
+		if (next.claudeSessionTemplates) {
+			const merged: Partial<Record<TerminalId, TerminalSettings>> = {
+				...next.terminalConfigs,
+			};
+			for (const [id, template] of Object.entries(next.claudeSessionTemplates)) {
+				if (template?.content) {
+					merged[id as TerminalId] = {
+						...merged[id as TerminalId],
+						claudeSessionTemplate: template.content,
+					};
+				}
+			}
+			next.terminalConfigs = merged;
+			changed = true;
+		}
+
+		// Drop the legacy keys once carried over.
+		if (next.selectedClaudeTerminal !== undefined) {
+			delete next.selectedClaudeTerminal;
+			changed = true;
+		}
+		if (next.terminal !== undefined) {
+			delete next.terminal;
+			changed = true;
+		}
+		if (next.claudeSessionTemplates !== undefined) {
+			delete next.claudeSessionTemplates;
+			changed = true;
+		}
+
+		return { settings: next, changed };
 	}
 
 	/**

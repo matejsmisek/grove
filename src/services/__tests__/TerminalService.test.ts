@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { clearCommandExistsCache } from '../../utils/commandExists.js';
 import { detectAvailableTerminals } from '../TerminalService.js';
 
 // Controlled platform value and set of "installed" commands per test.
@@ -32,10 +33,12 @@ describe('TerminalService.detectAvailableTerminals', () => {
 	beforeEach(() => {
 		mockPlatform = 'linux';
 		installedCommands = new Set();
+		clearCommandExistsCache();
 	});
 
 	afterEach(() => {
 		vi.clearAllMocks();
+		clearCommandExistsCache();
 	});
 
 	it('returns only installed terminals on linux, in preference order', async () => {
@@ -43,10 +46,9 @@ describe('TerminalService.detectAvailableTerminals', () => {
 
 		const result = await detectAvailableTerminals();
 
-		expect(result.map((t) => t.command)).toEqual(['konsole', 'alacritty']);
-		// First entry (preference order) is the detected default.
-		expect(result[0].command).toBe('konsole');
-		expect(result[0].args).toContain('{path}');
+		// Preference order: konsole appears before alacritty in the registry.
+		expect(result).toEqual(['konsole', 'alacritty']);
+		expect(result[0]).toBe('konsole');
 	});
 
 	it('returns an empty list on linux when no terminal is installed', async () => {
@@ -62,8 +64,8 @@ describe('TerminalService.detectAvailableTerminals', () => {
 
 		const result = await detectAvailableTerminals();
 
-		expect(result).toHaveLength(1);
-		expect(result[0].command).toBe('open');
+		// terminal-app is app-based (no PATH probe) and always present on darwin.
+		expect(result).toContain('terminal-app');
 	});
 
 	it('returns cmd on Windows', async () => {
@@ -71,7 +73,6 @@ describe('TerminalService.detectAvailableTerminals', () => {
 
 		const result = await detectAvailableTerminals();
 
-		expect(result).toHaveLength(1);
-		expect(result[0].command).toBe('cmd');
+		expect(result).toEqual(['cmd']);
 	});
 });

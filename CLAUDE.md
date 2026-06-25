@@ -103,6 +103,12 @@ Global  →  Workspace / Repo  →  .grove.json  →  .grove.local.json
 - **`.grove.json` / `.grove.local.json`** are a separate repo-level config (`GroveRepoConfig`)
   consumed during grove creation and tool launching; for overlapping fields (e.g. `ide`,
   `claudeSessionTemplates`) their consumers check these files before falling back to settings.
+- **Terminal**: `selectedTerminal` (a `TerminalId`) is the single default terminal for both
+  "Open terminal" and "Open/Attach Claude", inherited from global like `selectedIDE`. Per-terminal
+  overrides live in `terminalConfigs[id]` (`claudeSessionTemplate` for file-based terminals;
+  `customCommand`/`customArgs` for the `custom` id). Legacy `terminal` / `selectedClaudeTerminal` /
+  `claudeSessionTemplates` settings are auto-migrated to this shape on read by
+  `SettingsService.migrateTerminalSettings()` and then removed.
 - `mouseControlEnabled` is the one exception: it is always read from and written to the global
   file and cannot be overridden per-workspace.
 - `workingFolder` is context-specific (each workspace/repo has its own) and is not inherited from
@@ -125,6 +131,9 @@ Repositories can include a `.grove.json` file to customize grove creation:
 	}
 }
 ```
+
+`claudeSessionTemplates` is keyed by `TerminalId`; only file-based terminals with an editable
+template (currently `konsole`/`kitty`) consume it.
 
 **InitActions**: Execute sequentially in worktree directory after creation. Stop on first failure. Output logged to `grove-init-{worktreeName}.log`.
 
@@ -153,9 +162,34 @@ same environment an interactive shell would load. Helpers live in
 - `wrapSpawnWithDirenv(dir, command, args)` — argv form for `spawn`/`spawnSync`
   (handles paths with spaces); used for background sessions (`claude --bg`) and
   InitActions (`bash -c`).
-- `prefixCommandWithDirenv(dir, command)` — string form for the konsole/kitty
-  session templates, where `${AGENT_COMMAND}` is substituted into a file the
-  terminal parses.
+- `prefixCommandWithDirenv(dir, command)` — string form for the file-based
+  session templates (konsole/kitty), where `${AGENT_COMMAND}` is substituted into
+  a file the terminal parses.
+
+## Terminal Support
+
+Terminal launching (both "Open terminal" and "Open/Attach Claude") is driven by a
+**terminal adapter registry** in `src/terminals/`:
+
+- `types.ts` — `TerminalAdapter` interface. Each adapter has `openTerminal(path)`
+  (plain launch) and `launchClaude(ctx)` (Claude session), plus capability flags:
+  `multiTab` (opens multiple tabs) and `editableTemplate` (exposes a hand-editable
+  session template, file-based — only konsole/kitty).
+- `adapters.ts` — `ALL_TERMINAL_ADAPTERS`, in preference order. Multi-tab: konsole
+  & kitty (session files), gnome-terminal (`--tab`), iTerm2 (AppleScript). Everything
+  else (alacritty, ghostty, wezterm, xterm, Terminal.app, Windows Terminal, cmd, …)
+  is best-effort single-window. `custom` is a user-supplied command escape hatch.
+- `registry.ts` — `getAdapter`, `adaptersForPlatform`, `detectAvailableTerminalIds`
+  (platform + `commandExists`, or `isAvailable()` override for app-based terminals),
+  `getTerminalDisplayName`, and `commandToTerminalId` (legacy-settings migration).
+
+Consumers: `TerminalService` (module functions, registry-backed: `detectAvailableTerminals`,
+`resolveTerminalId`, `openTerminalInPath`), `SessionLauncherService` (resolves
+`selectedTerminal`, delegates the spawn to `adapter.launchClaude`), and
+`SessionTemplateService` (default template from `adapter.defaultTemplate`, custom from
+`terminalConfigs[id].claudeSessionTemplate`). The unified settings UI is
+`TerminalSettingsScreen` (route `terminalSettings`).
+
 - `getDirenvAllowWarning(dir)` — returns a user-facing warning when an
   `.envrc`/`.env` is found but **not allowed** (so its environment won't load).
   A whitelisted path reports `allowed = true`, so this never warns for paths under

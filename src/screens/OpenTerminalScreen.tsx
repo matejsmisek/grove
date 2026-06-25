@@ -6,9 +6,9 @@ import path from 'path';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
-import { detectTerminal, openTerminalInPath } from '../services/index.js';
+import { openTerminalInPath, resolveTerminalId } from '../services/index.js';
 import { GrovesServiceToken, SettingsServiceToken } from '../services/tokens.js';
-import type { TerminalConfig, Worktree } from '../storage/index.js';
+import type { TerminalId, Worktree } from '../storage/index.js';
 
 interface OpenTerminalScreenProps {
 	groveId: string;
@@ -31,7 +31,7 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
 	const [worktrees, setWorktrees] = useState<Worktree[]>([]);
-	const [terminalConfig, setTerminalConfig] = useState<TerminalConfig | undefined>(undefined);
+	const [terminalId, setTerminalId] = useState<TerminalId | undefined>(undefined);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [error, setError] = useState<string | null>(null);
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
@@ -40,20 +40,19 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 		let cancelled = false;
 
 		const loadTerminal = async () => {
-			// Read terminal config, respecting Claude terminal preference
+			// Resolve the user's default terminal (or first detected).
 			const settings = settingsService.readSettings();
-			const resolvedConfig = settings.selectedClaudeTerminal
-				? ((await detectTerminal(settings.selectedClaudeTerminal)) ?? settings.terminal)
-				: settings.terminal;
+			const resolvedId = await resolveTerminalId(settings);
 
 			if (cancelled) return;
 
-			if (!resolvedConfig) {
-				setError('No terminal configured. Please restart Grove to detect available terminals.');
+			if (!resolvedId) {
+				setError('No terminal configured. Choose one in Settings → Terminal.');
 				setLoading(false);
 				return;
 			}
-			setTerminalConfig(resolvedConfig);
+			setTerminalId(resolvedId);
+			const customConfig = settings.terminalConfigs?.[resolvedId];
 
 			const groveRef = grovesService.getGroveById(groveId);
 			if (!groveRef) {
@@ -80,7 +79,7 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 			// If only one worktree, open terminal directly
 			if (metadata.worktrees.length === 1) {
 				const terminalPath = getTerminalPath(metadata.worktrees[0]);
-				const result = openTerminalInPath(terminalPath, resolvedConfig);
+				const result = openTerminalInPath(terminalPath, resolvedId, customConfig);
 				if (result.success) {
 					goBack();
 				} else {
@@ -104,7 +103,10 @@ export function OpenTerminalScreen({ groveId }: OpenTerminalScreenProps) {
 
 	const handleSelect = (worktree: Worktree) => {
 		const terminalPath = getTerminalPath(worktree);
-		const result = openTerminalInPath(terminalPath, terminalConfig);
+		const customConfig = terminalId
+			? settingsService.readSettings().terminalConfigs?.[terminalId]
+			: undefined;
+		const result = openTerminalInPath(terminalPath, terminalId, customConfig);
 		if (result.success) {
 			const projectInfo = worktree.projectPath ? ` (${worktree.projectPath})` : '';
 			setResultMessage(`Opened terminal in ${worktree.repositoryName}${projectInfo}`);

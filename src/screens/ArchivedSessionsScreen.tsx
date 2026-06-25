@@ -4,13 +4,14 @@ import { Box, Text, useInput } from 'ink';
 
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
+import { getTerminalDisplayName } from '../services/index.js';
 import {
 	GrovesServiceToken,
 	SessionLauncherServiceToken,
 	SessionsServiceToken,
 	SettingsServiceToken,
 } from '../services/tokens.js';
-import type { AgentSession, ClaudeTerminalType, Worktree } from '../storage/types.js';
+import type { AgentSession, TerminalId, Worktree } from '../storage/types.js';
 import { sessionMatchesWorktree, shortSessionId } from '../utils/claudeAgents.js';
 import { formatTimeAgo } from '../utils/time.js';
 
@@ -20,11 +21,6 @@ interface ArchivedSessionsScreenProps {
 }
 
 type ViewMode = 'selectSession' | 'selectTerminal';
-
-const TERMINAL_DISPLAY_NAMES: Record<ClaudeTerminalType, string> = {
-	konsole: 'KDE Konsole',
-	kitty: 'Kitty',
-};
 
 /**
  * Display name for an archived session: its first prompt, then project name, then
@@ -58,7 +54,7 @@ export function ArchivedSessionsScreen({ groveId, worktreePath }: ArchivedSessio
 	const [resultMessage, setResultMessage] = useState<string | null>(null);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [viewMode, setViewMode] = useState<ViewMode>('selectSession');
-	const [availableTerminals, setAvailableTerminals] = useState<ClaudeTerminalType[]>([]);
+	const [availableTerminals, setAvailableTerminals] = useState<TerminalId[]>([]);
 	const [pendingSession, setPendingSession] = useState<AgentSession | null>(null);
 
 	// Resolve the worktree (for its name + background session id) and grove name.
@@ -100,18 +96,15 @@ export function ArchivedSessionsScreen({ groveId, worktreePath }: ArchivedSessio
 	}, [loadSessions, sessionLauncherService]);
 
 	// Determine which terminal to use, or null when the user must pick one.
-	const resolveTerminal = (): ClaudeTerminalType | null => {
+	const resolveTerminal = (): TerminalId | null => {
 		const settings = settingsService.readSettings();
-		if (
-			settings.selectedClaudeTerminal &&
-			availableTerminals.includes(settings.selectedClaudeTerminal)
-		) {
-			return settings.selectedClaudeTerminal;
+		if (settings.selectedTerminal && availableTerminals.includes(settings.selectedTerminal)) {
+			return settings.selectedTerminal;
 		}
 		return availableTerminals.length === 1 ? availableTerminals[0] : null;
 	};
 
-	const resume = async (session: AgentSession, terminal: ClaudeTerminalType) => {
+	const resume = async (session: AgentSession, terminal: TerminalId) => {
 		const workingDir = session.workspacePath || worktreePath;
 		const result = await sessionLauncherService.resumeSession(
 			session.sessionId,
@@ -224,7 +217,7 @@ export function ArchivedSessionsScreen({ groveId, worktreePath }: ArchivedSessio
 				{availableTerminals.map((terminal, index) => (
 					<Text key={terminal} color={selectedIndex === index ? 'cyan' : undefined}>
 						{selectedIndex === index ? '❯ ' : '  '}
-						{TERMINAL_DISPLAY_NAMES[terminal]}
+						{getTerminalDisplayName(terminal)}
 					</Text>
 				))}
 				<Box marginTop={1}>
