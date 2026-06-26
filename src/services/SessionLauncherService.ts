@@ -9,6 +9,7 @@ import { detectAvailableTerminalIds, getAdapter, isAdapterAvailable } from '../t
 import type { ClaudeLaunchContext } from '../terminals/index.js';
 import { commandExists } from '../utils/commandExists.js';
 import { getDirenvWarning, prefixCommandWithDirenv } from '../utils/direnv.js';
+import { buildSessionName, shellQuoteArg } from '../utils/sessionName.js';
 import type { ISessionTemplateService } from './SessionTemplateService.js';
 import type { ClaudeSessionResult } from './types.js';
 
@@ -90,8 +91,9 @@ export class SessionLauncherService implements ISessionLauncherService {
 
 	/**
 	 * Open Claude in a terminal session with the working directory set.
-	 * "Open Claude" launches plain `claude` (no prefilled prompt); the prompt
-	 * template is used by Instant Claude instead (BackgroundSessionService).
+	 * "Open Claude" launches `claude --name <grove/worktree>` (no prefilled
+	 * prompt) so the session is a tracked, named agent; the prompt template is
+	 * used by Instant Claude instead (BackgroundSessionService).
 	 */
 	async openSession(
 		workingDir: string,
@@ -217,12 +219,15 @@ export class SessionLauncherService implements ISessionLauncherService {
 			return unavailable;
 		}
 
+		// Standard "open" launches start a named interactive session (`claude --name
+		// <grove/worktree>`) so it shows up as a tracked agent — no `--bg`/attach dance.
+		const openCommand = `claude --name ${shellQuoteArg(buildSessionName(repositoryPath, groveName, worktreeName))}`;
 		const claudeCommand =
 			mode === 'attach'
 				? `claude attach ${sessionId}`
 				: mode === 'continue'
 					? 'claude --continue'
-					: 'claude';
+					: openCommand;
 		const failureLabel = mode === 'attach' ? 'attach to' : mode === 'continue' ? 'continue' : 'open';
 
 		try {

@@ -155,15 +155,11 @@ export function registerServices(
 			)
 	);
 
-	// BackgroundSessionService dispatches `claude --bg` sessions; depends on
-	// SessionTemplateService and SessionLauncherService (to attach after dispatch).
+	// BackgroundSessionService dispatches `claude --bg` sessions (Instant Claude);
+	// depends on SessionTemplateService.
 	c.registerSingleton(
 		BackgroundSessionServiceToken,
-		(cont) =>
-			new BackgroundSessionService(
-				cont.resolve(SessionTemplateServiceToken),
-				cont.resolve(SessionLauncherServiceToken)
-			)
+		(cont) => new BackgroundSessionService(cont.resolve(SessionTemplateServiceToken))
 	);
 
 	// ClaudeSessionService tracks sessions; depends on SessionsService (the

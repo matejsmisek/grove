@@ -1,19 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 
 import { Box, Text, useApp, useInput } from 'ink';
 
+import { useAgentSessions } from '../components/AgentSessionsContext.js';
 import { GroveGrid } from '../components/home/GroveGrid.js';
 import type { MenuOption } from '../components/home/MenuModal.js';
 import { MenuModal } from '../components/home/MenuModal.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { getContextDisplayName } from '../services/WorkspaceService.js';
-import {
-	ClaudeSessionServiceToken,
-	GrovesServiceToken,
-	WorkspaceServiceToken,
-} from '../services/tokens.js';
-import type { ClaudeAgentInfo } from '../utils/claudeAgents.js';
+import { GrovesServiceToken, WorkspaceServiceToken } from '../services/tokens.js';
 
 interface HomeScreenProps {
 	/** Grove to pre-select on mount (e.g. when returning from its detail screen). */
@@ -39,31 +35,11 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 	});
 	const [showMenu, setShowMenu] = useState(false);
 	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
-	const [agentSessions, setAgentSessions] = useState<ClaudeAgentInfo[]>([]);
 	const [columnCount, setColumnCount] = useState(4); // Default to 4, will be updated by GroveGrid
 
-	const claudeSessionService = useService(ClaudeSessionServiceToken);
-
-	// Poll live Claude sessions (interactive + background) from `claude agents --json`
-	// every 30 seconds to drive the per-worktree status icons on each grove tile.
-	useEffect(() => {
-		let cancelled = false;
-
-		const refreshAgents = async () => {
-			const sessions = await claudeSessionService.listTrackedSessions();
-			if (!cancelled) {
-				setAgentSessions(sessions);
-			}
-		};
-
-		void refreshAgents();
-		const interval = setInterval(() => void refreshAgents(), 30 * 1000);
-
-		return () => {
-			cancelled = true;
-			clearInterval(interval);
-		};
-	}, [claudeSessionService]);
+	// Live Claude sessions are polled centrally (see AgentSessionsProvider) and
+	// drive the per-worktree status icons on each grove tile.
+	const { sessions: agentSessions } = useAgentSessions();
 
 	// Get workspace context to display workspace name
 	const workspaceService = useService(WorkspaceServiceToken);

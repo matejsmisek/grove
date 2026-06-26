@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import path from 'path';
 
-import type { AgentSession } from '../storage/types.js';
+import type { AgentSession, SessionPresence } from '../storage/types.js';
 
 /**
  * A live Claude session as reported by `claude agents --json`.
@@ -31,6 +31,12 @@ export interface ClaudeAgentInfo {
 	status?: string;
 	/** When status is 'waiting', what the session is blocked on */
 	waitingFor?: string;
+	/**
+	 * Whether the session is actively opened (live in `--json`) or suspended (kept
+	 * by Grove after leaving the live list). Set by {@link reconcileSessions} /
+	 * {@link agentInfoFromSession}; live sessions are always 'open'.
+	 */
+	presence?: SessionPresence;
 	/** Preserve any additional fields the CLI reports (e.g. activity timestamps). */
 	[key: string]: unknown;
 }
@@ -227,16 +233,22 @@ export interface ReconcileResult {
 }
 
 /**
- * Merge the persisted session registry (populated by Claude hooks) with the live
- * sessions reported by `claude agents --json`.
+ * Merge the persisted session registry (populated by Claude hooks and prior
+ * reconciliations) with the live sessions reported by `claude agents --json`.
  *
- * - `claude agents --json` is authoritative for liveness: a registry entry seen
- *   live is (re)marked running, and one no longer reported is considered archived.
- * - A live session missing from the registry is appended, so Grove still knows it
- *   exists even if the hook never fired for it.
+ * `claude agents --json` is authoritative for liveness:
+ * - A registry entry seen live is marked `open` (and revived if it had been
+ *   suspended/archived). Its `kind`/`name`/cwd are captured from the live data so
+ *   that, once it later leaves the live list, we know how to treat it.
+ * - A registry entry no longer reported live is either:
+ *     - **archived** if it is a background session (`kind === 'background'`) — the
+ *       previous behaviour, since a finished `--bg` job has nothing to resume; or
+ *     - **suspended** otherwise (interactive or unknown kind) — kept in the
+ *       registry and shown in the UI so it can be resumed (`claude --resume`).
+ * - A live session missing from the registry is appended.
  *
- * Status shown in the UI still comes from the live `--json` data directly; the
- * registry only records existence and the archived flag.
+ * The live activity status shown in the UI still comes from the `--json` data
+ * directly; the registry tracks existence, `presence`, and the archived flag.
  */
 export function reconcileSessions(
 	registry: AgentSession[],
@@ -245,10 +257,10 @@ export function reconcileSessions(
 ): ReconcileResult {
 	let changed = false;
 
-	const liveIds = new Set<string>();
+	const liveById = new Map<string, ClaudeAgentInfo>();
 	for (const agent of live) {
 		if (agent.sessionId) {
-			liveIds.add(agent.sessionId);
+			liveById.set(agent.sessionId, agent);
 		}
 	}
 
@@ -256,23 +268,51 @@ export function reconcileSessions(
 	const sessions = registry.map((session) => ({ ...session }));
 
 	for (const session of sessions) {
-		const isLive = liveIds.has(session.sessionId);
-		if (isLive) {
-			// A previously-archived (or stopped) session that is live again.
-			if (session.archived || !session.isRunning || session.status === 'closed') {
+		const liveAgent = liveById.get(session.sessionId);
+		if (liveAgent) {
+			// Live again: refresh captured metadata and mark it open, reviving a
+			// previously suspended/archived/stopped entry.
+			const kind = typeof liveAgent.kind === 'string' ? liveAgent.kind : session.kind;
+			const name = typeof liveAgent.name === 'string' ? liveAgent.name : session.name;
+			const cwd = typeof liveAgent.cwd === 'string' ? liveAgent.cwd : session.workspacePath;
+			const wasNotOpen =
+				session.presence !== 'open' ||
+				session.archived === true ||
+				!session.isRunning ||
+				session.status === 'closed' ||
+				session.status === 'suspended';
+			if (wasNotOpen || session.kind !== kind || session.name !== name) {
+				session.presence = 'open';
 				session.archived = false;
 				session.isRunning = true;
-				session.status = 'active';
+				if (wasNotOpen) {
+					session.status = 'active';
+				}
+				session.kind = kind;
+				session.name = name;
+				session.workspacePath = cwd;
 				session.lastUpdate = now;
 				changed = true;
 			}
 		} else if (!session.archived) {
-			// No longer reported by `--json` → archived.
-			session.archived = true;
-			session.isRunning = false;
-			session.status = 'closed';
-			session.lastUpdate = now;
-			changed = true;
+			if (session.kind === 'background') {
+				// Background sessions have nothing to reattach to once gone → archive.
+				if (session.presence !== undefined || session.isRunning || session.status !== 'closed') {
+					session.presence = undefined;
+					session.archived = true;
+					session.isRunning = false;
+					session.status = 'closed';
+					session.lastUpdate = now;
+					changed = true;
+				}
+			} else if (session.presence !== 'suspended' || session.isRunning) {
+				// Interactive (or unknown) sessions are retained but suspended.
+				session.presence = 'suspended';
+				session.isRunning = false;
+				session.status = 'suspended';
+				session.lastUpdate = now;
+				changed = true;
+			}
 		}
 	}
 
@@ -287,6 +327,9 @@ export function reconcileSessions(
 			workspacePath: typeof agent.cwd === 'string' ? agent.cwd : '',
 			worktreePath: null,
 			status: 'active',
+			presence: 'open',
+			kind: typeof agent.kind === 'string' ? agent.kind : undefined,
+			name: typeof agent.name === 'string' ? agent.name : undefined,
 			isRunning: true,
 			archived: false,
 			lastUpdate: now,
@@ -295,4 +338,20 @@ export function reconcileSessions(
 	}
 
 	return { sessions, changed };
+}
+
+/**
+ * Reconstruct a {@link ClaudeAgentInfo} for the UI from a persisted registry
+ * entry. Used to surface suspended sessions (which are no longer in the live
+ * `--json` list) so they can still be shown and resumed.
+ */
+export function agentInfoFromSession(session: AgentSession): ClaudeAgentInfo {
+	return {
+		sessionId: session.sessionId,
+		cwd: session.workspacePath || undefined,
+		kind: session.kind,
+		name: session.name,
+		status: session.status,
+		presence: session.presence,
+	};
 }

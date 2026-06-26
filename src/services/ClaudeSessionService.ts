@@ -5,7 +5,9 @@ import path from 'path';
 import type { ISessionsService } from '../storage/SessionsService.js';
 import {
 	type ClaudeAgentInfo,
+	agentInfoFromSession,
 	listClaudeAgentSessions,
+	reconcileSessions,
 	shortSessionId,
 } from '../utils/claudeAgents.js';
 import { spawnCollect } from '../utils/spawnCollect.js';
@@ -77,14 +79,48 @@ export class ClaudeSessionService implements IClaudeSessionService {
 	}
 
 	/**
-	 * List the sessions Grove should display. Relies solely on the live
-	 * `claude agents --json` data — the hook-written registry (`sessions.json`)
-	 * is intentionally ignored, so what's shown always matches what Claude
-	 * currently reports. Archived sessions are still hidden via `claude rm`,
-	 * which drops them from the live list (see `archiveSession`).
+	 * List the sessions Grove should display: the live `claude agents --json`
+	 * sessions, reconciled against the persisted registry (`sessions.json`).
+	 *
+	 * Reconciliation lets interactive sessions survive losing their live process
+	 * (e.g. the terminal was closed): instead of disappearing, they are kept in the
+	 * registry as `suspended` and still returned here so they can be resumed.
+	 * Background sessions are archived (and hidden) once they leave the live list,
+	 * as before. Archived sessions are always excluded.
 	 */
-	listTrackedSessions(): Promise<ClaudeAgentInfo[]> {
-		return this.listAgentSessions();
+	async listTrackedSessions(): Promise<ClaudeAgentInfo[]> {
+		const live = await this.listAgentSessions();
+
+		let registry: ReturnType<ISessionsService['readSessions']>;
+		try {
+			registry = this.sessionsService.readSessions();
+		} catch {
+			// No usable registry — fall back to the live list (all actively open).
+			return live.map((agent) => ({ ...agent, presence: 'open' as const }));
+		}
+
+		const now = new Date().toISOString();
+		const { sessions, changed } = reconcileSessions(registry.sessions, live, now);
+		if (changed) {
+			try {
+				this.sessionsService.writeSessions({ ...registry, sessions });
+			} catch {
+				// Persistence is best-effort; still return the reconciled view.
+			}
+		}
+
+		const liveIds = new Set(live.map((agent) => agent.sessionId).filter(Boolean));
+		// Live sessions keep their fresh `--json` status; append the suspended
+		// (retained, non-live, non-archived) registry sessions so they stay
+		// visible and resumable.
+		const result: ClaudeAgentInfo[] = live.map((agent) => ({ ...agent, presence: 'open' }));
+		for (const session of sessions) {
+			if (liveIds.has(session.sessionId) || session.archived || session.presence !== 'suspended') {
+				continue;
+			}
+			result.push(agentInfoFromSession(session));
+		}
+		return result;
 	}
 
 	/**

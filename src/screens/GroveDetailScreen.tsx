@@ -15,6 +15,7 @@ import {
 	AgentStatusIcon,
 	getAgentStatusMeta,
 } from '../components/AgentSessionIndicator.js';
+import { useAgentSessions } from '../components/AgentSessionsContext.js';
 import { AsanaReferenceCell } from '../components/AsanaReferenceCell.js';
 import TextInput from '../components/GroveTextInput.js';
 import { MergeRequestCell } from '../components/MergeRequestCell.js';
@@ -502,9 +503,13 @@ export function GroveDetailScreen({
 	const [selectedActionIndex, setSelectedActionIndex] = useState(0);
 	// Cursor into the active Claude submenu's options.
 	const [submenuIndex, setSubmenuIndex] = useState(0);
-	// Live Claude sessions (interactive + background) from `claude agents --json`,
-	// refreshed in the background. Drives the per-worktree status icons + panels.
-	const [agentSessions, setAgentSessions] = useState<ClaudeAgentInfo[]>([]);
+	// Live + suspended Claude sessions, polled centrally (see AgentSessionsProvider).
+	// Drives the per-worktree status icons + panels.
+	const {
+		sessions: agentSessions,
+		refresh: refreshAgentSessions,
+		removeSession: removeAgentSession,
+	} = useAgentSessions();
 	// Launching a Claude session blocks (spawnSync / $EDITOR), which freezes the
 	// Ink render loop. We show a loading screen first and run the blocking work
 	// from an effect on the next tick, so the feedback paints before we block.
@@ -648,34 +653,6 @@ export function GroveDetailScreen({
 		loadDetails();
 	}, [groveId]);
 
-	// Poll live Claude sessions from `claude agents --json` in the background.
-	// The CLI reports the authoritative status, refreshed every 30 seconds.
-	//
-	// A monotonic request id guards against out-of-order resolution: a slow in-flight
-	// request must not overwrite the result of a newer one. `claudeSessionService` is a
-	// DI singleton, so it's intentionally omitted from the deps — including it would
-	// needlessly re-arm the interval.
-	useEffect(() => {
-		let cancelled = false;
-		let latest = 0;
-
-		const refreshAgents = async () => {
-			const id = ++latest;
-			const sessions = await claudeSessionService.listTrackedSessions();
-			if (!cancelled && id === latest) {
-				setAgentSessions(sessions);
-			}
-		};
-
-		void refreshAgents();
-		const interval = setInterval(() => void refreshAgents(), 30 * 1000);
-
-		return () => {
-			cancelled = true;
-			clearInterval(interval);
-		};
-	}, []);
-
 	// Run a pending launch once its loading screen has been committed/painted.
 	// `setTimeout` yields to the event loop so Ink flushes the message to the
 	// terminal before the (blocking) launch runs.
@@ -740,18 +717,24 @@ export function GroveDetailScreen({
 		if (success) {
 			setResultMessage(message);
 			setTimeout(() => setResultMessage(null), 2000);
+			// A freshly launched session takes a moment to register in
+			// `claude agents --json`. Refresh now and again shortly after so it shows
+			// up without waiting for the next scheduled poll.
+			refreshAgentSessions();
+			setTimeout(() => refreshAgentSessions(), 1500);
 		} else {
 			setError(message);
 		}
 	};
 
-	// Standard launch: start a background session (no prompt) and attach right
-	// away, so it's a tracked, re-attachable agent. Persist its session id.
+	// Standard launch: open a named interactive Claude session (`claude --name`)
+	// in a terminal. It's matched back to this worktree by its cwd, so it still
+	// shows up as a tracked agent without the `--bg`/attach dance.
 	const handleOpenInClaude = () => {
 		const selected = worktreeDetails[selectedIndex].worktree;
 		const targetPath = getWorktreePath(selected);
 		beginLaunch(`Launching Claude in ${selected.repositoryName}…`, async () => {
-			const result = await backgroundSessionService.launchStandardSession(
+			const result = await sessionLauncherService.openSession(
 				targetPath,
 				selected.repositoryPath,
 				selected.projectPath,
@@ -759,9 +742,6 @@ export function GroveDetailScreen({
 				groveName,
 				selected.name
 			);
-			if (result.sessionId) {
-				persistBackgroundSession(selected, result.sessionId, result.sessionName);
-			}
 			finishLaunch(
 				result.success,
 				result.success ? `Opened Claude session in ${selected.repositoryName}` : result.message
@@ -889,7 +869,7 @@ export function GroveDetailScreen({
 		// no longer blocks the UI. Reflect locally so the session disappears without
 		// waiting for the removal or the next poll.
 		void claudeSessionService.archiveSession(sessionId);
-		setAgentSessions((prev) => prev.filter((agent) => agent.sessionId !== sessionId));
+		removeAgentSession(sessionId);
 		setResultMessage('Terminated Claude session');
 		setTimeout(() => setResultMessage(null), 2000);
 	};

@@ -2,8 +2,8 @@ import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildSessionName } from '../../utils/sessionName.js';
 import { BackgroundSessionService } from '../BackgroundSessionService.js';
-import type { ISessionLauncherService } from '../SessionLauncherService.js';
 import type { ISessionTemplateService } from '../SessionTemplateService.js';
 
 // Mock child_process so spawnCollect (used by dispatchBackgroundSession) is driven
@@ -64,7 +64,6 @@ function fakeProc(opts: {
 describe('BackgroundSessionService', () => {
 	let service: BackgroundSessionService;
 	let mockTemplateService: ISessionTemplateService;
-	let mockLauncherService: ISessionLauncherService;
 
 	beforeEach(() => {
 		mockTemplateService = {
@@ -75,16 +74,7 @@ describe('BackgroundSessionService', () => {
 			applyTemplate: vi.fn(),
 		};
 
-		mockLauncherService = {
-			detectAvailableTerminals: vi.fn().mockResolvedValue([]),
-			detectTerminal: vi.fn().mockResolvedValue(null),
-			attachSession: vi.fn(),
-			openSession: vi.fn(),
-			resumeSession: vi.fn(),
-			continueSession: vi.fn(),
-		};
-
-		service = new BackgroundSessionService(mockTemplateService, mockLauncherService);
+		service = new BackgroundSessionService(mockTemplateService);
 	});
 
 	afterEach(() => {
@@ -119,11 +109,7 @@ describe('BackgroundSessionService', () => {
 
 	describe('buildSessionName', () => {
 		const build = (repo: string, grove?: string, worktree?: string): string =>
-			(
-				service as unknown as {
-					buildSessionName(r: string, g?: string, w?: string): string;
-				}
-			).buildSessionName(repo, grove, worktree);
+			buildSessionName(repo, grove, worktree);
 
 		it('joins grove and worktree names', () => {
 			expect(build('/repos/app', 'my-grove', 'frontend')).toBe('my-grove/frontend');

@@ -660,9 +660,26 @@ export type AgentType = 'claude' | 'gemini' | 'codex' | 'custom';
  * - idle: Waiting for user input (session still running)
  * - attention: Needs user action (permission, input, etc.)
  * - closed: Session has been closed/terminated (SessionEnd fired)
+ * - suspended: An interactive session no longer reported live by
+ *   `claude agents --json` (e.g. its terminal was closed) but kept in Grove so it
+ *   can be resumed. See {@link SessionPresence}.
  * - error: Session encountered an error
  */
-export type SessionStatus = 'active' | 'idle' | 'attention' | 'closed' | 'error';
+export type SessionStatus = 'active' | 'idle' | 'attention' | 'closed' | 'suspended' | 'error';
+
+/**
+ * Whether a session is currently backed by a live process.
+ *
+ * - open: actively opened — reported by `claude agents --json`.
+ * - suspended: not reported by `claude agents --json` (its terminal was closed),
+ *   but retained by Grove so it can be resumed. Only non-background sessions are
+ *   suspended; background sessions are archived when they leave the live list.
+ *
+ * This is intentionally separate from {@link SessionStatus} (the live activity
+ * state: idle/busy/…) to avoid conflating "is the process attached" with "what is
+ * the session doing".
+ */
+export type SessionPresence = 'open' | 'suspended';
 
 /**
  * Individual AI agent session
@@ -681,6 +698,21 @@ export interface AgentSession {
 	worktreePath: string | null;
 	/** Current session status */
 	status: SessionStatus;
+	/**
+	 * Whether the session is actively opened (live in `claude agents --json`) or
+	 * suspended (no longer live but retained for resuming). Populated during
+	 * reconciliation; absent for legacy entries written before this field existed.
+	 */
+	presence?: SessionPresence;
+	/**
+	 * Session kind as reported by `claude agents --json`: 'interactive' (a normal
+	 * terminal session) or 'background' (`claude --bg`). Captured while the session
+	 * is live so reconciliation can tell, once it leaves the live list, whether to
+	 * suspend it (interactive) or archive it (background).
+	 */
+	kind?: string;
+	/** Display name (set via `--name` or auto-generated), captured while live. */
+	name?: string;
 	/** Last update timestamp (ISO format) */
 	lastUpdate: string;
 	/** Whether the process is currently running */

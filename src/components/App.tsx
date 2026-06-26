@@ -11,6 +11,7 @@ import type { Routes } from '../navigation/types.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { getContextDisplayName } from '../services/WorkspaceService.js';
 import { SettingsServiceToken, WorkspaceServiceToken } from '../services/tokens.js';
+import { AgentSessionsProvider } from './AgentSessionsContext.js';
 import { StatusBar } from './StatusBar.js';
 import { TextInputActivityProvider, useTextInputActivity } from './TextInputActivityContext.js';
 
@@ -104,11 +105,13 @@ interface AppProps {
 export function App({ initialScreen = 'home' }: AppProps) {
 	return (
 		<ServiceProvider>
-			<NavigationProvider initialScreen={initialScreen}>
-				<MouseControlGate>
-					<AppContent />
-				</MouseControlGate>
-			</NavigationProvider>
+			<AgentSessionsProvider>
+				<NavigationProvider initialScreen={initialScreen}>
+					<MouseControlGate>
+						<AppContent />
+					</MouseControlGate>
+				</NavigationProvider>
+			</AgentSessionsProvider>
 		</ServiceProvider>
 	);
 }

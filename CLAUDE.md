@@ -240,9 +240,12 @@ which suppresses the prompt on its own.
 Grove tracks Claude sessions by merging two sources:
 
 1. **`claude agents --json`** (live) — the authoritative source for a session's
-   **status** (`idle` / `busy` / `waiting` / …) and liveness. Polled every 2 minutes
-   by the UI via `ClaudeSessionService.listTrackedSessions()`. Status is rendered
-   as-is (see `AgentSessionIndicator`); Grove derives no status of its own.
+   **status** (`idle` / `busy` / `waiting` / …) and liveness. Polled every 10 seconds
+   on a single app-wide interval by `AgentSessionsProvider`
+   (`src/components/AgentSessionsContext.tsx`), which calls
+   `ClaudeSessionService.listTrackedSessions()` and shares the result with every
+   screen via the `useAgentSessions()` hook. Status is rendered as-is (see
+   `AgentSessionIndicator`); Grove derives no status of its own.
 2. **`~/.grove/sessions.json`** (registry) — written by Claude **hooks**
    (`SessionStart` / `Stop` / `Notification` / `SessionEnd`, handled in
    `src/commands/sessions.ts` → `SessionsService`). Its role is mainly to record
@@ -252,10 +255,19 @@ Grove tracks Claude sessions by merging two sources:
 `listTrackedSessions`) merges them on each refresh:
 
 - A live session missing from the registry is added (so Grove knows it exists even
-  if the hook never fired).
-- A registry session **no longer reported by `--json`** is considered **archived**.
-- Archived sessions are kept in `sessions.json` but **hidden from the UI** (a future
-  feature may surface them).
+  if the hook never fired). Its `kind` (`interactive` / `background`) and `name` are
+  captured from the live data while it is live.
+- A registry session **no longer reported by `--json`** is handled by `kind`:
+  - **background** sessions are **archived** (a finished `--bg` job has nothing to
+    reattach to).
+  - **interactive** sessions (the standard `claude --name` launch) are **suspended**,
+    not archived — kept in `sessions.json` and still surfaced in the UI so they can
+    be resumed (`claude --resume`). A suspended session that reappears live is
+    revived back to `open`.
+- Each session carries a `presence` field — `open` (live in `--json`) or `suspended`
+  (retained but not live) — kept separate from `status` (the live activity state:
+  idle/busy/…). Suspended sessions render with a `⏸` icon.
+- Archived sessions are kept in `sessions.json` but **hidden from the UI**.
 
 **Archiving from a grove** (`ClaudeSessionService.archiveSession`) runs
 `claude rm <id>` to drop the session from Claude's agent list, then flags it

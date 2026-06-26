@@ -192,8 +192,8 @@ describe('claudeAgents', () => {
 			...overrides,
 		});
 
-		it('archives a registry session no longer reported live', () => {
-			const registry = [registryEntry({ sessionId: 'gone' })];
+		it('archives a background registry session no longer reported live', () => {
+			const registry = [registryEntry({ sessionId: 'gone', kind: 'background' })];
 			const { sessions, changed } = reconcileSessions(registry, [], NOW);
 			expect(changed).toBe(true);
 			expect(sessions[0]).toMatchObject({
@@ -203,10 +203,34 @@ describe('claudeAgents', () => {
 				status: 'closed',
 				lastUpdate: NOW,
 			});
+			expect(sessions[0].presence).toBeUndefined();
 		});
 
-		it('registers a live session the registry has not seen', () => {
-			const live: ClaudeAgentInfo[] = [{ sessionId: 'new', cwd: '/wt' }];
+		it('suspends (keeps) an interactive session no longer reported live', () => {
+			const registry = [registryEntry({ sessionId: 'gone', kind: 'interactive' })];
+			const { sessions, changed } = reconcileSessions(registry, [], NOW);
+			expect(changed).toBe(true);
+			expect(sessions[0]).toMatchObject({
+				sessionId: 'gone',
+				isRunning: false,
+				status: 'suspended',
+				presence: 'suspended',
+				lastUpdate: NOW,
+			});
+			expect(sessions[0].archived).toBeFalsy();
+		});
+
+		it('suspends an unknown-kind session rather than archiving it', () => {
+			const registry = [registryEntry({ sessionId: 'gone' })];
+			const { sessions } = reconcileSessions(registry, [], NOW);
+			expect(sessions[0].presence).toBe('suspended');
+			expect(sessions[0].archived).toBeFalsy();
+		});
+
+		it('registers a live session the registry has not seen, capturing kind/name', () => {
+			const live: ClaudeAgentInfo[] = [
+				{ sessionId: 'new', cwd: '/wt', kind: 'interactive', name: 'my-grove/app' },
+			];
 			const { sessions, changed } = reconcileSessions([], live, NOW);
 			expect(changed).toBe(true);
 			expect(sessions).toHaveLength(1);
@@ -215,6 +239,30 @@ describe('claudeAgents', () => {
 				workspacePath: '/wt',
 				archived: false,
 				isRunning: true,
+				presence: 'open',
+				kind: 'interactive',
+				name: 'my-grove/app',
+			});
+		});
+
+		it('revives a suspended interactive session when it is live again', () => {
+			const registry = [
+				registryEntry({
+					sessionId: 'back',
+					kind: 'interactive',
+					presence: 'suspended',
+					isRunning: false,
+					status: 'suspended',
+				}),
+			];
+			const live: ClaudeAgentInfo[] = [{ sessionId: 'back', cwd: '/wt', kind: 'interactive' }];
+			const { sessions, changed } = reconcileSessions(registry, live, NOW);
+			expect(changed).toBe(true);
+			expect(sessions[0]).toMatchObject({
+				archived: false,
+				isRunning: true,
+				status: 'active',
+				presence: 'open',
 			});
 		});
 

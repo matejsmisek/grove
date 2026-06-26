@@ -1,7 +1,3 @@
-import path from 'path';
-
-import type { ClaudeTerminalType } from '../storage/types.js';
-import { shortSessionId } from '../utils/claudeAgents.js';
 import { commandExists } from '../utils/commandExists.js';
 import { getDirenvWarning, wrapSpawnWithDirenv } from '../utils/direnv.js';
 import { hasExternalEditor, openExternalEditor } from '../utils/externalEditor.js';
@@ -10,16 +6,17 @@ import {
 	preparePromptTemplate,
 	stripPlaceholder,
 } from '../utils/promptTemplate.js';
+import { buildSessionName } from '../utils/sessionName.js';
 import { spawnCollect } from '../utils/spawnCollect.js';
-import type { ISessionLauncherService } from './SessionLauncherService.js';
 import type { ISessionTemplateService } from './SessionTemplateService.js';
 import type { ClaudeSessionResult } from './types.js';
 
 /**
  * Background session service interface
- * Dispatches Claude background sessions via `claude --bg` (Instant Claude and the
- * "Open in Claude" standard launch), including direnv wrapping and the `$EDITOR`
- * prompt interaction. Interactive terminal launches live in SessionLauncherService.
+ * Dispatches Claude "Instant Claude" background sessions via `claude --bg`,
+ * including direnv wrapping and the `$EDITOR` prompt interaction. The standard
+ * "Open in Claude" launch is a plain interactive terminal session and lives in
+ * SessionLauncherService.
  */
 export interface IBackgroundSessionService {
 	/**
@@ -50,32 +47,15 @@ export interface IBackgroundSessionService {
 		worktreeName?: string,
 		skipEditor?: boolean
 	): Promise<ClaudeSessionResult>;
-	/**
-	 * Launch a standard Claude session as a background session (`claude --bg`, no
-	 * prompt) and attach to it immediately, so every regular launch is a tracked,
-	 * re-attachable agent. The result carries the session id for persistence.
-	 */
-	launchStandardSession(
-		workingDir: string,
-		repositoryPath: string,
-		projectPath?: string,
-		terminalType?: ClaudeTerminalType,
-		groveName?: string,
-		worktreeName?: string
-	): Promise<ClaudeSessionResult>;
 }
 
 /**
  * Background Session Service
- * Dispatches Claude background sessions (`claude --bg`) for Instant Claude and the
- * standard "open + attach" launch. Defers interactive terminal launching to
- * SessionLauncherService and template resolution to SessionTemplateService.
+ * Dispatches Claude background sessions (`claude --bg`) for Instant Claude.
+ * Template resolution is deferred to SessionTemplateService.
  */
 export class BackgroundSessionService implements IBackgroundSessionService {
-	constructor(
-		private readonly templateService: ISessionTemplateService,
-		private readonly launcherService: ISessionLauncherService
-	) {}
+	constructor(private readonly templateService: ISessionTemplateService) {}
 
 	/**
 	 * Resolve the prompt text for an "Instant Claude" launch: resolve the configured
@@ -113,27 +93,6 @@ export class BackgroundSessionService implements IBackgroundSessionService {
 		// No editor available: fall back to the template text directly
 		const text = prepared.content.trim();
 		return text || null;
-	}
-
-	/**
-	 * Build a display name for a background session from grove/worktree names.
-	 */
-	private buildSessionName(
-		repositoryPath: string,
-		groveName?: string,
-		worktreeName?: string
-	): string {
-		const parts: string[] = [];
-		if (groveName) {
-			parts.push(groveName);
-		}
-		const leaf = worktreeName || path.basename(repositoryPath);
-		// Avoid duplicating the name (e.g. "name/name") when the grove and
-		// worktree names are identical.
-		if (leaf !== groveName) {
-			parts.push(leaf);
-		}
-		return (parts.join('/') || 'grove-session').slice(0, 60);
 	}
 
 	/**
@@ -226,7 +185,7 @@ export class BackgroundSessionService implements IBackgroundSessionService {
 			};
 		}
 
-		const name = this.buildSessionName(repositoryPath, groveName, worktreeName);
+		const name = buildSessionName(repositoryPath, groveName, worktreeName);
 		const dispatched = await this.dispatchBackgroundSession(workingDir, name, prompt);
 		if ('errorMessage' in dispatched) {
 			return { success: false, message: dispatched.errorMessage };
@@ -239,60 +198,6 @@ export class BackgroundSessionService implements IBackgroundSessionService {
 				dispatched.warning
 			),
 			sessionId: dispatched.sessionId,
-			sessionName: name,
-		};
-	}
-
-	/**
-	 * Launch a "standard" Claude session as a background session (`claude --bg`,
-	 * no prompt) and immediately attach to it in a terminal. This makes every
-	 * regular launch a tracked, re-attachable agent. Returns the session id so the
-	 * caller can persist it on the worktree. If the attach step fails, the session
-	 * id is still returned (the background session was created and is tracked).
-	 */
-	async launchStandardSession(
-		workingDir: string,
-		repositoryPath: string,
-		projectPath?: string,
-		terminalType?: ClaudeTerminalType,
-		groveName?: string,
-		worktreeName?: string
-	): Promise<ClaudeSessionResult> {
-		if (!(await commandExists('claude'))) {
-			return {
-				success: false,
-				message: 'Claude CLI not found. Please install Claude CLI first.',
-			};
-		}
-
-		const name = this.buildSessionName(repositoryPath, groveName, worktreeName);
-		const dispatched = await this.dispatchBackgroundSession(workingDir, name);
-		if ('errorMessage' in dispatched) {
-			return { success: false, message: dispatched.errorMessage };
-		}
-
-		const sessionId = dispatched.sessionId;
-		const attach = await this.launcherService.attachSession(
-			shortSessionId(sessionId),
-			workingDir,
-			repositoryPath,
-			projectPath,
-			terminalType,
-			groveName,
-			worktreeName
-		);
-
-		return {
-			success: attach.success,
-			// On success the attach result already carries any direnv warning (added
-			// by the terminal launcher); only the failure branch needs it appended.
-			message: attach.success
-				? attach.message
-				: this.appendWarning(
-						`Started background session (${sessionId}) but failed to attach: ${attach.message}`,
-						dispatched.warning
-					),
-			sessionId,
 			sessionName: name,
 		};
 	}

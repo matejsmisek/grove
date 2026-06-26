@@ -31,6 +31,8 @@ const STATUS_META: Record<string, StatusMeta> = {
 	failed: { icon: '✗', color: 'red' },
 	error: { icon: '✗', color: 'red' },
 	stopped: { icon: '■', color: 'gray' },
+	// Interactive session retained after its terminal closed; resume to reconnect.
+	suspended: { icon: '⏸', color: 'gray' },
 };
 
 const DEFAULT_META: StatusMeta = { icon: '•', color: 'gray' };

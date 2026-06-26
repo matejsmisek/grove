@@ -43,7 +43,7 @@ const spawnMock = vi.mocked(spawn);
  * Build a fake child process for the mocked `spawn`. Emits `close` on the next
  * microtask with the given exit code.
  */
-function fakeProc(opts: { code?: number }) {
+function fakeProc(opts: { code?: number; stdout?: string }) {
 	const proc = new EventEmitter() as EventEmitter & {
 		stdout: EventEmitter;
 		stderr: EventEmitter;
@@ -53,6 +53,9 @@ function fakeProc(opts: { code?: number }) {
 	proc.stderr = new EventEmitter();
 	proc.kill = vi.fn();
 	queueMicrotask(() => {
+		if (opts.stdout) {
+			proc.stdout.emit('data', Buffer.from(opts.stdout));
+		}
 		proc.emit('close', opts.code ?? 0);
 	});
 	return proc;
@@ -116,6 +119,100 @@ describe('ClaudeSessionService', () => {
 
 		it('returns false for an empty session id', () => {
 			expect(service.isBackgroundSessionAlive('')).toBe(false);
+		});
+	});
+
+	describe('listTrackedSessions', () => {
+		const registryEntry = (overrides: Record<string, unknown>) => ({
+			sessionId: 'id',
+			agentType: 'claude' as const,
+			groveId: null,
+			workspacePath: '/wt',
+			worktreePath: null,
+			status: 'active' as const,
+			isRunning: true,
+			lastUpdate: '2026-01-01T00:00:00Z',
+			...overrides,
+		});
+
+		it('surfaces a suspended interactive session that is no longer live', async () => {
+			// No live sessions reported by `claude agents --json`.
+			spawnMock.mockImplementation(() => fakeProc({ stdout: '[]' }) as never);
+			vi.mocked(mockSessionsService.readSessions).mockReturnValue({
+				sessions: [
+					registryEntry({
+						sessionId: 'abc12345',
+						kind: 'interactive',
+						presence: 'suspended',
+						isRunning: false,
+						status: 'suspended',
+						name: 'my-grove/app',
+					}),
+				],
+				version: '1.0.0',
+				lastUpdated: '2026-01-01T00:00:00Z',
+			});
+
+			const sessions = await service.listTrackedSessions();
+
+			expect(sessions).toHaveLength(1);
+			expect(sessions[0]).toMatchObject({
+				sessionId: 'abc12345',
+				kind: 'interactive',
+				presence: 'suspended',
+				status: 'suspended',
+				name: 'my-grove/app',
+				cwd: '/wt',
+			});
+		});
+
+		it('does not surface an archived session', async () => {
+			spawnMock.mockImplementation(() => fakeProc({ stdout: '[]' }) as never);
+			vi.mocked(mockSessionsService.readSessions).mockReturnValue({
+				sessions: [
+					registryEntry({
+						sessionId: 'abc12345',
+						kind: 'interactive',
+						presence: 'suspended',
+						archived: true,
+						isRunning: false,
+						status: 'suspended',
+					}),
+				],
+				version: '1.0.0',
+				lastUpdated: '2026-01-01T00:00:00Z',
+			});
+
+			await expect(service.listTrackedSessions()).resolves.toEqual([]);
+		});
+
+		it('marks live sessions open and persists the reconciled registry', async () => {
+			spawnMock.mockImplementation(
+				() =>
+					fakeProc({
+						stdout: JSON.stringify([
+							{ sessionId: 'live123', cwd: '/wt', kind: 'interactive', status: 'idle' },
+						]),
+					}) as never
+			);
+			vi.mocked(mockSessionsService.readSessions).mockReturnValue({
+				sessions: [],
+				version: '1.0.0',
+				lastUpdated: '2026-01-01T00:00:00Z',
+			});
+
+			const sessions = await service.listTrackedSessions();
+
+			expect(sessions).toHaveLength(1);
+			expect(sessions[0]).toMatchObject({ sessionId: 'live123', presence: 'open', status: 'idle' });
+			// The newly-seen live session is appended to the registry on disk.
+			expect(mockSessionsService.writeSessions).toHaveBeenCalledWith(
+				expect.objectContaining({
+					sessions: expect.arrayContaining([
+						expect.objectContaining({ sessionId: 'live123', presence: 'open', kind: 'interactive' }),
+					]),
+				})
+			);
 		});
 	});
 

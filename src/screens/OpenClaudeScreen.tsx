@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
+import { useAgentSessions } from '../components/AgentSessionsContext.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { getTerminalDisplayName } from '../services/index.js';
@@ -23,6 +24,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 	const sessionLauncherService = useService(SessionLauncherServiceToken);
 	const grovesService = useService(GrovesServiceToken);
 	const settingsService = useService(SettingsServiceToken);
+	const { refresh: refreshAgentSessions } = useAgentSessions();
 	const [loading, setLoading] = useState(true);
 	const [groveName, setGroveName] = useState('');
 	const [worktrees, setWorktrees] = useState<Worktree[]>([]);
@@ -109,6 +111,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 				);
 				if (cancelled) return;
 				if (result.success) {
+					refreshAgentSessions();
 					goBack();
 				} else {
 					setError(result.message);
@@ -149,6 +152,7 @@ export function OpenClaudeScreen({ groveId }: OpenClaudeScreenProps) {
 			worktree.name
 		);
 		if (result.success) {
+			refreshAgentSessions();
 			setResultMessage(`Opened Claude in ${worktree.repositoryName}`);
 			// Go back after a short delay to show the message
 			setTimeout(() => goBack(), 500);
