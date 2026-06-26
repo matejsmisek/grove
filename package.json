@@ -5,7 +5,7 @@
 	"type": "module",
 	"main": "./dist/index.js",
 	"bin": {
-		"grove": "./dist/index.js"
+		"grove": "dist/index.js"
 	},
 	"files": [
 		"dist",
@@ -44,7 +44,7 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/matejsmisek/hypergrove.git"
+		"url": "git+https://github.com/matejsmisek/hypergrove.git"
 	},
 	"bugs": {
 		"url": "https://github.com/matejsmisek/hypergrove/issues"
