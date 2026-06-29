@@ -5,12 +5,13 @@ import crypto from 'crypto';
  * Uses SHA256 hash of the name to ensure deterministic output
  *
  * @param name - The original grove name
- * @returns A 5-character alphanumeric identifier
+ * @returns A 5-character lowercase alphanumeric identifier (0-9, a-f)
  */
 export function generateGroveIdentifier(name: string): string {
-	const hash = crypto.createHash('sha256').update(name).digest('base64url');
-	// Convert to lowercase for uniform identifiers across grove, folders, worktrees, and branches
-	return hash.substring(0, 5).toLowerCase();
+	// Use hex encoding so the identifier is strictly lowercase alphanumeric.
+	// (base64url would include '-' and '_', which would leak into folder/branch slugs.)
+	const hash = crypto.createHash('sha256').update(name).digest('hex');
+	return hash.substring(0, 5);
 }
 
 /**
