@@ -131,7 +131,7 @@ export function RepositoriesScreen() {
 				</Box>
 
 				<Box marginLeft={2} marginTop={1}>
-					<Text color="cyan">grove --register</Text>
+					<Text color="cyan">grove workspace add-repository</Text>
 				</Box>
 
 				<Box marginTop={2}>

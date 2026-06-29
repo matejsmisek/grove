@@ -157,12 +157,12 @@ if (command.cmd === 'help') {
 	console.log(
 		'  workspace init                                Initialize a workspace in the current directory'
 	);
+	console.log(
+		'  workspace add-repository [path]               Register a repository (default: current directory)'
+	);
 	console.log('  session-hook [--agent-type <type>]             Handle session lifecycle hooks');
 	console.log('');
 	console.log('Options:');
-	console.log(
-		'  --register                                    Register current directory as a repository'
-	);
 	console.log(
 		'  --setup-hooks [--agent <type>]                 Set up agent hooks (default: claude)'
 	);
@@ -290,8 +290,8 @@ if (command.cmd === 'help') {
 		console.error('✗', result.message);
 		process.exit(1);
 	}
-} else if (command.cmd === 'register') {
-	const result = await registerRepository();
+} else if (command.cmd === 'add-repository') {
+	const result = await registerRepository(command.path);
 
 	if (result.success) {
 		console.log('✓', result.message);

@@ -71,7 +71,7 @@ export async function createGrove(name: string, repoArg?: string): Promise<Creat
 				const availableRepos = repositories.map((r) => r.name).join(', ');
 				return {
 					success: false,
-					message: `Repository '${repoName}' not found. Available: ${availableRepos || 'none (register with --register)'}`,
+					message: `Repository '${repoName}' not found. Available: ${availableRepos || 'none (register with "grove workspace add-repository")'}`,
 				};
 			}
 

@@ -38,7 +38,7 @@ export type ParsedCommand =
 	| { cmd: 'claude-asana'; worktreeId?: string; asanaUrl?: string }
 	| { cmd: 'list'; json: boolean }
 	| { cmd: 'status'; json: boolean }
-	| { cmd: 'register' }
+	| { cmd: 'add-repository'; path?: string }
 	| { cmd: 'session-hook'; agentType: string }
 	| { cmd: 'setup-hooks'; agentType: string }
 	| { cmd: 'verify-hooks'; agentType: string }
@@ -64,8 +64,8 @@ function readAgentType(argv: string[], flag: string): { agentType: string } | { 
 /**
  * Parse the CLI argv into a command. The branch precedence matches the original
  * inline dispatch: `--help` wins over everything, then the positional commands
- * (`workspace init`, `create`, `add-worktree`, `claude`, `list`, `status`), then
- * the flag commands (`--register`, `session-hook`, `--setup-hooks`,
+ * (`workspace <subcommand>`, `create`, `add-worktree`, `claude`, `list`,
+ * `status`), then the flag commands (`session-hook`, `--setup-hooks`,
  * `--verify-hooks`), and finally the interactive UI.
  */
 export function parseArgs(argv: string[]): ParsedCommand {
@@ -73,8 +73,8 @@ export function parseArgs(argv: string[]): ParsedCommand {
 		return { cmd: 'help' };
 	}
 
-	if (argv[0] === 'workspace' && argv[1] === 'init') {
-		return { cmd: 'workspace-init' };
+	if (argv[0] === 'workspace') {
+		return parseWorkspace(argv.slice(1));
 	}
 
 	if (argv[0] === 'create') {
@@ -101,10 +101,6 @@ export function parseArgs(argv: string[]): ParsedCommand {
 		return { cmd: 'status', json: argv.includes('--json') };
 	}
 
-	if (argv.includes('--register')) {
-		return { cmd: 'register' };
-	}
-
 	if (argv.includes('session-hook')) {
 		const result = readAgentType(argv, '--agent-type');
 		return 'error' in result
@@ -127,6 +123,34 @@ export function parseArgs(argv: string[]): ParsedCommand {
 	}
 
 	return { cmd: 'ui' };
+}
+
+/**
+ * Parse the `workspace` subcommands:
+ *   - `workspace init` — initialize a workspace in the current directory.
+ *   - `workspace add-repository [path]` — register a repository. The optional
+ *     path (relative or absolute) lets a repo in another workspace be registered
+ *     from the current one; when omitted the current directory is used.
+ */
+function parseWorkspace(workspaceArgs: string[]): ParsedCommand {
+	const subcommand = workspaceArgs[0];
+
+	if (subcommand === 'init') {
+		return { cmd: 'workspace-init' };
+	}
+
+	if (subcommand === 'add-repository') {
+		// Optional path value, unless the following token is a flag. When omitted
+		// the current directory is registered.
+		const value = workspaceArgs[1];
+		const path = value && !value.startsWith('-') ? value : undefined;
+		return { cmd: 'add-repository', path };
+	}
+
+	return {
+		cmd: 'error',
+		lines: ['✗ Usage: grove workspace init', '  grove workspace add-repository [path]'],
+	};
 }
 
 /**

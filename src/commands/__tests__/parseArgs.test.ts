@@ -12,9 +12,9 @@ describe('parseArgs', () => {
 			expect(parseArgs(['frobnicate'])).toEqual({ cmd: 'ui' });
 		});
 
-		it('treats a bare "workspace" (without init) as ui', () => {
-			expect(parseArgs(['workspace'])).toEqual({ cmd: 'ui' });
-			expect(parseArgs(['workspace', 'other'])).toEqual({ cmd: 'ui' });
+		it('errors on a bare "workspace" or an unknown subcommand', () => {
+			expect(parseArgs(['workspace']).cmd).toBe('error');
+			expect(parseArgs(['workspace', 'other']).cmd).toBe('error');
 		});
 	});
 
@@ -29,7 +29,7 @@ describe('parseArgs', () => {
 
 		it('takes precedence over any other command', () => {
 			expect(parseArgs(['create', 'x', 'repo', '--help'])).toEqual({ cmd: 'help' });
-			expect(parseArgs(['--register', '-h'])).toEqual({ cmd: 'help' });
+			expect(parseArgs(['--add-repository', '-h'])).toEqual({ cmd: 'help' });
 		});
 	});
 
@@ -308,9 +308,23 @@ describe('parseArgs', () => {
 		});
 	});
 
-	describe('register', () => {
-		it('parses --register anywhere in the args', () => {
-			expect(parseArgs(['--register'])).toEqual({ cmd: 'register' });
+	describe('workspace add-repository', () => {
+		it('parses workspace add-repository with no path', () => {
+			expect(parseArgs(['workspace', 'add-repository'])).toEqual({
+				cmd: 'add-repository',
+				path: undefined,
+			});
+		});
+
+		it('parses workspace add-repository with a path', () => {
+			expect(parseArgs(['workspace', 'add-repository', '/some/repo'])).toEqual({
+				cmd: 'add-repository',
+				path: '/some/repo',
+			});
+		});
+
+		it('errors on an unknown workspace subcommand', () => {
+			expect(parseArgs(['workspace', 'bogus']).cmd).toBe('error');
 		});
 	});
 
@@ -365,12 +379,15 @@ describe('parseArgs', () => {
 	});
 
 	describe('command precedence', () => {
-		it('prefers a positional create command over a trailing --register flag', () => {
-			expect(parseArgs(['create', 'x', 'repo', '--register'])).toMatchObject({ cmd: 'create' });
+		it('prefers a positional create command over a trailing --setup-hooks flag', () => {
+			expect(parseArgs(['create', 'x', 'repo', '--setup-hooks'])).toMatchObject({ cmd: 'create' });
 		});
 
-		it('prefers --register over the session-hook/--setup-hooks flag commands', () => {
-			expect(parseArgs(['--register', 'session-hook'])).toEqual({ cmd: 'register' });
+		it('prefers a workspace subcommand over the session-hook/--setup-hooks flag commands', () => {
+			expect(parseArgs(['workspace', 'add-repository', '--setup-hooks'])).toEqual({
+				cmd: 'add-repository',
+				path: undefined,
+			});
 		});
 	});
 });
