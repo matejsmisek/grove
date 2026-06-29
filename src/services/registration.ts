@@ -29,6 +29,7 @@ import { SessionLauncherService } from './SessionLauncherService.js';
 import { SessionTemplateService } from './SessionTemplateService.js';
 import { SessionTrackingService } from './SessionTrackingService.js';
 import { TaskService } from './TaskService.js';
+import { UpdateService } from './UpdateService.js';
 import { WorkspaceService } from './WorkspaceService.js';
 import { WorktreeSetupService } from './WorktreeSetupService.js';
 import {
@@ -51,6 +52,7 @@ import {
 	SessionsServiceToken,
 	SettingsServiceToken,
 	TaskServiceToken,
+	UpdateServiceToken,
 	WorkspaceServiceToken,
 	WorktreeSetupServiceToken,
 } from './tokens.js';
@@ -132,6 +134,9 @@ export function registerServices(
 
 	// TaskService manages background jobs (no dependencies)
 	c.registerSingleton(TaskServiceToken, () => new TaskService());
+
+	// UpdateService checks the npm registry for newer releases (no dependencies)
+	c.registerSingleton(UpdateServiceToken, () => new UpdateService());
 
 	// SessionTemplateService resolves session/prompt templates; depends on
 	// SettingsService and GroveConfigService.

@@ -15,6 +15,7 @@ export { SessionTemplateService } from './SessionTemplateService.js';
 export { WorktreeSetupService } from './WorktreeSetupService.js';
 export { SessionTrackingService, type ISessionTrackingService } from './SessionTrackingService.js';
 export { TaskService } from './TaskService.js';
+export { UpdateService, type IUpdateService } from './UpdateService.js';
 export { WorkspaceService, getContextDisplayName } from './WorkspaceService.js';
 export {
 	detectAvailableTerminals,
@@ -108,6 +109,7 @@ export {
 	SessionTrackingServiceToken,
 	SettingsServiceToken,
 	TaskServiceToken,
+	UpdateServiceToken,
 	WorkspaceServiceToken,
 	WorktreeSetupServiceToken,
 } from './tokens.js';

@@ -19,6 +19,8 @@ export const DEFAULT_AGENT_TYPE = 'claude';
  */
 export type ParsedCommand =
 	| { cmd: 'help' }
+	| { cmd: 'version' }
+	| { cmd: 'update' }
 	| { cmd: 'workspace-init' }
 	| { cmd: 'create'; name: string; repository?: string; empty: boolean }
 	| {
@@ -73,6 +75,10 @@ export function parseArgs(argv: string[]): ParsedCommand {
 		return { cmd: 'help' };
 	}
 
+	if (argv.includes('--version') || argv.includes('-v')) {
+		return { cmd: 'version' };
+	}
+
 	if (argv[0] === 'workspace') {
 		return parseWorkspace(argv.slice(1));
 	}
@@ -99,6 +105,10 @@ export function parseArgs(argv: string[]): ParsedCommand {
 
 	if (argv[0] === 'status') {
 		return { cmd: 'status', json: argv.includes('--json') };
+	}
+
+	if (argv[0] === 'update') {
+		return { cmd: 'update' };
 	}
 
 	if (argv.includes('session-hook')) {

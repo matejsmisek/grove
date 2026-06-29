@@ -14,6 +14,7 @@ import { SettingsServiceToken, WorkspaceServiceToken } from '../services/tokens.
 import { AgentSessionsProvider } from './AgentSessionsContext.js';
 import { StatusBar } from './StatusBar.js';
 import { TextInputActivityProvider, useTextInputActivity } from './TextInputActivityContext.js';
+import { UpdateStatusProvider } from './UpdateStatusContext.js';
 
 /** ESC byte — what the terminal sends for the Escape key. */
 const ESCAPE_SEQUENCE = '\u001B';
@@ -105,13 +106,15 @@ interface AppProps {
 export function App({ initialScreen = 'home' }: AppProps) {
 	return (
 		<ServiceProvider>
-			<AgentSessionsProvider>
-				<NavigationProvider initialScreen={initialScreen}>
-					<MouseControlGate>
-						<AppContent />
-					</MouseControlGate>
-				</NavigationProvider>
-			</AgentSessionsProvider>
+			<UpdateStatusProvider>
+				<AgentSessionsProvider>
+					<NavigationProvider initialScreen={initialScreen}>
+						<MouseControlGate>
+							<AppContent />
+						</MouseControlGate>
+					</NavigationProvider>
+				</AgentSessionsProvider>
+			</UpdateStatusProvider>
 		</ServiceProvider>
 	);
 }

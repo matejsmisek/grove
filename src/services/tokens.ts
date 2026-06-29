@@ -22,6 +22,7 @@ import type { ISessionLauncherService } from './SessionLauncherService.js';
 import type { ISessionTemplateService } from './SessionTemplateService.js';
 import type { ISessionTrackingService } from './SessionTrackingService.js';
 import type { ITaskService } from './TaskService.js';
+import type { IUpdateService } from './UpdateService.js';
 import type { IWorkspaceService } from './WorkspaceService.js';
 import type { IWorktreeSetupService } from './WorktreeSetupService.js';
 
@@ -53,6 +54,7 @@ export const WorkspaceServiceToken = createToken<IWorkspaceService>('WorkspaceSe
 export const SessionTrackingServiceToken =
 	createToken<ISessionTrackingService>('SessionTrackingService');
 export const TaskServiceToken = createToken<ITaskService>('TaskService');
+export const UpdateServiceToken = createToken<IUpdateService>('UpdateService');
 
 // Plugin system tokens
 export const GitLabPluginToken = createToken<GitLabPlugin>('GitLabPlugin');

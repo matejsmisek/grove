@@ -33,6 +33,26 @@ describe('parseArgs', () => {
 		});
 	});
 
+	describe('version', () => {
+		it('parses --version', () => {
+			expect(parseArgs(['--version'])).toEqual({ cmd: 'version' });
+		});
+
+		it('parses -v', () => {
+			expect(parseArgs(['-v'])).toEqual({ cmd: 'version' });
+		});
+
+		it('yields to --help when both are present', () => {
+			expect(parseArgs(['--version', '--help'])).toEqual({ cmd: 'help' });
+		});
+	});
+
+	describe('update', () => {
+		it('parses the update command', () => {
+			expect(parseArgs(['update'])).toEqual({ cmd: 'update' });
+		});
+	});
+
 	describe('workspace init', () => {
 		it('parses "workspace init"', () => {
 			expect(parseArgs(['workspace', 'init'])).toEqual({ cmd: 'workspace-init' });

@@ -5,6 +5,7 @@ import { render } from 'ink';
 
 import {
 	addWorktree,
+	checkForUpdate,
 	createGrove,
 	formatGrovesText,
 	groveStatus,
@@ -26,6 +27,7 @@ import type { Routes } from './navigation/types.js';
 import {
 	RepositoryServiceToken,
 	SessionsServiceToken,
+	UpdateServiceToken,
 	WorkspaceService,
 	WorkspaceServiceToken,
 	detectAvailableTerminals,
@@ -38,6 +40,7 @@ import {
 	GlobalGroveDirError,
 	ensureGlobalGroveFolder,
 	ensureGroveGitExcluded,
+	getAppVersion,
 } from './utils/index.js';
 
 // Resolve and create the global Grove directory (honoring GROVE_GLOBAL_DIR)
@@ -128,7 +131,7 @@ if (!isFirstRun && !settings.selectedTerminal) {
 const command = parseArgs(process.argv.slice(2));
 
 if (command.cmd === 'help') {
-	const version = '1.0.0';
+	const version = getAppVersion();
 	console.log(`Grove v${version} - Git worktree management CLI`);
 	console.log('');
 	console.log('Usage: grove [command] [options]');
@@ -152,6 +155,9 @@ if (command.cmd === 'help') {
 	);
 	console.log('  list [--json]                                 List all groves and their worktrees');
 	console.log(
+		'  update                                        Check for a newer version and print the update command'
+	);
+	console.log(
 		'  status [--json]                               Show grove/worktree info for the current directory'
 	);
 	console.log(
@@ -168,11 +174,20 @@ if (command.cmd === 'help') {
 	);
 	console.log('  --verify-hooks [--agent <type>]                Verify agent hooks are configured');
 	console.log('  -h, --help                                    Show this help message');
+	console.log('  -v, --version                                 Show the installed version');
 	console.log('');
 	console.log('Repository format: reponame or reponame.projectfolder');
 	console.log('');
 	console.log('Run grove without arguments to launch the interactive terminal UI.');
 	process.exit(0);
+} else if (command.cmd === 'version') {
+	console.log(getAppVersion());
+	process.exit(0);
+} else if (command.cmd === 'update') {
+	const updateService = container.resolve(UpdateServiceToken);
+	const result = await checkForUpdate(updateService);
+	result.lines.forEach((line) => console.log(line));
+	process.exit(result.success ? 0 : 1);
 } else if (command.cmd === 'error') {
 	command.lines.forEach((line) => console.error(line));
 	process.exit(1);
