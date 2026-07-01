@@ -64,6 +64,9 @@ export function CreateGroveScreen() {
 	const [cursorIndex, setCursorIndex] = useState(0);
 	const [error, setError] = useState<string>('');
 	const [nameError, setNameError] = useState<string>('');
+	// True while the Asana-URL confirmation modal (inside AsanaNameInput) is open, so the
+	// screen suspends its own Esc→goBack handling while the modal owns the key.
+	const [asanaConfirmOpen, setAsanaConfirmOpen] = useState(false);
 
 	// When there is exactly one repository to work with (a single registered repo,
 	// or repo-scoped mode), we skip the multi-select repository step entirely.
@@ -313,11 +316,12 @@ export function CreateGroveScreen() {
 		},
 		{
 			isActive:
-				step === 'description' ||
-				step === 'name' ||
-				step === 'error' ||
-				step === 'done' ||
-				step === 'creating',
+				(step === 'description' ||
+					step === 'name' ||
+					step === 'error' ||
+					step === 'done' ||
+					step === 'creating') &&
+				!asanaConfirmOpen,
 		}
 	);
 
@@ -507,8 +511,10 @@ export function CreateGroveScreen() {
 					}}
 					onSubmit={handleDescriptionSubmit}
 					onCreateFromAsana={handleCreateFromAsana}
+					onConfirmOpenChange={setAsanaConfirmOpen}
 					isActive={step === 'description'}
 					label="Description: "
+					continueLabel="Use the URL as the description"
 					busy={asanaBusy}
 				/>
 
@@ -597,8 +603,10 @@ export function CreateGroveScreen() {
 					}}
 					onSubmit={handleNameSubmit}
 					onCreateFromAsana={handleCreateFromAsana}
+					onConfirmOpenChange={setAsanaConfirmOpen}
 					isActive={step === 'name'}
 					label="Name: "
+					continueLabel="Use the URL as the grove name"
 					busy={asanaBusy}
 				/>
 

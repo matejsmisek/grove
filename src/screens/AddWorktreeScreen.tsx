@@ -54,6 +54,9 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 	const [cursorIndex, setCursorIndex] = useState(0);
 	const [error, setError] = useState<string>('');
 	const [nameError, setNameError] = useState<string>('');
+	// True while the Asana-URL confirmation modal (inside AsanaNameInput) is open, so the
+	// screen suspends its own Esc→goBack handling while the modal owns the key.
+	const [asanaConfirmOpen, setAsanaConfirmOpen] = useState(false);
 
 	// Asana "Create from Asana" flow. The resolved reference is held in a ref so that
 	// createWorktree() reads the correct value even when invoked in the same tick that
@@ -310,7 +313,11 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 				goBack();
 			}
 		},
-		{ isActive: step === 'name' || step === 'creating' || step === 'done' || step === 'error' }
+		{
+			isActive:
+				(step === 'name' || step === 'creating' || step === 'done' || step === 'error') &&
+				!asanaConfirmOpen,
+		}
 	);
 
 	if (step === 'name') {
@@ -353,8 +360,10 @@ export function AddWorktreeScreen({ groveId, forkFromWorktreePath }: AddWorktree
 					}}
 					onSubmit={handleNameSubmit}
 					onCreateFromAsana={handleCreateFromAsana}
+					onConfirmOpenChange={setAsanaConfirmOpen}
 					isActive={step === 'name'}
 					label="Name: "
+					continueLabel="Use the URL as the worktree name"
 					busy={asanaBusy}
 				/>
 
