@@ -113,4 +113,50 @@ describe('UpdateService', () => {
 
 		expect(latest).toBeNull();
 	});
+
+	describe('dismissal', () => {
+		it('reports no dismissal before any is recorded', () => {
+			const service = new UpdateService({ cacheDir: CACHE_DIR, fetchLatest: vi.fn() });
+
+			expect(service.getDismissal()).toEqual({ version: null, at: null });
+		});
+
+		it('persists a dismissal and reads it back', () => {
+			const now = 1_000_000_000_000;
+			vi.spyOn(Date, 'now').mockReturnValue(now);
+			const service = new UpdateService({ cacheDir: CACHE_DIR, fetchLatest: vi.fn() });
+
+			service.dismissUpdate('1.3.0');
+
+			expect(service.getDismissal()).toEqual({ version: '1.3.0', at: now });
+			const cache = JSON.parse(vol.readFileSync(CACHE_PATH, 'utf-8') as string);
+			expect(cache.dismissedVersion).toBe('1.3.0');
+			expect(cache.dismissedAt).toBe(now);
+		});
+
+		it('preserves a prior version check when dismissing', async () => {
+			const fetchLatest = vi.fn().mockResolvedValue('1.3.0');
+			const service = new UpdateService({ cacheDir: CACHE_DIR, fetchLatest });
+
+			await service.getLatestVersion();
+			service.dismissUpdate('1.3.0');
+
+			const cache = JSON.parse(vol.readFileSync(CACHE_PATH, 'utf-8') as string);
+			expect(cache.latest).toBe('1.3.0');
+			expect(cache.dismissedVersion).toBe('1.3.0');
+		});
+
+		it('preserves an existing dismissal across a version re-fetch', async () => {
+			const fetchLatest = vi.fn().mockResolvedValue('1.4.0');
+			const service = new UpdateService({ cacheDir: CACHE_DIR, fetchLatest });
+
+			service.dismissUpdate('1.3.0');
+			await service.getLatestVersion({ force: true });
+
+			expect(service.getDismissal().version).toBe('1.3.0');
+			const cache = JSON.parse(vol.readFileSync(CACHE_PATH, 'utf-8') as string);
+			expect(cache.latest).toBe('1.4.0');
+			expect(cache.dismissedVersion).toBe('1.3.0');
+		});
+	});
 });

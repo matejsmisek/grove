@@ -14,7 +14,8 @@ import { SettingsServiceToken, WorkspaceServiceToken } from '../services/tokens.
 import { AgentSessionsProvider } from './AgentSessionsContext.js';
 import { StatusBar } from './StatusBar.js';
 import { TextInputActivityProvider, useTextInputActivity } from './TextInputActivityContext.js';
-import { UpdateStatusProvider } from './UpdateStatusContext.js';
+import { UpdateAvailableModal } from './UpdateAvailableModal.js';
+import { UpdateStatusProvider, useUpdateStatus } from './UpdateStatusContext.js';
 
 /** ESC byte — what the terminal sends for the Escape key. */
 const ESCAPE_SEQUENCE = '\u001B';
@@ -24,7 +25,8 @@ function AppContent() {
 	const settingsService = useService(SettingsServiceToken);
 	// Subscribe to navigation so the status bar re-renders after a context
 	// switch (which happens alongside a navigate from the global switcher).
-	useNavigation();
+	const { current: navState } = useNavigation();
+	const { showNotification } = useUpdateStatus();
 	const { internal_eventEmitter } = useStdin();
 	const { stdout } = useStdout();
 	const { isTracking, enable, disable } = useMouse();
@@ -72,13 +74,19 @@ function AppContent() {
 		}
 	});
 
+	// Show the "update available" modal in place of the normal screen once the
+	// (async) update check resolves — but never over the first-run flows, which
+	// are their own startup gates. It intercepts all input until dismissed.
+	const inStartupGate = navState.screen === 'setupWizard' || navState.screen === 'direnvTrust';
+	const showUpdateModal = showNotification && !inStartupGate;
+
 	// minHeight forces the root to span the full terminal, not just its content,
 	// so the right-click→back gesture is hit-tested over the empty space below
 	// the content too. (height="100%" resolves to content height on Ink's root.)
 	return (
 		<Box ref={rootRef} flexDirection="column" minHeight={stdout.rows ?? 24}>
 			<StatusBar isProcessing={false} workspaceName={workspaceName} />
-			<Router />
+			{showUpdateModal ? <UpdateAvailableModal /> : <Router />}
 		</Box>
 	);
 }

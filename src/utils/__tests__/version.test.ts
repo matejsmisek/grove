@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { UNKNOWN_VERSION, compareSemver, getAppVersion, isNewerVersion } from '../version.js';
+import {
+	UNKNOWN_VERSION,
+	UPDATE_NOTIFY_COOLDOWN_MS,
+	compareSemver,
+	getAppVersion,
+	isNewerVersion,
+	shouldShowUpdateNotification,
+} from '../version.js';
 
 describe('getAppVersion', () => {
 	it('reads the hypergrove package.json version (semver shape)', () => {
@@ -40,5 +47,81 @@ describe('isNewerVersion', () => {
 	it('never reports an update when either version is unknown', () => {
 		expect(isNewerVersion(UNKNOWN_VERSION, '1.2.0')).toBe(false);
 		expect(isNewerVersion('1.3.0', UNKNOWN_VERSION)).toBe(false);
+	});
+});
+
+describe('shouldShowUpdateNotification', () => {
+	const NOW = 1_000_000_000_000;
+
+	it('does not show when there is no newer version', () => {
+		expect(
+			shouldShowUpdateNotification({
+				current: '1.3.0',
+				latest: '1.3.0',
+				dismissedVersion: null,
+				dismissedAt: null,
+				now: NOW,
+			})
+		).toBe(false);
+	});
+
+	it('does not show when latest is unknown (offline)', () => {
+		expect(
+			shouldShowUpdateNotification({
+				current: '1.2.0',
+				latest: null,
+				dismissedVersion: null,
+				dismissedAt: null,
+				now: NOW,
+			})
+		).toBe(false);
+	});
+
+	it('shows an available update that was never dismissed', () => {
+		expect(
+			shouldShowUpdateNotification({
+				current: '1.2.0',
+				latest: '1.3.0',
+				dismissedVersion: null,
+				dismissedAt: null,
+				now: NOW,
+			})
+		).toBe(true);
+	});
+
+	it('stays snoozed within the 7-day cooldown for the dismissed version', () => {
+		expect(
+			shouldShowUpdateNotification({
+				current: '1.2.0',
+				latest: '1.3.0',
+				dismissedVersion: '1.3.0',
+				dismissedAt: NOW - (UPDATE_NOTIFY_COOLDOWN_MS - 1),
+				now: NOW,
+			})
+		).toBe(false);
+	});
+
+	it('shows again once the cooldown elapses for the same version', () => {
+		expect(
+			shouldShowUpdateNotification({
+				current: '1.2.0',
+				latest: '1.3.0',
+				dismissedVersion: '1.3.0',
+				dismissedAt: NOW - UPDATE_NOTIFY_COOLDOWN_MS,
+				now: NOW,
+			})
+		).toBe(true);
+	});
+
+	it('shows immediately when a newer version ships during the cooldown', () => {
+		expect(
+			shouldShowUpdateNotification({
+				current: '1.2.0',
+				latest: '1.4.0',
+				dismissedVersion: '1.3.0',
+				dismissedAt: NOW - 1000,
+				now: NOW,
+			})
+		).toBe(true);
 	});
 });

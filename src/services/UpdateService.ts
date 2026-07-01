@@ -30,6 +30,18 @@ interface UpdateCheckCache {
 	checkedAt: number;
 	/** The latest version seen, or null when no successful lookup has happened. */
 	latest: string | null;
+	/** The version the user last dismissed the update modal for, or null. */
+	dismissedVersion?: string | null;
+	/** Epoch ms of the last dismissal, or null when never dismissed. */
+	dismissedAt?: number | null;
+}
+
+/** The user's last dismissal of the "update available" modal. */
+export interface UpdateDismissal {
+	/** The version the modal was dismissed for, or null when never dismissed. */
+	version: string | null;
+	/** Epoch ms of the dismissal, or null when never dismissed. */
+	at: number | null;
 }
 
 export interface IUpdateService {
@@ -41,6 +53,13 @@ export interface IUpdateService {
 	 * `{ force: true }` to bypass the cache.
 	 */
 	getLatestVersion(options?: { force?: boolean }): Promise<string | null>;
+	/** The user's last dismissal of the "update available" modal. */
+	getDismissal(): UpdateDismissal;
+	/**
+	 * Record that the user dismissed the "update available" modal for `version`,
+	 * starting the snooze cooldown. Persisted alongside the update cache.
+	 */
+	dismissUpdate(version: string): void;
 }
 
 export interface UpdateServiceDeps {
@@ -92,6 +111,24 @@ export class UpdateService implements IUpdateService {
 		}
 	}
 
+	getDismissal(): UpdateDismissal {
+		const cache = this.readCache();
+		return {
+			version: cache?.dismissedVersion ?? null,
+			at: cache?.dismissedAt ?? null,
+		};
+	}
+
+	dismissUpdate(version: string): void {
+		const prior = this.readCache();
+		this.writeCache({
+			checkedAt: prior?.checkedAt ?? Date.now(),
+			latest: prior?.latest ?? null,
+			dismissedVersion: version,
+			dismissedAt: Date.now(),
+		});
+	}
+
 	private async refresh(): Promise<string | null> {
 		const prior = this.readCache();
 		let latest: string | null;
@@ -103,7 +140,13 @@ export class UpdateService implements IUpdateService {
 		// A failed fetch keeps the last known version but still bumps the
 		// timestamp, so we back off instead of hammering the network every render.
 		const resolved = latest ?? prior?.latest ?? null;
-		this.writeCache({ checkedAt: Date.now(), latest: resolved });
+		// Preserve any dismissal record; a version check must not clear the snooze.
+		this.writeCache({
+			checkedAt: Date.now(),
+			latest: resolved,
+			dismissedVersion: prior?.dismissedVersion ?? null,
+			dismissedAt: prior?.dismissedAt ?? null,
+		});
 		return resolved;
 	}
 
@@ -115,6 +158,8 @@ export class UpdateService implements IUpdateService {
 				return {
 					checkedAt: parsed.checkedAt,
 					latest: typeof parsed.latest === 'string' ? parsed.latest : null,
+					dismissedVersion: typeof parsed.dismissedVersion === 'string' ? parsed.dismissedVersion : null,
+					dismissedAt: typeof parsed.dismissedAt === 'number' ? parsed.dismissedAt : null,
 				};
 			}
 		} catch {

@@ -82,6 +82,45 @@ export function isNewerVersion(latest: string, current: string): boolean {
 	return compareSemver(latest, current) > 0;
 }
 
+/**
+ * How long the "update available" modal stays snoozed after the user dismisses
+ * it. The snooze is bypassed when a version newer than the dismissed one ships.
+ */
+export const UPDATE_NOTIFY_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/**
+ * Decide whether the startup "update available" modal should be shown, given the
+ * installed version, the latest published version, and what the user previously
+ * dismissed.
+ *
+ * Rules:
+ * - Never show when there is no newer version available (or `latest` is unknown).
+ * - Always show when nothing has been dismissed yet.
+ * - Always show when `latest` is newer than the version the user last dismissed
+ *   (a new release shipped during the cooldown — the user hasn't seen this one).
+ * - Otherwise respect a {@link UPDATE_NOTIFY_COOLDOWN_MS} cooldown from the last
+ *   dismissal.
+ */
+export function shouldShowUpdateNotification(params: {
+	current: string;
+	latest: string | null;
+	dismissedVersion: string | null;
+	dismissedAt: number | null;
+	now: number;
+}): boolean {
+	const { current, latest, dismissedVersion, dismissedAt, now } = params;
+	if (latest === null || !isNewerVersion(latest, current)) {
+		return false;
+	}
+	if (dismissedVersion === null || dismissedAt === null) {
+		return true;
+	}
+	if (isNewerVersion(latest, dismissedVersion)) {
+		return true;
+	}
+	return now - dismissedAt >= UPDATE_NOTIFY_COOLDOWN_MS;
+}
+
 function parseVersion(version: string): [number, number, number] {
 	const core = version.trim().replace(/^v/i, '').split(/[-+]/)[0];
 	const parts = core.split('.');
