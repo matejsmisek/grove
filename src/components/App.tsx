@@ -41,14 +41,16 @@ function AppContent() {
 	const showUpdateModal = showNotification && !inStartupGate;
 
 	// Single source of truth for whether the terminal mouse should be tracking:
-	// the global setting says yes AND no text input is focused AND the update
-	// modal isn't up (its raw mouse escape sequences would otherwise leak into the
-	// modal's useInput and dismiss it on mouse move). We drive the library's
-	// enable()/disable() ourselves (the provider starts disabled via
+	// the global setting says yes AND no text input is focused. We drive the
+	// library's enable()/disable() ourselves (the provider starts disabled via
 	// autoEnable={false}, so its internal isEnabled flag stays consistent —
 	// otherwise disable() is a no-op and mouse sequences leak into text inputs).
-	const shouldTrackMouse =
-		settingsService.getMouseControlEnabled() && !isTextInputActive && !showUpdateModal;
+	//
+	// We deliberately do NOT gate this on the update modal: ink-mouse's disable()
+	// calls stdin.pause(), and toggling it as the modal mounts/unmounts left the
+	// keyboard dead afterward. The modal ignores mouse input on its own — Ink only
+	// reports key.escape for a lone ESC byte, never for a mouse CSI sequence.
+	const shouldTrackMouse = settingsService.getMouseControlEnabled() && !isTextInputActive;
 	useEffect(() => {
 		// Wait for ink-mouse to create its instance (isTracking) before toggling;
 		// enable()/disable() no-op against a not-yet-created instance. Re-running
