@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
+import { copyToClipboard } from '../utils/clipboard.js';
 import { useUpdateStatus } from './UpdateStatusContext.js';
 
 /** The npm package name Grove is published under. */
@@ -10,22 +11,29 @@ const PACKAGE_NAME = 'hypergrove';
 /**
  * Full-screen "update available" modal shown on launch when a newer Grove
  * release is published. Notify-only — it never installs anything; it just shows
- * the exact upgrade command (matching `grove update`). Dismissing it snoozes the
- * modal for 7 days (unless an even newer version ships), handled by
- * {@link UpdateStatusProvider} via {@link useUpdateStatus}.
+ * the exact upgrade command (matching `grove update`) and lets the user copy it
+ * to the clipboard. Press Esc to dismiss, which snoozes the modal for 7 days
+ * (unless an even newer version ships), handled by {@link UpdateStatusProvider}
+ * via {@link useUpdateStatus}.
  *
  * Assumes it is only rendered while `showNotification` is true, so `latest` is
  * non-null.
  */
 export function UpdateAvailableModal() {
 	const { current, latest, dismissNotification } = useUpdateStatus();
-
-	useInput((_input, _key) => {
-		// Any key dismisses the modal and continues into the app.
-		dismissNotification();
-	});
+	const [copied, setCopied] = useState<boolean | null>(null);
 
 	const installCommand = `npm install -g ${PACKAGE_NAME}@${latest ?? 'latest'}`;
+
+	useInput((_input, key) => {
+		if (key.escape) {
+			dismissNotification();
+			return;
+		}
+		if (key.return) {
+			setCopied(copyToClipboard(installCommand));
+		}
+	});
 
 	return (
 		<Box flexGrow={1} alignItems="center" justifyContent="center" paddingY={1}>
@@ -55,8 +63,15 @@ export function UpdateAvailableModal() {
 					<Text color="gray">To update, run:</Text>
 					<Text color="cyan">{`  ${installCommand}`}</Text>
 				</Box>
+				{copied !== null && (
+					<Box marginBottom={1}>
+						<Text color={copied ? 'green' : 'red'}>
+							{copied ? '✓ Copied to clipboard' : '✗ Could not copy (no clipboard tool found)'}
+						</Text>
+					</Box>
+				)}
 				<Text color="gray" dimColor>
-					Press any key to dismiss (won&apos;t show again for 7 days)
+					Press Enter to copy the command · Esc to dismiss (won&apos;t show again for 7 days)
 				</Text>
 			</Box>
 		</Box>

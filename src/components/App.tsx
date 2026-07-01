@@ -34,12 +34,21 @@ function AppContent() {
 	const workspaceContext = workspaceService.getCurrentContext();
 	const workspaceName = getContextDisplayName(workspaceContext);
 
+	// Show the "update available" modal in place of the normal screen once the
+	// (async) update check resolves — but never over the first-run flows, which
+	// are their own startup gates. It intercepts all input until dismissed.
+	const inStartupGate = navState.screen === 'setupWizard' || navState.screen === 'direnvTrust';
+	const showUpdateModal = showNotification && !inStartupGate;
+
 	// Single source of truth for whether the terminal mouse should be tracking:
-	// the global setting says yes AND no text input is focused. We drive the
-	// library's enable()/disable() ourselves (the provider starts disabled via
+	// the global setting says yes AND no text input is focused AND the update
+	// modal isn't up (its raw mouse escape sequences would otherwise leak into the
+	// modal's useInput and dismiss it on mouse move). We drive the library's
+	// enable()/disable() ourselves (the provider starts disabled via
 	// autoEnable={false}, so its internal isEnabled flag stays consistent —
 	// otherwise disable() is a no-op and mouse sequences leak into text inputs).
-	const shouldTrackMouse = settingsService.getMouseControlEnabled() && !isTextInputActive;
+	const shouldTrackMouse =
+		settingsService.getMouseControlEnabled() && !isTextInputActive && !showUpdateModal;
 	useEffect(() => {
 		// Wait for ink-mouse to create its instance (isTracking) before toggling;
 		// enable()/disable() no-op against a not-yet-created instance. Re-running
@@ -73,12 +82,6 @@ function AppContent() {
 			internal_eventEmitter.emit('input', ESCAPE_SEQUENCE);
 		}
 	});
-
-	// Show the "update available" modal in place of the normal screen once the
-	// (async) update check resolves — but never over the first-run flows, which
-	// are their own startup gates. It intercepts all input until dismissed.
-	const inStartupGate = navState.screen === 'setupWizard' || navState.screen === 'direnvTrust';
-	const showUpdateModal = showNotification && !inStartupGate;
 
 	// minHeight forces the root to span the full terminal, not just its content,
 	// so the right-click→back gesture is hit-tested over the empty space below
