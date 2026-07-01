@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 import { copyToClipboard } from '../utils/clipboard.js';
+import { interpretModalKey } from '../utils/mouseInput.js';
 import { useUpdateStatus } from './UpdateStatusContext.js';
 
 type CopyState = 'idle' | 'copying' | 'copied' | 'failed';
@@ -35,12 +36,15 @@ export function UpdateAvailableModal() {
 
 	const installCommand = `npm install -g ${PACKAGE_NAME}@${latest ?? 'latest'}`;
 
-	useInput((_input, key) => {
-		if (key.escape) {
+	useInput((input, key) => {
+		// Mouse tracking floods stdin with motion reports that can batch with a
+		// keypress; interpretModalKey strips them so Esc/Enter are still recognized.
+		const { escape, enter } = interpretModalKey(input, key);
+		if (escape) {
 			dismissNotification();
 			return;
 		}
-		if (key.return && copyState !== 'copying') {
+		if (enter && copyState !== 'copying') {
 			setCopyState('copying');
 			// Fire-and-forget: copyToClipboard never blocks or throws.
 			void copyToClipboard(installCommand).then((ok) => {
