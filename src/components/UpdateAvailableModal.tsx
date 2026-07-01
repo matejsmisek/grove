@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
 import { copyToClipboard } from '../utils/clipboard.js';
 import { useUpdateStatus } from './UpdateStatusContext.js';
+
+type CopyState = 'idle' | 'copying' | 'copied' | 'failed';
 
 /** The npm package name Grove is published under. */
 const PACKAGE_NAME = 'hypergrove';
@@ -21,7 +23,15 @@ const PACKAGE_NAME = 'hypergrove';
  */
 export function UpdateAvailableModal() {
 	const { current, latest, dismissNotification } = useUpdateStatus();
-	const [copied, setCopied] = useState<boolean | null>(null);
+	const [copyState, setCopyState] = useState<CopyState>('idle');
+
+	// Guard against a resolved copy setting state after the modal is dismissed.
+	const mounted = useRef(true);
+	useEffect(() => {
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
 
 	const installCommand = `npm install -g ${PACKAGE_NAME}@${latest ?? 'latest'}`;
 
@@ -30,8 +40,14 @@ export function UpdateAvailableModal() {
 			dismissNotification();
 			return;
 		}
-		if (key.return) {
-			setCopied(copyToClipboard(installCommand));
+		if (key.return && copyState !== 'copying') {
+			setCopyState('copying');
+			// Fire-and-forget: copyToClipboard never blocks or throws.
+			void copyToClipboard(installCommand).then((ok) => {
+				if (mounted.current) {
+					setCopyState(ok ? 'copied' : 'failed');
+				}
+			});
 		}
 	});
 
@@ -63,11 +79,13 @@ export function UpdateAvailableModal() {
 					<Text color="gray">To update, run:</Text>
 					<Text color="cyan">{`  ${installCommand}`}</Text>
 				</Box>
-				{copied !== null && (
+				{copyState !== 'idle' && (
 					<Box marginBottom={1}>
-						<Text color={copied ? 'green' : 'red'}>
-							{copied ? '✓ Copied to clipboard' : '✗ Could not copy (no clipboard tool found)'}
-						</Text>
+						{copyState === 'copying' && <Text color="gray">Copying…</Text>}
+						{copyState === 'copied' && <Text color="green">✓ Copied to clipboard</Text>}
+						{copyState === 'failed' && (
+							<Text color="red">✗ Could not copy (no clipboard tool found)</Text>
+						)}
 					</Box>
 				)}
 				<Text color="gray" dimColor>

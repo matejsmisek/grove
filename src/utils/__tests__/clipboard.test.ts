@@ -1,20 +1,37 @@
+import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { copyToClipboard } from '../clipboard.js';
 
-// Records the argv of each spawnSync call, and a per-command canned result.
-const calls: Array<{ command: string; args: string[]; input?: string }> = [];
-let results: Record<string, { status: number; error?: Error }> = {};
+// Records the argv of each spawn call. `available` decides, per command, whether
+// the fake child emits 'spawn' (present) or 'error' (missing, e.g. ENOENT).
+const calls: Array<{ command: string; args: string[] }> = [];
+let available: Record<string, boolean> = {};
+let lastInput: string | undefined;
 
 vi.mock('child_process', () => ({
-	spawnSync: vi.fn((command: string, args: string[], options: { input?: string }) => {
-		calls.push({ command, args, input: options?.input });
-		const result = results[command];
-		if (!result) {
-			// Simulate "command not found".
-			return { status: null, error: new Error('spawn ENOENT') };
-		}
-		return { status: result.status, error: result.error };
+	spawn: vi.fn((command: string, args: string[]) => {
+		calls.push({ command, args });
+		const child = new EventEmitter() as EventEmitter & {
+			stdin: { end: (t: string) => void; on: () => void };
+			unref: () => void;
+		};
+		child.stdin = {
+			end: (t: string) => {
+				lastInput = t;
+			},
+			on: () => {},
+		};
+		child.unref = () => {};
+		// Emit asynchronously, like a real spawn.
+		queueMicrotask(() => {
+			if (available[command]) {
+				child.emit('spawn');
+			} else {
+				child.emit('error', new Error(`spawn ${command} ENOENT`));
+			}
+		});
+		return child;
 	}),
 }));
 
@@ -27,7 +44,8 @@ function setPlatform(platform: NodeJS.Platform): void {
 describe('copyToClipboard', () => {
 	beforeEach(() => {
 		calls.length = 0;
-		results = {};
+		available = {};
+		lastInput = undefined;
 	});
 
 	afterEach(() => {
@@ -35,43 +53,45 @@ describe('copyToClipboard', () => {
 		Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
 	});
 
-	it('uses pbcopy on macOS and passes the text via stdin', () => {
+	it('uses pbcopy on macOS and passes the text via stdin', async () => {
 		setPlatform('darwin');
-		results = { pbcopy: { status: 0 } };
+		available = { pbcopy: true };
 
-		expect(copyToClipboard('hello')).toBe(true);
-		expect(calls).toEqual([{ command: 'pbcopy', args: [], input: 'hello' }]);
+		await expect(copyToClipboard('hello')).resolves.toBe(true);
+		expect(calls).toEqual([{ command: 'pbcopy', args: [] }]);
+		expect(lastInput).toBe('hello');
 	});
 
-	it('uses clip on Windows', () => {
+	it('uses clip on Windows', async () => {
 		setPlatform('win32');
-		results = { clip: { status: 0 } };
+		available = { clip: true };
 
-		expect(copyToClipboard('hello')).toBe(true);
+		await expect(copyToClipboard('hello')).resolves.toBe(true);
 		expect(calls[0].command).toBe('clip');
 	});
 
-	it('falls through Linux tools until one succeeds', () => {
+	it('falls through Linux tools until one launches', async () => {
 		setPlatform('linux');
-		// wl-copy missing, xclip succeeds.
-		results = { xclip: { status: 0 } };
+		// wl-copy missing, xclip present.
+		available = { xclip: true };
 
-		expect(copyToClipboard('cmd')).toBe(true);
+		await expect(copyToClipboard('cmd')).resolves.toBe(true);
 		expect(calls.map((c) => c.command)).toEqual(['wl-copy', 'xclip']);
 	});
 
-	it('returns false when no clipboard tool is available', () => {
+	it('falls back to clip.exe under WSL (no X/Wayland tools present)', async () => {
 		setPlatform('linux');
-		results = {};
+		available = { 'clip.exe': true };
 
-		expect(copyToClipboard('cmd')).toBe(false);
-		expect(calls.map((c) => c.command)).toEqual(['wl-copy', 'xclip', 'xsel']);
+		await expect(copyToClipboard('cmd')).resolves.toBe(true);
+		expect(calls.map((c) => c.command)).toEqual(['wl-copy', 'xclip', 'xsel', 'clip.exe']);
 	});
 
-	it('returns false when a tool exits non-zero', () => {
-		setPlatform('darwin');
-		results = { pbcopy: { status: 1 } };
+	it('returns false when no clipboard tool is available', async () => {
+		setPlatform('linux');
+		available = {};
 
-		expect(copyToClipboard('cmd')).toBe(false);
+		await expect(copyToClipboard('cmd')).resolves.toBe(false);
+		expect(calls.map((c) => c.command)).toEqual(['wl-copy', 'xclip', 'xsel', 'clip.exe']);
 	});
 });
