@@ -2,6 +2,7 @@ export { registerRepository } from './register.js';
 export { initWorkspace } from './workspace.js';
 export { createGrove } from './create.js';
 export { addWorktree } from './addWorktree.js';
+export { adoptWorktree } from './adoptWorktree.js';
 export { openClaude } from './claude.js';
 export { openClaudeFromAsana } from './claudeAsana.js';
 export {
@@ -22,6 +23,7 @@ export type { RegisterResult, WorkspaceInitResult } from './types.js';
 export type { StatusResult } from './status.js';
 export type { CreateResult } from './create.js';
 export type { AddWorktreeResult } from './addWorktree.js';
+export type { AdoptWorktreeResult } from './adoptWorktree.js';
 export type { ClaudeResult } from './claude.js';
 export type { ClaudeAsanaResult } from './claudeAsana.js';
 export type { SessionCommandResult } from './sessions.js';

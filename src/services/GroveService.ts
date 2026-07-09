@@ -26,6 +26,24 @@ import type { CloseGroveResult, CloseWorktreeResult } from './types.js';
 export type { CloseGroveResult, CloseWorktreeResult, CreateGroveResult } from './types.js';
 
 /**
+ * Description of an existing git worktree to adopt into a grove. The caller
+ * (CLI command or UI flow) validates that `worktreePath` really is a linked
+ * worktree of `repository` and resolves its `branch`; adoption itself only
+ * writes grove metadata, so the worktree stays where it is on disk.
+ */
+export interface WorktreeAdoption {
+	repository: Repository;
+	/** Absolute path to the existing worktree */
+	worktreePath: string;
+	/** Branch currently checked out in the worktree */
+	branch: string;
+	/** Display name; defaults to the worktree folder name */
+	name?: string;
+	/** Project folder path relative to repository root (for monorepos) */
+	projectPath?: string;
+}
+
+/**
  * Grove service interface
  * Orchestrates grove lifecycle operations
  */
@@ -46,6 +64,11 @@ export interface IGroveService {
 		forkFromWorktreePath?: string,
 		reference?: WorktreeReference
 	): Promise<GroveMetadata>;
+	/**
+	 * Adopt an existing git worktree (created outside Grove) into a grove.
+	 * Only grove metadata is written - the worktree keeps its folder and branch.
+	 */
+	adoptWorktreeIntoGrove(groveId: string, adoption: WorktreeAdoption): GroveMetadata;
 	/** Attach (or replace) an external reference on a worktree; returns updated metadata. */
 	setWorktreeReference(
 		groveId: string,
@@ -409,6 +432,59 @@ export class GroveService implements IGroveService {
 			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
 			throw new Error(`Failed to add worktree for ${displayName}: ${errorMsg}`);
 		}
+	}
+
+	/**
+	 * Adopt an existing git worktree (created outside Grove, e.g. with plain
+	 * `git worktree add`) into a grove. The worktree stays where it is on disk
+	 * and keeps its branch; only grove metadata is written, so it shows up in
+	 * the grove like any other worktree (and is torn down like one on close).
+	 * Throws if the grove is missing or the worktree is already tracked.
+	 * @returns The updated grove metadata
+	 */
+	adoptWorktreeIntoGrove(groveId: string, adoption: WorktreeAdoption): GroveMetadata {
+		const groveRef = this.grovesService.getGroveById(groveId);
+		if (!groveRef) {
+			throw new Error('Grove not found');
+		}
+
+		const metadata = this.grovesService.readGroveMetadata(groveRef.path);
+		if (!metadata) {
+			throw new Error('Grove metadata not found');
+		}
+
+		const worktreePath = path.resolve(adoption.worktreePath);
+
+		// Reject a worktree that any grove already tracks (ignoring closed
+		// entries, whose folders no longer exist), so the same worktree can't
+		// be adopted twice.
+		for (const ref of this.grovesService.getAllGroves()) {
+			const refMetadata =
+				ref.id === groveId ? metadata : this.grovesService.readGroveMetadata(ref.path);
+			const alreadyTracked = refMetadata?.worktrees.some(
+				(w) => !w.closed && path.resolve(w.worktreePath) === worktreePath
+			);
+			if (alreadyTracked) {
+				throw new Error(`Worktree is already tracked by grove "${ref.name}"`);
+			}
+		}
+
+		metadata.worktrees.push({
+			id: generateWorktreeId(),
+			name: adoption.name || path.basename(worktreePath),
+			repositoryName: adoption.repository.name,
+			repositoryPath: adoption.repository.path,
+			worktreePath,
+			branch: adoption.branch,
+			projectPath: adoption.projectPath,
+			adopted: true,
+		});
+		metadata.updatedAt = new Date().toISOString();
+
+		this.grovesService.writeGroveMetadata(groveRef.path, metadata);
+		this.grovesService.updateGroveInIndex(groveId, { updatedAt: metadata.updatedAt });
+
+		return metadata;
 	}
 
 	/**

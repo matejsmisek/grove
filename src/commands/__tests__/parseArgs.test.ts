@@ -251,6 +251,31 @@ describe('parseArgs', () => {
 		});
 	});
 
+	describe('adopt-worktree', () => {
+		it('parses grove id and path without a name', () => {
+			expect(parseArgs(['adopt-worktree', 'grove-1', '../my-worktree'])).toEqual({
+				cmd: 'adopt-worktree',
+				groveId: 'grove-1',
+				path: '../my-worktree',
+				name: undefined,
+			});
+		});
+
+		it('joins the remaining tokens into a name with spaces', () => {
+			expect(parseArgs(['adopt-worktree', 'grove-1', '/wt', 'My', 'Feature'])).toEqual({
+				cmd: 'adopt-worktree',
+				groveId: 'grove-1',
+				path: '/wt',
+				name: 'My Feature',
+			});
+		});
+
+		it('errors when the grove id or path is missing', () => {
+			expect(parseArgs(['adopt-worktree']).cmd).toBe('error');
+			expect(parseArgs(['adopt-worktree', 'grove-1']).cmd).toBe('error');
+		});
+	});
+
 	describe('claude', () => {
 		it('parses claude without a grove id', () => {
 			expect(parseArgs(['claude'])).toEqual({ cmd: 'claude', groveId: undefined });

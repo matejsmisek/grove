@@ -5,6 +5,7 @@ import { Box, useStdout } from 'ink';
 import type { GroveReference } from '../../storage/index.js';
 import type { ClaudeAgentInfo } from '../../utils/claudeAgents.js';
 import { wasLinkRecentlyOpened } from '../../utils/links.js';
+import { AdoptWorktreePanel } from './AdoptWorktreePanel.js';
 import { ClickableTile } from './ClickableTile.js';
 import { CreateGrovePanel } from './CreateGrovePanel.js';
 import { GrovePanel } from './GrovePanel.js';
@@ -14,6 +15,11 @@ type GroveGridProps = {
 	selectedIndex: number;
 	/** Live Claude sessions (interactive + background) from `claude agents --json`. */
 	agentSessions: ClaudeAgentInfo[];
+	/**
+	 * Number of untracked (adoptable) worktrees. The Adopt Worktree tile is
+	 * shown, with this count, only when it is greater than zero.
+	 */
+	adoptableCount?: number;
 	/** Callback to notify parent of column count changes */
 	onColumnsChange?: (columns: number) => void;
 	/** Called with the flat item index on mouse-down (selects the tile) */
@@ -26,6 +32,7 @@ export function GroveGrid({
 	groves,
 	selectedIndex,
 	agentSessions,
+	adoptableCount = 0,
 	onColumnsChange,
 	onSelectItem,
 	onActivateItem,
@@ -50,8 +57,11 @@ export function GroveGrid({
 		}
 	}, [columns, onColumnsChange]);
 
-	// Total items = 1 (create button) + groves.length
-	const totalItems = 1 + groves.length;
+	// Action tiles precede the grove tiles: Create Grove, then (when there is
+	// something to adopt) Adopt Worktree.
+	const showAdoptTile = adoptableCount > 0;
+	const actionTiles = showAdoptTile ? 2 : 1;
+	const totalItems = actionTiles + groves.length;
 	const rowCount = Math.ceil(totalItems / columns);
 
 	return (
@@ -79,9 +89,25 @@ export function GroveGrid({
 								<CreateGrovePanel isSelected={isSelected} width={MIN_PANEL_WIDTH} />
 							</ClickableTile>
 						);
+					} else if (showAdoptTile && itemIndex === 1) {
+						// Second item is the Adopt Worktree button
+						items.push(
+							<ClickableTile
+								key="adopt"
+								marginLeft={marginLeft}
+								onPress={() => onSelectItem?.(itemIndex)}
+								onRelease={() => onActivateItem?.(itemIndex)}
+							>
+								<AdoptWorktreePanel
+									isSelected={isSelected}
+									count={adoptableCount}
+									width={MIN_PANEL_WIDTH}
+								/>
+							</ClickableTile>
+						);
 					} else {
-						// Remaining items are groves (offset by 1)
-						const grove = groves[itemIndex - 1];
+						// Remaining items are groves (offset by the action tiles)
+						const grove = groves[itemIndex - actionTiles];
 						if (grove) {
 							items.push(
 								<ClickableTile

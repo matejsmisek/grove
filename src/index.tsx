@@ -5,6 +5,7 @@ import { render } from 'ink';
 
 import {
 	addWorktree,
+	adoptWorktree,
 	checkForUpdate,
 	createGrove,
 	formatGrovesText,
@@ -149,6 +150,9 @@ if (command.cmd === 'help') {
 	console.log(
 		'  add-worktree <grove-id> --asana <url> <repository>    Add a worktree named from an Asana task'
 	);
+	console.log(
+		'  adopt-worktree <grove-id> <path> [name]       Adopt an existing git worktree into a grove'
+	);
 	console.log('  claude [grove-id]                             Open Claude CLI for a grove');
 	console.log(
 		'  claude-asana [worktree-id] [--asana <url>]    Launch background Claude from an Asana task (no editor)'
@@ -242,6 +246,28 @@ if (command.cmd === 'help') {
 		}
 		if (result.worktreePath) {
 			console.log('  Folder:', result.worktreePath);
+		}
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		process.exit(1);
+	}
+} else if (command.cmd === 'adopt-worktree') {
+	const result = await adoptWorktree(command.groveId, command.path, command.name);
+
+	if (result.success) {
+		console.log('✓', result.message);
+		if (result.worktreeId) {
+			console.log('  ID:', result.worktreeId);
+		}
+		if (result.worktreeName) {
+			console.log('  Name:', result.worktreeName);
+		}
+		if (result.worktreePath) {
+			console.log('  Folder:', result.worktreePath);
+		}
+		if (result.branch) {
+			console.log('  Branch:', result.branch);
 		}
 		process.exit(0);
 	} else {

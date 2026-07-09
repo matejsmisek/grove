@@ -4,6 +4,7 @@ import { Box, Text } from 'ink';
 
 import { ActivityScreen } from '../screens/ActivityScreen.js';
 import { AddWorktreeScreen } from '../screens/AddWorktreeScreen.js';
+import { AdoptWorktreeScreen } from '../screens/AdoptWorktreeScreen.js';
 import { ArchivedSessionsScreen } from '../screens/ArchivedSessionsScreen.js';
 import { AsanaSettingsScreen } from '../screens/AsanaSettingsScreen.js';
 import { ChatScreen } from '../screens/ChatScreen.js';
@@ -77,6 +78,8 @@ export function Router() {
 			return <CloseMergedWorktreesScreen groveId={current.params.groveId} />;
 		case 'addWorktree':
 			return <AddWorktreeScreen groveId={current.params.groveId} />;
+		case 'adoptWorktree':
+			return <AdoptWorktreeScreen groveId={current.params.groveId} />;
 		case 'forkWorktree':
 			return (
 				<AddWorktreeScreen
