@@ -4,10 +4,12 @@ import { Box, Text } from 'ink';
 
 type AdoptWorktreePanelProps = {
 	isSelected: boolean;
+	/** Number of untracked (adoptable) worktrees found by the scan */
+	count: number;
 	width?: number;
 };
 
-export function AdoptWorktreePanel({ isSelected, width = 24 }: AdoptWorktreePanelProps) {
+export function AdoptWorktreePanel({ isSelected, count, width = 24 }: AdoptWorktreePanelProps) {
 	return (
 		<Box
 			borderStyle="round"
@@ -32,7 +34,9 @@ export function AdoptWorktreePanel({ isSelected, width = 24 }: AdoptWorktreePane
 			</Box>
 
 			<Box marginTop={1}>
-				<Text dimColor>Track an existing worktree</Text>
+				<Text dimColor>
+					{count} untracked worktree{count === 1 ? '' : 's'}
+				</Text>
 			</Box>
 		</Box>
 	);

@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { Box, Text, useApp, useInput } from 'ink';
 
 import { useAgentSessions } from '../components/AgentSessionsContext.js';
-import { GRID_ACTION_TILES, GroveGrid } from '../components/home/GroveGrid.js';
+import { GroveGrid } from '../components/home/GroveGrid.js';
 import type { MenuOption } from '../components/home/MenuModal.js';
 import { MenuModal } from '../components/home/MenuModal.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import { getContextDisplayName } from '../services/WorkspaceService.js';
-import { GrovesServiceToken, WorkspaceServiceToken } from '../services/tokens.js';
+import { findAdoptableWorktrees } from '../services/adoptableWorktrees.js';
+import {
+	GitServiceToken,
+	GrovesServiceToken,
+	RepositoryServiceToken,
+	WorkspaceServiceToken,
+} from '../services/tokens.js';
 
 interface HomeScreenProps {
 	/** Grove to pre-select on mount (e.g. when returning from its detail screen). */
@@ -22,17 +28,49 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 
 	// Get workspace-aware groves service
 	const grovesService = useService(GrovesServiceToken);
+	const gitService = useService(GitServiceToken);
+	const repositoryService = useService(RepositoryServiceToken);
 	const groves = grovesService.getAllGroves();
 
-	// Pre-select the requested grove (index is offset by the action tiles);
-	// fall back to the create button when it's missing or none was requested.
+	// The Adopt Worktree tile only shows when the (async) scan finds at least
+	// one linked worktree that no grove tracks yet, so the tile count starts at
+	// one (Create Grove) and grows to two when the scan resolves.
+	const [adoptableCount, setAdoptableCount] = useState(0);
+	const showAdoptTile = adoptableCount > 0;
+	const actionTiles = showAdoptTile ? 2 : 1;
+
+	// Pre-select the requested grove (index is offset by the Create Grove tile;
+	// the adopt tile is never visible yet on mount). Falls back to the create
+	// button when it's missing or none was requested.
 	const [selectedGroveIndex, setSelectedGroveIndex] = useState(() => {
 		if (!selectedGroveId) {
 			return 0;
 		}
 		const index = groves.findIndex((grove) => grove.id === selectedGroveId);
-		return index >= 0 ? index + GRID_ACTION_TILES : 0;
+		return index >= 0 ? index + 1 : 0;
 	});
+
+	useEffect(() => {
+		let cancelled = false;
+
+		void findAdoptableWorktrees(
+			gitService,
+			grovesService,
+			repositoryService.getAllRepositories()
+		).then((found) => {
+			if (cancelled || found.length === 0) {
+				return;
+			}
+			setAdoptableCount(found.length);
+			// The adopt tile is inserted at index 1, shifting every grove tile by
+			// one; move the selection along so the same tile stays selected.
+			setSelectedGroveIndex((prev) => (prev >= 1 ? prev + 1 : prev));
+		});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [gitService, grovesService, repositoryService]);
 	const [showMenu, setShowMenu] = useState(false);
 	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
 	const [columnCount, setColumnCount] = useState(4); // Default to 4, will be updated by GroveGrid
@@ -54,7 +92,7 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 	];
 
 	// Total items in the grid = action tiles + groves.length
-	const totalItems = GRID_ACTION_TILES + groves.length;
+	const totalItems = actionTiles + groves.length;
 
 	// Enter/activate a grid item (shared by Enter key and mouse click).
 	const activateItem = (index: number) => {
@@ -63,7 +101,7 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 			navigate('createGrove', {});
 			return;
 		}
-		if (index === 1) {
+		if (showAdoptTile && index === 1) {
 			// Second item is the "Adopt Worktree" button
 			navigate('adoptWorktree', {});
 			return;
@@ -71,7 +109,7 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 		// Navigate to grove detail screen (offset by the action tiles).
 		// Stamp the selection into our own params first so returning via
 		// goBack() re-selects this grove instead of the first tile.
-		const grove = groves[index - GRID_ACTION_TILES];
+		const grove = groves[index - actionTiles];
 		if (!grove) {
 			return;
 		}
@@ -168,6 +206,7 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 							groves={groves}
 							selectedIndex={selectedGroveIndex}
 							agentSessions={agentSessions}
+							adoptableCount={adoptableCount}
 							onColumnsChange={setColumnCount}
 							onSelectItem={setSelectedGroveIndex}
 							onActivateItem={activateItem}
