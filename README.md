@@ -43,6 +43,18 @@ grove
 
 Each grove will then be creating within your repo under .grove folder
 
+### Adopting Existing Worktrees
+
+Worktrees created outside Grove (e.g. with plain `git worktree add`) can be adopted into a grove so they show up in the UI like any other worktree:
+
+```bash
+grove adopt-worktree <grove-id> <path-to-worktree> [name]
+```
+
+The worktree stays where it is on disk and keeps its branch — only grove metadata is written. Its repository must be registered, and the name defaults to the worktree's folder name. Find grove ids with `grove list`.
+
+Note: once adopted, the worktree is managed like any other — closing it (or its grove) removes the worktree from disk.
+
 ### Interactive UI Navigation
 
 Once in the interactive UI:

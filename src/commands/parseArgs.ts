@@ -36,6 +36,14 @@ export type ParsedCommand =
 			 */
 			asanaUrl?: string;
 	  }
+	| {
+			cmd: 'adopt-worktree';
+			groveId: string;
+			/** Path (relative or absolute) to the existing worktree to adopt */
+			path: string;
+			/** Display name; defaults to the worktree folder name */
+			name?: string;
+	  }
 	| { cmd: 'claude'; groveId?: string }
 	| { cmd: 'claude-asana'; worktreeId?: string; asanaUrl?: string }
 	| { cmd: 'list'; json: boolean }
@@ -66,8 +74,8 @@ function readAgentType(argv: string[], flag: string): { agentType: string } | { 
 /**
  * Parse the CLI argv into a command. The branch precedence matches the original
  * inline dispatch: `--help` wins over everything, then the positional commands
- * (`workspace <subcommand>`, `create`, `add-worktree`, `claude`, `list`,
- * `status`), then the flag commands (`session-hook`, `--setup-hooks`,
+ * (`workspace <subcommand>`, `create`, `add-worktree`, `adopt-worktree`,
+ * `claude`, `list`, `status`), then the flag commands (`session-hook`, `--setup-hooks`,
  * `--verify-hooks`), and finally the interactive UI.
  */
 export function parseArgs(argv: string[]): ParsedCommand {
@@ -89,6 +97,10 @@ export function parseArgs(argv: string[]): ParsedCommand {
 
 	if (argv[0] === 'add-worktree') {
 		return parseAddWorktree(argv.slice(1));
+	}
+
+	if (argv[0] === 'adopt-worktree') {
+		return parseAdoptWorktree(argv.slice(1));
 	}
 
 	if (argv[0] === 'claude-asana') {
@@ -296,6 +308,29 @@ function parseAddWorktree(addArgs: string[]): ParsedCommand {
 	const repository = positional[positional.length - 1];
 	const worktreeName = positional.slice(1, -1).join(' ');
 	return { cmd: 'add-worktree', groveId, name: worktreeName, repository };
+}
+
+/**
+ * Parse `adopt-worktree <grove-id> <path> [name]`. Adopts an existing git
+ * worktree (created outside Grove) into a grove. The name may contain spaces:
+ * every token after the path is joined.
+ */
+function parseAdoptWorktree(adoptArgs: string[]): ParsedCommand {
+	const [groveId, worktreePath, ...nameParts] = adoptArgs;
+
+	if (!groveId || !worktreePath) {
+		return {
+			cmd: 'error',
+			lines: ['✗ Usage: grove adopt-worktree <grove-id> <path> [name]'],
+		};
+	}
+
+	return {
+		cmd: 'adopt-worktree',
+		groveId,
+		path: worktreePath,
+		name: nameParts.length > 0 ? nameParts.join(' ') : undefined,
+	};
 }
 
 /**

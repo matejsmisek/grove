@@ -275,6 +275,102 @@ describe('GroveService.addWorktreeToGrove', () => {
 		expect(savedMetadata.worktrees[0].reference).toBeUndefined();
 	});
 
+	describe('adoptWorktreeIntoGrove', () => {
+		beforeEach(() => {
+			vi.mocked(mockGrovesService.getAllGroves).mockReturnValue([createMockGroveRef()]);
+		});
+
+		it('records the worktree with its original path/branch and marks it adopted', () => {
+			const result = service.adoptWorktreeIntoGrove('grove-1', {
+				repository: createSelection().repository,
+				worktreePath: '/elsewhere/my-feature',
+				branch: 'feature/my-branch',
+			});
+
+			expect(result.worktrees).toHaveLength(1);
+			const adopted = result.worktrees[0];
+			expect(adopted.worktreePath).toBe('/elsewhere/my-feature');
+			expect(adopted.branch).toBe('feature/my-branch');
+			expect(adopted.adopted).toBe(true);
+			// Name defaults to the worktree folder name
+			expect(adopted.name).toBe('my-feature');
+			expect(adopted.id).toEqual(expect.any(String));
+
+			// No git commands run - adoption only writes metadata
+			expect(mockGitService.addWorktree).not.toHaveBeenCalled();
+
+			const savedMetadata = vi.mocked(mockGrovesService.writeGroveMetadata).mock
+				.calls[0][1] as GroveMetadata;
+			expect(savedMetadata.worktrees).toHaveLength(1);
+			expect(mockGrovesService.updateGroveInIndex).toHaveBeenCalledWith(
+				'grove-1',
+				expect.objectContaining({ updatedAt: expect.any(String) })
+			);
+		});
+
+		it('uses the provided display name when given', () => {
+			const result = service.adoptWorktreeIntoGrove('grove-1', {
+				repository: createSelection().repository,
+				worktreePath: '/elsewhere/my-feature',
+				branch: 'feature/my-branch',
+				name: 'My Feature',
+			});
+
+			expect(result.worktrees[0].name).toBe('My Feature');
+		});
+
+		it('throws when the worktree is already tracked by a grove', () => {
+			const existing: Worktree = {
+				name: 'taken',
+				repositoryName: 'test-repo',
+				repositoryPath: '/repos/test-repo',
+				worktreePath: '/elsewhere/my-feature',
+				branch: 'feature/my-branch',
+			};
+			vi.mocked(mockGrovesService.readGroveMetadata).mockReturnValue(createMockMetadata([existing]));
+
+			expect(() =>
+				service.adoptWorktreeIntoGrove('grove-1', {
+					repository: createSelection().repository,
+					worktreePath: '/elsewhere/my-feature',
+					branch: 'feature/my-branch',
+				})
+			).toThrow(/already tracked/i);
+		});
+
+		it('allows re-adoption when the tracking entry is closed', () => {
+			const closed: Worktree = {
+				name: 'old',
+				repositoryName: 'test-repo',
+				repositoryPath: '/repos/test-repo',
+				worktreePath: '/elsewhere/my-feature',
+				branch: 'feature/my-branch',
+				closed: true,
+			};
+			vi.mocked(mockGrovesService.readGroveMetadata).mockReturnValue(createMockMetadata([closed]));
+
+			const result = service.adoptWorktreeIntoGrove('grove-1', {
+				repository: createSelection().repository,
+				worktreePath: '/elsewhere/my-feature',
+				branch: 'feature/my-branch',
+			});
+
+			expect(result.worktrees).toHaveLength(2);
+		});
+
+		it('throws when the grove does not exist', () => {
+			vi.mocked(mockGrovesService.getGroveById).mockReturnValue(null);
+
+			expect(() =>
+				service.adoptWorktreeIntoGrove('missing', {
+					repository: createSelection().repository,
+					worktreePath: '/elsewhere/my-feature',
+					branch: 'feature/my-branch',
+				})
+			).toThrow(/grove not found/i);
+		});
+	});
+
 	describe('setWorktreeReference', () => {
 		const existing: Worktree = {
 			name: 'feature',

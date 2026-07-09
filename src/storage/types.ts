@@ -365,6 +365,13 @@ export interface Worktree {
 	 */
 	bgSessionName?: string;
 	/**
+	 * Whether this worktree already existed (created outside Grove, e.g. with
+	 * plain `git worktree add`) and was adopted via `adopt-worktree`. Adopted
+	 * worktrees keep their original folder and branch instead of the grove's
+	 * naming scheme.
+	 */
+	adopted?: boolean;
+	/**
 	 * Whether this worktree has been closed (removed from disk but kept in metadata)
 	 */
 	closed?: boolean;
