@@ -1,8 +1,8 @@
 import fs from 'fs';
-import path from 'path';
 
 import { getContainer } from '../di/index.js';
 import { findMainRepoRootSync, isGitWorktree } from '../git/index.js';
+import { canonicalPath } from '../services/adoptableWorktrees.js';
 import { GitServiceToken, GroveServiceToken, RepositoryServiceToken } from '../services/tokens.js';
 
 /**
@@ -15,18 +15,6 @@ export interface AdoptWorktreeResult {
 	worktreeName?: string;
 	worktreePath?: string;
 	branch?: string;
-}
-
-/**
- * Resolve a path to its canonical form for comparisons (symlinks such as
- * /tmp -> /private/tmp on macOS would otherwise make equal paths differ).
- */
-function canonicalPath(p: string): string {
-	try {
-		return fs.realpathSync(p);
-	} catch {
-		return path.resolve(p);
-	}
 }
 
 /**

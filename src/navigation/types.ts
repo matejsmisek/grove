@@ -12,6 +12,7 @@ export type Routes = {
 	closeWorktree: { groveId: string; worktreePath: string };
 	closeMergedWorktrees: { groveId: string };
 	addWorktree: { groveId: string };
+	adoptWorktree: { groveId?: string };
 	forkWorktree: { groveId: string; worktreePath: string };
 	openTerminal: { groveId: string };
 	openIDE: { groveId: string };

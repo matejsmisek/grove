@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 
 import { useAgentSessions } from '../components/AgentSessionsContext.js';
-import { GroveGrid } from '../components/home/GroveGrid.js';
+import { GRID_ACTION_TILES, GroveGrid } from '../components/home/GroveGrid.js';
 import type { MenuOption } from '../components/home/MenuModal.js';
 import { MenuModal } from '../components/home/MenuModal.js';
 import { useService } from '../di/index.js';
@@ -24,14 +24,14 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 	const grovesService = useService(GrovesServiceToken);
 	const groves = grovesService.getAllGroves();
 
-	// Pre-select the requested grove (index is offset by 1 for the create button);
+	// Pre-select the requested grove (index is offset by the action tiles);
 	// fall back to the create button when it's missing or none was requested.
 	const [selectedGroveIndex, setSelectedGroveIndex] = useState(() => {
 		if (!selectedGroveId) {
 			return 0;
 		}
 		const index = groves.findIndex((grove) => grove.id === selectedGroveId);
-		return index >= 0 ? index + 1 : 0;
+		return index >= 0 ? index + GRID_ACTION_TILES : 0;
 	});
 	const [showMenu, setShowMenu] = useState(false);
 	const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
@@ -53,8 +53,8 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 		{ label: 'Quit', action: () => exit() },
 	];
 
-	// Total items in the grid = 1 (create button) + groves.length
-	const totalItems = 1 + groves.length;
+	// Total items in the grid = action tiles + groves.length
+	const totalItems = GRID_ACTION_TILES + groves.length;
 
 	// Enter/activate a grid item (shared by Enter key and mouse click).
 	const activateItem = (index: number) => {
@@ -63,10 +63,15 @@ export function HomeScreen({ selectedGroveId }: HomeScreenProps) {
 			navigate('createGrove', {});
 			return;
 		}
-		// Navigate to grove detail screen (offset by 1 for create button).
+		if (index === 1) {
+			// Second item is the "Adopt Worktree" button
+			navigate('adoptWorktree', {});
+			return;
+		}
+		// Navigate to grove detail screen (offset by the action tiles).
 		// Stamp the selection into our own params first so returning via
 		// goBack() re-selects this grove instead of the first tile.
-		const grove = groves[index - 1];
+		const grove = groves[index - GRID_ACTION_TILES];
 		if (!grove) {
 			return;
 		}
