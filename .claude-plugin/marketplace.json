@@ -9,7 +9,7 @@
 			"name": "grove",
 			"source": "./plugins/grove",
 			"description": "Grove multi-agent orchestration skill — create groves, add worktrees, and launch parallel Claude agents via the Grove CLI.",
-			"version": "2.0.0"
+			"version": "1.4.0"
 		}
 	]
 }
