@@ -1,6 +1,6 @@
 {
 	"name": "hypergrove",
-	"version": "1.3.1",
+	"version": "2.0.0",
 	"description": "AI-powered Git worktree management CLI with interactive terminal UI",
 	"type": "module",
 	"main": "./dist/index.js",
