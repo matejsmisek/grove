@@ -13,6 +13,8 @@ export {
 	handleSessionStart,
 } from './sessions.js';
 export { setupAgentHooks, verifyAgentHooks } from './setupHooks.js';
+export { manageSkill } from './skill.js';
+export type { SkillAction, SkillResult } from './skill.js';
 export { formatGrovesText, listGroves } from './list.js';
 export { groveStatus } from './status.js';
 export { DEFAULT_AGENT_TYPE, parseArgs } from './parseArgs.js';

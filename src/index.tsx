@@ -13,6 +13,7 @@ import {
 	handleSessionHook,
 	initWorkspace,
 	listGroves,
+	manageSkill,
 	openClaude,
 	openClaudeFromAsana,
 	parseArgs,
@@ -35,6 +36,7 @@ import {
 	initializeServices,
 } from './services/index.js';
 import { AgentType, SettingsService } from './storage/index.js';
+import { getInstalledPluginVersion, syncPluginDetached } from './utils/claudePlugin.js';
 import { shouldOfferDirenvWhitelist } from './utils/direnvWhitelist.js';
 import {
 	GROVE_GLOBAL_DIR_ENV,
@@ -42,6 +44,7 @@ import {
 	ensureGlobalGroveFolder,
 	ensureGroveGitExcluded,
 	getAppVersion,
+	isNewerVersion,
 } from './utils/index.js';
 
 // Resolve and create the global Grove directory (honoring GROVE_GLOBAL_DIR)
@@ -171,6 +174,9 @@ if (command.cmd === 'help') {
 		'  workspace add-repository [path]               Register a repository (default: current directory)'
 	);
 	console.log('  session-hook [--agent-type <type>]             Handle session lifecycle hooks');
+	console.log(
+		'  skill install|status|update|uninstall         Manage the Grove Claude Code skill (plugin)'
+	);
 	console.log('');
 	console.log('Options:');
 	console.log(
@@ -384,8 +390,33 @@ if (command.cmd === 'help') {
 	}
 
 	process.exit(result.configured ? 0 : 1);
+} else if (command.cmd === 'skill') {
+	const result = await manageSkill(command.action);
+
+	if (result.success) {
+		console.log('✓', result.message);
+		if (result.details && result.details.length > 0) {
+			result.details.forEach((detail) => console.log('  ', detail));
+		}
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		if (result.details && result.details.length > 0) {
+			result.details.forEach((detail) => console.error('  ', detail));
+		}
+		process.exit(1);
+	}
 } else {
 	// command.cmd === 'ui'
+	// Best-effort: if the Grove skill plugin is installed but behind the version
+	// bundled with this (freshly npm-updated) Grove, sync it in the background.
+	// Fully detached and unawaited so it never delays the UI; a version bump is
+	// required for it to have any effect, so this is a no-op in the common case.
+	const installedSkillVersion = getInstalledPluginVersion();
+	if (installedSkillVersion && isNewerVersion(getAppVersion(), installedSkillVersion)) {
+		syncPluginDetached();
+	}
+
 	// Clear terminal to give app full height
 	console.clear();
 	// Choose the initial screen:

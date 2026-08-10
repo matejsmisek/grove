@@ -10,7 +10,9 @@
 	"files": [
 		"dist",
 		"README.md",
-		"LICENSE"
+		"LICENSE",
+		".claude-plugin",
+		"plugins"
 	],
 	"scripts": {
 		"build": "tsc",
@@ -24,8 +26,10 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"typecheck": "tsc --noEmit --skipLibCheck",
+		"sync-plugin-version": "node scripts/sync-plugin-version.mjs",
 		"prepare": "husky",
-		"prepublishOnly": "npm run typecheck && npm run build"
+		"version": "node scripts/sync-plugin-version.mjs && git add .claude-plugin plugins/grove/.claude-plugin",
+		"prepublishOnly": "node scripts/sync-plugin-version.mjs --check && npm run typecheck && npm run build"
 	},
 	"keywords": [
 		"git",

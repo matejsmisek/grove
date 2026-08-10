@@ -275,6 +275,43 @@ Grove tracks Claude sessions by merging two sources:
 launch tracking still lives on the `Worktree` (`bgSessionId` / `bgSessionName`,
 used to match and attach background sessions).
 
+## Grove Skill Distribution (Claude Code plugin)
+
+Grove ships its orchestration **skill** to users as a Claude Code **plugin**,
+bundled inside the npm package rather than hand-copied into `~/.claude/skills`.
+
+**Bundled layout** (checked in, shipped as-is via `package.json` `files`):
+
+- `.claude-plugin/marketplace.json` — a one-plugin marketplace named `hypergrove`.
+- `plugins/grove/.claude-plugin/plugin.json` — the `grove` plugin manifest.
+- `plugins/grove/skills/grove/SKILL.md` — the skill itself (single source of truth).
+
+**Install flow** (`grove skill install`, handled by `src/commands/skill.ts` →
+`src/utils/claudePlugin.ts`): registers the package directory as a **user-scope**
+marketplace (`claude plugin marketplace add <pkgRoot> --scope user`) and installs
+`grove@hypergrove`. The package root is resolved from the running binary via
+`findPackageRoot()` in `src/utils/version.ts` (robust across nvm/volta/global
+paths). Install also removes the legacy hand-placed `~/.claude/skills/grove` copy.
+Other actions: `status`, `update`, `uninstall`.
+
+**Sync model** — the version is the sync key. A `directory`-source marketplace is
+referenced live, but Claude snapshots plugin **content per version** into
+`~/.claude/plugins/cache/<mp>/<plugin>/<version>/`. Editing `SKILL.md` without a
+version bump is silently ignored on `claude plugin update`. Therefore:
+
+- `scripts/sync-plugin-version.mjs` keeps both manifests' versions equal to
+  `package.json` — run from the npm `version` lifecycle (auto-staged into the
+  version commit) and enforced in `prepublishOnly` via `--check`. It edits only
+  the version string in place, so output stays Prettier-clean. A guard test
+  (`src/__tests__/pluginManifestVersion.test.ts`) fails on drift.
+- On UI startup (`src/index.tsx`), if the installed plugin version is behind the
+  bundled version, Grove fires `syncPluginDetached()` (unawaited, never blocks) so
+  a freshly npm-updated Grove catches the skill up; the user restarts Claude Code
+  to apply.
+
+All paths degrade gracefully when the `claude` CLI is absent. The setup wizard
+offers install via `SkillInstallPrompt` (mirrors `DirenvWhitelistPrompt`).
+
 ## Development Workflow
 
 ### Essential Commands

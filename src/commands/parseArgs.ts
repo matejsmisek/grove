@@ -52,6 +52,7 @@ export type ParsedCommand =
 	| { cmd: 'session-hook'; agentType: string }
 	| { cmd: 'setup-hooks'; agentType: string }
 	| { cmd: 'verify-hooks'; agentType: string }
+	| { cmd: 'skill'; action: 'install' | 'status' | 'update' | 'uninstall' }
 	| { cmd: 'ui' }
 	| { cmd: 'error'; lines: string[] };
 
@@ -121,6 +122,10 @@ export function parseArgs(argv: string[]): ParsedCommand {
 
 	if (argv[0] === 'update') {
 		return { cmd: 'update' };
+	}
+
+	if (argv[0] === 'skill') {
+		return parseSkill(argv.slice(1));
 	}
 
 	if (argv.includes('session-hook')) {
@@ -353,4 +358,27 @@ function parseClaudeAsana(asanaArgs: string[]): ParsedCommand {
 	}
 
 	return { cmd: 'claude-asana', worktreeId: positional[0], asanaUrl };
+}
+
+/**
+ * Parse `skill <action>` for managing the bundled Claude Code skill/plugin.
+ * Actions: `install` (default), `status`, `update`, `uninstall`.
+ */
+function parseSkill(skillArgs: string[]): ParsedCommand {
+	const action = skillArgs[0] ?? 'install';
+
+	if (action === 'install' || action === 'status' || action === 'update' || action === 'uninstall') {
+		return { cmd: 'skill', action };
+	}
+
+	return {
+		cmd: 'error',
+		lines: [
+			`✗ Unknown skill action: ${action}`,
+			'  grove skill install     Install the Grove skill as a Claude Code plugin',
+			'  grove skill status      Show installed vs. bundled skill version',
+			'  grove skill update      Sync the installed skill to the bundled version',
+			'  grove skill uninstall   Remove the Grove skill plugin and marketplace',
+		],
+	};
 }

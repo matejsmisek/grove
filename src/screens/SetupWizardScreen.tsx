@@ -6,6 +6,7 @@ import path from 'path';
 
 import { DirenvWhitelistPrompt } from '../components/DirenvWhitelistPrompt.js';
 import TextInput from '../components/GroveTextInput.js';
+import { SkillInstallPrompt } from '../components/SkillInstallPrompt.js';
 import { useService } from '../di/index.js';
 import { useNavigation } from '../navigation/useNavigation.js';
 import {
@@ -20,9 +21,9 @@ import {
 import { SettingsServiceToken } from '../services/tokens.js';
 import type { Settings, TerminalId } from '../storage/types.js';
 
-type WizardStep = 'folder' | 'terminal' | 'ide';
+type WizardStep = 'folder' | 'terminal' | 'ide' | 'plugin';
 
-const STEP_ORDER: WizardStep[] = ['folder', 'terminal', 'ide'];
+const STEP_ORDER: WizardStep[] = ['folder', 'terminal', 'ide', 'plugin'];
 
 /**
  * Compute the default groves folder: one directory up from the current working
@@ -141,6 +142,12 @@ export function SetupWizardScreen() {
 		// During the direnv sub-phase the prompt owns all keys (incl. Escape, which
 		// means "skip whitelist" there rather than "skip the wizard").
 		if (step === 'folder' && folderPhase === 'direnv') {
+			return;
+		}
+
+		// During the plugin step the SkillInstallPrompt owns all keys (Escape there
+		// means "skip install", and it calls finish() itself on completion).
+		if (step === 'plugin') {
 			return;
 		}
 
@@ -283,7 +290,9 @@ export function SetupWizardScreen() {
 				</Box>
 			)}
 
-			{!(step === 'folder' && folderPhase === 'direnv') && (
+			{step === 'plugin' && <SkillInstallPrompt onComplete={finish} />}
+
+			{!(step === 'folder' && folderPhase === 'direnv') && step !== 'plugin' && (
 				<Box marginTop={2} flexDirection="column">
 					{step === 'folder' ? (
 						<Text dimColor>
@@ -291,8 +300,8 @@ export function SetupWizardScreen() {
 						</Text>
 					) : (
 						<Text dimColor>
-							<Text color="cyan">Up/Down</Text> Select - <Text color="cyan">Enter</Text>{' '}
-							{step === 'ide' ? 'Finish' : 'Continue'} - <Text color="cyan">Left</Text> Back
+							<Text color="cyan">Up/Down</Text> Select - <Text color="cyan">Enter</Text> Continue -{' '}
+							<Text color="cyan">Left</Text> Back
 						</Text>
 					)}
 					<Text dimColor>

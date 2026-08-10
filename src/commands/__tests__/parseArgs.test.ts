@@ -423,6 +423,23 @@ describe('parseArgs', () => {
 		});
 	});
 
+	describe('skill', () => {
+		it('defaults to the install action', () => {
+			expect(parseArgs(['skill'])).toEqual({ cmd: 'skill', action: 'install' });
+		});
+
+		it('parses each valid action', () => {
+			expect(parseArgs(['skill', 'install'])).toEqual({ cmd: 'skill', action: 'install' });
+			expect(parseArgs(['skill', 'status'])).toEqual({ cmd: 'skill', action: 'status' });
+			expect(parseArgs(['skill', 'update'])).toEqual({ cmd: 'skill', action: 'update' });
+			expect(parseArgs(['skill', 'uninstall'])).toEqual({ cmd: 'skill', action: 'uninstall' });
+		});
+
+		it('errors on an unknown action', () => {
+			expect(parseArgs(['skill', 'frobnicate']).cmd).toBe('error');
+		});
+	});
+
 	describe('command precedence', () => {
 		it('prefers a positional create command over a trailing --setup-hooks flag', () => {
 			expect(parseArgs(['create', 'x', 'repo', '--setup-hooks'])).toMatchObject({ cmd: 'create' });

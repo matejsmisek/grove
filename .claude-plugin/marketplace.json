@@ -1,0 +1,15 @@
+{
+	"name": "hypergrove",
+	"owner": {
+		"name": "Matej Smisek",
+		"url": "https://github.com/matejsmisek/hypergrove"
+	},
+	"plugins": [
+		{
+			"name": "grove",
+			"source": "./plugins/grove",
+			"description": "Grove multi-agent orchestration skill — create groves, add worktrees, and launch parallel Claude agents via the Grove CLI.",
+			"version": "1.3.1"
+		}
+	]
+}

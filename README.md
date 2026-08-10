@@ -55,6 +55,27 @@ The worktree stays where it is on disk and keeps its branch — only grove metad
 
 Note: once adopted, the worktree is managed like any other — closing it (or its grove) removes the worktree from disk.
 
+### Grove Claude Code skill
+
+Grove ships a Claude Code **skill** (bundled as a plugin) that teaches Claude to
+orchestrate groves — create worktrees and launch parallel agents. Install it once:
+
+```bash
+grove skill install      # register + install the plugin at user scope (all repos)
+```
+
+The first-run setup wizard also offers to install it. Other actions:
+
+```bash
+grove skill status       # show installed vs. bundled skill version
+grove skill update       # sync the installed skill to the bundled version
+grove skill uninstall    # remove the plugin and its marketplace
+```
+
+The skill is versioned with Grove itself: when you `npm install -g hypergrove@latest`,
+Grove syncs the installed skill on next launch (restart Claude Code to apply). This
+requires the [Claude Code](https://claude.ai/code) CLI to be installed.
+
 ### Interactive UI Navigation
 
 Once in the interactive UI:

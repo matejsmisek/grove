@@ -32,19 +32,26 @@ export function getAppVersion(): string {
 }
 
 /**
- * Walk upward from this module's directory looking for the `hypergrove`
- * package.json. The compiled file lives at `<pkg>/dist/utils/version.js` and the
- * source at `<pkg>/src/utils/version.ts`, so package.json is one or two levels
- * up; we scan a few levels to stay robust to layout changes.
+ * Locate the root directory of the installed `hypergrove` package by walking
+ * upward from this module's location looking for its `package.json`. The compiled
+ * file lives at `<pkg>/dist/utils/version.js` and the source at
+ * `<pkg>/src/utils/version.ts`, so package.json is one or two levels up; we scan
+ * a few levels to stay robust to layout changes. Resolves relative to
+ * `import.meta.url` rather than `process.cwd()`, so it works regardless of how
+ * the package was installed (global npm/pnpm/yarn/bun, local `node_modules`, or a
+ * dev checkout run via tsx). Returns `null` when it can't be found.
+ *
+ * This is the anchor for both the app version and the bundled Claude Code plugin
+ * marketplace (`<pkg>/.claude-plugin/marketplace.json`).
  */
-function readPackageVersion(): string | null {
+export function findPackageRoot(): string | null {
 	let dir = dirname(fileURLToPath(import.meta.url));
 	for (let i = 0; i < 5; i++) {
 		try {
 			const raw = readFileSync(join(dir, 'package.json'), 'utf-8');
-			const parsed = JSON.parse(raw) as { name?: string; version?: string };
-			if (parsed.name === 'hypergrove' && typeof parsed.version === 'string') {
-				return parsed.version;
+			const parsed = JSON.parse(raw) as { name?: string };
+			if (parsed.name === 'hypergrove') {
+				return dir;
 			}
 		} catch {
 			// No package.json here (or unreadable/invalid); keep walking up.
@@ -56,6 +63,22 @@ function readPackageVersion(): string | null {
 		dir = parent;
 	}
 	return null;
+}
+
+/** Read the `version` field from the package root's package.json, or null. */
+function readPackageVersion(): string | null {
+	const root = findPackageRoot();
+	if (root === null) {
+		return null;
+	}
+	try {
+		const parsed = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8')) as {
+			version?: string;
+		};
+		return typeof parsed.version === 'string' ? parsed.version : null;
+	} catch {
+		return null;
+	}
 }
 
 /**
