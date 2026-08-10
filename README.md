@@ -34,14 +34,82 @@ npm install -g hypergrove
 
 ### Quick Start
 
-**Launch Grove**:
+**Launch the interactive UI**:
 
 ```bash
 cd your-repository
 grove
 ```
 
-Each grove will then be creating within your repo under .grove folder
+Each grove is then created within your repo under its `.grove` folder.
+
+### Scopes
+
+Grove figures out where it operates from the current directory. Pick the simplest
+one that fits:
+
+- **Repo mode (simplest)** — `cd` into a git repository and run `grove`. No
+  registration, no setup. Grove operates as a single-repo grove factory: its data
+  lives in `<repo>/.grove` and every worktree comes from that one repo. This is
+  the right default when all the work is in one repository.
+- **Workspace mode (cross-repo)** — a workspace scopes a directory (and its
+  subdirectories) to a shared context with its own settings and its own set of
+  registered repositories. Use it when a grove needs worktrees from **multiple
+  repos** at once.
+
+  ```bash
+  cd your-workspace-root
+  grove workspace init                          # creates .grove.workspace.json (prompts for name + groves folder)
+  grove workspace add-repository /path/to/repo-a
+  grove workspace add-repository /path/to/repo-b
+  ```
+
+  Any Grove command run inside that tree now uses the workspace, and groves can
+  mix worktrees from any registered repo.
+
+- **Global mode** — running Grove outside a git repo and outside a workspace is a
+  read-only switcher across known locations; you can't create groves there.
+
+### Command-line usage (scripting & agents)
+
+The interactive UI is for humans; most of what it does for groves and worktrees
+is also available as CLI commands, which is how automated tools (e.g. the bundled
+Claude Code skill) drive Grove. Run `grove --help` for the authoritative,
+version-current command set. The essentials:
+
+```bash
+# Discover (use --json to parse; worktree paths returned are absolute)
+grove list --json
+grove status --json                              # grove/worktree info for the current directory
+
+# Create groves and worktrees (repo format: reponame or reponame.projectfolder)
+grove create "<grove-name>" <reponame>           # single-worktree grove
+grove create "<grove-name>" --empty              # empty grove, add worktrees next
+grove add-worktree <grove-id> "<name>" <reponame>
+grove add-worktree <grove-id> "<name>" --fork <worktree-id> [repo]   # branch off an existing worktree
+
+# Close
+grove close <grove> [--force]                    # remove a grove and all its worktrees
+grove close-worktree <worktree-id> [--force]     # remove a single worktree
+```
+
+The same repository can appear in many worktrees of one grove — that's the normal
+way to split a task into parallel branches. Branch names are generated
+automatically.
+
+### Launching Claude for a worktree
+
+Grove can open a Claude session scoped to a worktree's working directory:
+
+- **Interactive session** — `grove claude [grove-id]` (or the "Open in Claude"
+  worktree action in the UI). Detects the grove/worktree from the current
+  directory when the id is omitted.
+- **Background "Instant Claude"** — in the UI, opens `$EDITOR` for a prompt, then
+  dispatches a silent background session (`claude --bg`); Grove tracks the session
+  id on the worktree so the action becomes "Attach to Running Claude".
+- **Background from an Asana task** — `grove claude-asana [worktree-id] [--asana <url>]`
+  builds the prompt from a linked Asana task and dispatches a background session
+  (requires the [Asana plugin](#plugins)).
 
 ### Adopting Existing Worktrees
 
@@ -90,9 +158,44 @@ Or use your mouse to click on panels and items
 
 ### Environment Variables
 
-| Variable           | Description                                                                                                                                                                        |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GROVE_GLOBAL_DIR` | Overrides the folder used to store global Grove settings (default: `~/.grove`). The directory is created on startup if it doesn't exist; Grove exits with an error if it can't be. |
+| Variable             | Description                                                                                                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GROVE_GLOBAL_DIR`   | Overrides the folder used to store global Grove settings (default: `~/.grove`). The directory is created on startup if it doesn't exist; Grove exits with an error if it can't be. |
+| `GROVE_GITLAB_TOKEN` | GitLab personal access token (API scope) for the [GitLab plugin](#plugins). Takes priority over the token stored in plugin settings.                                               |
+| `GROVE_GITLAB_URL`   | GitLab instance base URL for the [GitLab plugin](#plugins). Optional; defaults to `https://gitlab.com`. Set this for self-hosted instances.                                        |
+| `ASANA_TOKEN`        | Asana personal access token for the [Asana plugin](#plugins). Takes priority over the token stored in plugin settings.                                                             |
+
+### Plugins
+
+Grove has two optional plugins. Enable each in the UI (**Settings → Plugins**),
+which validates the token, or configure them in settings. Each reads its
+credential from an environment variable (see above) that takes priority over the
+stored value.
+
+#### GitLab
+
+Surfaces the merge-request status for each worktree's branch in the UI — open,
+draft, in review, changes requested, merged, or closed, along with approvals. It
+matches a worktree's branch against merge requests on the configured GitLab
+instance (status appears only when the worktree's `origin` host matches
+`GROVE_GITLAB_URL`).
+
+```bash
+export GROVE_GITLAB_TOKEN=glpat-xxxxxxxx
+export GROVE_GITLAB_URL=https://gitlab.mycompany.com   # only for self-hosted
+```
+
+#### Asana
+
+Lets you name a worktree from an Asana task and seed a Claude prompt from the
+task's name and description. Powers `grove add-worktree <grove-id> --asana <url> <repo>`
+and `grove claude-asana`. The prompt is built from a configurable template with
+the variables `{task_name}`, `{task_description}`, `{task_gid}`, `{task_url}`, and
+`{task_assignee}`.
+
+```bash
+export ASANA_TOKEN=1/xxxxxxxxxxxx
+```
 
 ### Repository Configuration (`.grove.json`)
 
