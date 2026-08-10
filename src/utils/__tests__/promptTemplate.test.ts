@@ -1,11 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
 	PROMPT_PLACEHOLDER,
 	fillPromptTemplate,
 	preparePromptTemplate,
+	resolvePromptText,
 	stripPlaceholder,
 } from '../promptTemplate.js';
+
+// Mock the external editor so resolvePromptText's editor branch is deterministic.
+const { editorState } = vi.hoisted(() => ({
+	editorState: { available: true, edited: null as string | null },
+}));
+vi.mock('../externalEditor.js', () => ({
+	hasExternalEditor: vi.fn(() => editorState.available),
+	openExternalEditor: vi.fn(() => editorState.edited),
+}));
 
 describe('promptTemplate', () => {
 	describe('preparePromptTemplate', () => {
@@ -98,6 +108,49 @@ describe('promptTemplate', () => {
 
 		it('leaves text without a placeholder unchanged', () => {
 			expect(stripPlaceholder('no placeholder here')).toBe('no placeholder here');
+		});
+	});
+
+	describe('resolvePromptText', () => {
+		afterEach(() => {
+			editorState.available = true;
+			editorState.edited = null;
+			vi.clearAllMocks();
+		});
+
+		it('returns the edited text when the editor is confirmed', () => {
+			editorState.edited = '  Do the work  ';
+			expect(resolvePromptText(`Lead: ${PROMPT_PLACEHOLDER}`, 'TASK')).toBe('Do the work');
+		});
+
+		it('returns null when the editor is cancelled', () => {
+			editorState.edited = null;
+			expect(resolvePromptText('Some template', 'TASK')).toBeNull();
+		});
+
+		it('returns null when the edited prompt is empty', () => {
+			editorState.edited = '   \n  ';
+			expect(resolvePromptText('Some template', 'TASK')).toBeNull();
+		});
+
+		it('strips any placeholder left behind by the user before returning', () => {
+			editorState.edited = `Fix ${PROMPT_PLACEHOLDER} bug`;
+			expect(resolvePromptText('template', 'TASK')).toBe('Fix  bug');
+		});
+
+		it('falls back to the seeded template when no editor is available', () => {
+			editorState.available = false;
+			expect(resolvePromptText(`Lead: ${PROMPT_PLACEHOLDER}`, 'TASK')).toBe('Lead: TASK');
+		});
+
+		it('uses the template directly (skipping the editor) when skipEditor is true', () => {
+			editorState.edited = 'should not be used';
+			expect(resolvePromptText(`Lead: ${PROMPT_PLACEHOLDER}`, 'TASK', true)).toBe('Lead: TASK');
+		});
+
+		it('removes the placeholder when no replacement is provided', () => {
+			editorState.available = false;
+			expect(resolvePromptText(`Fix ${PROMPT_PLACEHOLDER} now`)).toBe('Fix  now');
 		});
 	});
 });

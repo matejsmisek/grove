@@ -1,11 +1,6 @@
 import { commandExists } from '../utils/commandExists.js';
 import { getDirenvWarning, wrapSpawnWithDirenv } from '../utils/direnv.js';
-import { hasExternalEditor, openExternalEditor } from '../utils/externalEditor.js';
-import {
-	fillPromptTemplate,
-	preparePromptTemplate,
-	stripPlaceholder,
-} from '../utils/promptTemplate.js';
+import { resolvePromptText } from '../utils/promptTemplate.js';
 import { buildSessionName } from '../utils/sessionName.js';
 import { spawnCollect } from '../utils/spawnCollect.js';
 import type { ISessionTemplateService } from './SessionTemplateService.js';
@@ -71,28 +66,7 @@ export class BackgroundSessionService implements IBackgroundSessionService {
 		skipEditor = false
 	): string | null {
 		const template = this.templateService.getPromptTemplateForRepo(repositoryPath, projectPath) ?? '';
-		const prepared =
-			placeholderReplacement === undefined
-				? preparePromptTemplate(template)
-				: fillPromptTemplate(template, placeholderReplacement);
-
-		if (!skipEditor && hasExternalEditor()) {
-			const edited = openExternalEditor(prepared.content, {
-				extension: '.md',
-				prefix: 'grove-prompt-',
-				cursor: prepared.cursor,
-			});
-			// Editor cancelled/failed
-			if (edited === null) {
-				return null;
-			}
-			const text = stripPlaceholder(edited).trim();
-			return text || null;
-		}
-
-		// No editor available: fall back to the template text directly
-		const text = prepared.content.trim();
-		return text || null;
+		return resolvePromptText(template, placeholderReplacement, skipEditor);
 	}
 
 	/**

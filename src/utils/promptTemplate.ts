@@ -7,6 +7,7 @@
  * removed before the text is opened in the editor (and again before launching, in
  * case the user re-typed it).
  */
+import { hasExternalEditor, openExternalEditor } from './externalEditor.js';
 
 /** The literal placeholder token used inside prompt templates. */
 export const PROMPT_PLACEHOLDER = '{prompt}';
@@ -98,4 +99,43 @@ export function fillPromptTemplate(template: string, replacement: string): Prepa
  */
 export function stripPlaceholder(text: string): string {
 	return text.split(PROMPT_PLACEHOLDER).join('');
+}
+
+/**
+ * Resolve the final prompt text for a launch: seed the template (filling the
+ * `{prompt}` placeholder with `placeholderReplacement` when provided, otherwise
+ * removing it), open it in `$EDITOR` (caret at the placeholder) for the user to
+ * edit, and strip any remaining placeholder before returning. When `skipEditor`
+ * is true, or no editor is available, the seeded template is used as-is.
+ *
+ * Shared by the background (`claude --bg`) and standard interactive launches.
+ * Returns null when the user cancels the editor or the resulting prompt is empty.
+ */
+export function resolvePromptText(
+	template: string,
+	placeholderReplacement?: string,
+	skipEditor = false
+): string | null {
+	const prepared =
+		placeholderReplacement === undefined
+			? preparePromptTemplate(template)
+			: fillPromptTemplate(template, placeholderReplacement);
+
+	if (!skipEditor && hasExternalEditor()) {
+		const edited = openExternalEditor(prepared.content, {
+			extension: '.md',
+			prefix: 'grove-prompt-',
+			cursor: prepared.cursor,
+		});
+		// Editor cancelled/failed
+		if (edited === null) {
+			return null;
+		}
+		const text = stripPlaceholder(edited).trim();
+		return text || null;
+	}
+
+	// No editor available: fall back to the template text directly
+	const text = prepared.content.trim();
+	return text || null;
 }

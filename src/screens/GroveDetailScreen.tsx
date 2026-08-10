@@ -810,6 +810,44 @@ export function GroveDetailScreen({
 			});
 	};
 
+	// Standard Claude from Asana: fetch the linked task, seed the prompt template's
+	// `{prompt}` placeholder with the task name + description, edit it in $EDITOR, then
+	// launch a standard interactive session (`claude --name <name> <prompt>`) — non-bg,
+	// non-print — so it starts working on the task immediately. Fetching is async, so we
+	// show a loading screen first and run the blocking editor/launch once resolved.
+	const handleOpenInClaudeFromAsana = () => {
+		const selected = worktreeDetails[selectedIndex].worktree;
+		const reference = selected.reference;
+		if (!asanaPlugin || reference?.type !== 'asana') {
+			return;
+		}
+		const targetPath = getWorktreePath(selected);
+		returnToDetail();
+		setLaunchingMessage(`Fetching Asana task for ${selected.repositoryName}…`);
+		asanaPlugin
+			.getTask(reference.id)
+			.then((task) => {
+				const promptBody = asanaPlugin.buildInstantClaudePrompt(task);
+				beginLaunch(`Opening prompt editor for ${selected.repositoryName}…`, async () => {
+					const result = await sessionLauncherService.openSessionWithPrompt(
+						targetPath,
+						selected.repositoryPath,
+						promptBody,
+						selected.projectPath,
+						groveName,
+						selected.name
+					);
+					finishLaunch(
+						result.success,
+						result.success ? `Opened Claude from Asana in ${selected.repositoryName}` : result.message
+					);
+				});
+			})
+			.catch((err: unknown) => {
+				finishLaunch(false, err instanceof Error ? err.message : 'Failed to fetch Asana task');
+			});
+	};
+
 	// Attach to a background session (`claude attach <short id>`).
 	const handleAttachSession = (session: ClaudeAgentInfo) => {
 		const selected = worktreeDetails[selectedIndex].worktree;
@@ -1080,14 +1118,13 @@ export function GroveDetailScreen({
 			return [];
 		}
 		if (uiMode.mode === 'launch') {
+			// Menu order: standard, then the Asana-seeded standard, then background, then
+			// the Asana-seeded background (instant). The Asana rows only appear when a task
+			// is linked and the Asana plugin is active.
+			const selected = worktreeDetails[selectedIndex]?.worktree;
+			const asanaAvailable = asanaEnabled && asanaPlugin && selected?.reference?.type === 'asana';
+
 			const options = [
-				{
-					label: 'Launch background claude',
-					run: () => {
-						returnToDetail();
-						handleInstantClaude();
-					},
-				},
 				{
 					label: 'Launch standard claude',
 					run: () => {
@@ -1096,10 +1133,23 @@ export function GroveDetailScreen({
 					},
 				},
 			];
-			// Offer seeding the prompt from a linked Asana task, when one is attached
-			// and the Asana plugin is active.
-			const selected = worktreeDetails[selectedIndex]?.worktree;
-			if (asanaEnabled && asanaPlugin && selected?.reference?.type === 'asana') {
+			if (asanaAvailable) {
+				options.push({
+					label: 'Launch standard Claude from Asana',
+					run: () => {
+						returnToDetail();
+						handleOpenInClaudeFromAsana();
+					},
+				});
+			}
+			options.push({
+				label: 'Launch background claude',
+				run: () => {
+					returnToDetail();
+					handleInstantClaude();
+				},
+			});
+			if (asanaAvailable) {
 				options.push({
 					label: 'Launch instant Claude from Asana',
 					run: () => {

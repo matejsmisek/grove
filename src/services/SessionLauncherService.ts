@@ -9,6 +9,8 @@ import { detectAvailableTerminalIds, getAdapter, isAdapterAvailable } from '../t
 import type { ClaudeLaunchContext } from '../terminals/index.js';
 import { commandExists } from '../utils/commandExists.js';
 import { getDirenvWarning, prefixCommandWithDirenv } from '../utils/direnv.js';
+import { buildClaudePromptLaunchScript } from '../utils/launchScript.js';
+import { resolvePromptText } from '../utils/promptTemplate.js';
 import { buildSessionName, shellQuoteArg } from '../utils/sessionName.js';
 import type { ISessionTemplateService } from './SessionTemplateService.js';
 import type { ClaudeSessionResult } from './types.js';
@@ -42,6 +44,22 @@ export interface ISessionLauncherService {
 		terminalType?: ClaudeTerminalType,
 		groveName?: string,
 		worktreeName?: string
+	): Promise<ClaudeSessionResult>;
+	/**
+	 * Open a standard (interactive) Claude terminal session with a prefilled prompt,
+	 * seeding the repository's prompt template with `promptBody` (e.g. a linked Asana
+	 * task) and opening it in `$EDITOR` before launching `claude --name <name> <prompt>`
+	 * (non-`--bg`, non-`-p`). When `skipEditor` is true the prompt is used as-is.
+	 * Resolves with a failure result when the user cancels the editor or leaves it empty.
+	 */
+	openSessionWithPrompt(
+		workingDir: string,
+		repositoryPath: string,
+		promptBody: string,
+		projectPath?: string,
+		groveName?: string,
+		worktreeName?: string,
+		skipEditor?: boolean
 	): Promise<ClaudeSessionResult>;
 	/** Resume an existing Claude session */
 	resumeSession(
@@ -111,6 +129,42 @@ export class SessionLauncherService implements ISessionLauncherService {
 			terminalType,
 			groveName,
 			worktreeName
+		);
+	}
+
+	/**
+	 * Open a standard interactive Claude session with a prefilled prompt. Resolves the
+	 * repository's prompt template (seeded with `promptBody`), edits it in `$EDITOR`,
+	 * and launches `claude --name <name> <prompt>` in a terminal — a tracked session
+	 * that starts working on the prompt immediately, without `--bg`/`-p`.
+	 */
+	async openSessionWithPrompt(
+		workingDir: string,
+		repositoryPath: string,
+		promptBody: string,
+		projectPath?: string,
+		groveName?: string,
+		worktreeName?: string,
+		skipEditor = false
+	): Promise<ClaudeSessionResult> {
+		const template = this.templateService.getPromptTemplateForRepo(repositoryPath, projectPath) ?? '';
+		const prompt = resolvePromptText(template, promptBody, skipEditor);
+		if (!prompt) {
+			return {
+				success: false,
+				message: 'No prompt provided for Claude.',
+			};
+		}
+		return this.launchRepoSession(
+			'open',
+			workingDir,
+			repositoryPath,
+			projectPath,
+			undefined,
+			groveName,
+			worktreeName,
+			undefined,
+			prompt
 		);
 	}
 
@@ -211,7 +265,8 @@ export class SessionLauncherService implements ISessionLauncherService {
 		terminalType?: ClaudeTerminalType,
 		groveName?: string,
 		worktreeName?: string,
-		sessionId?: string
+		sessionId?: string,
+		prompt?: string
 	): Promise<ClaudeSessionResult> {
 		const terminal = await this.resolveSelectedTerminal(terminalType);
 		const unavailable = await this.checkTerminalAvailable(terminal);
@@ -221,13 +276,28 @@ export class SessionLauncherService implements ISessionLauncherService {
 
 		// Standard "open" launches start a named interactive session (`claude --name
 		// <grove/worktree>`) so it shows up as a tracked agent — no `--bg`/attach dance.
-		const openCommand = `claude --name ${shellQuoteArg(buildSessionName(repositoryPath, groveName, worktreeName))}`;
-		const claudeCommand =
-			mode === 'attach'
-				? `claude attach ${sessionId}`
-				: mode === 'continue'
-					? 'claude --continue'
-					: openCommand;
+		const sessionName = buildSessionName(repositoryPath, groveName, worktreeName);
+		const quotedName = shellQuoteArg(sessionName);
+
+		// When a prompt is supplied, we can't inline it into the command: the prompt
+		// is multi-line and may contain quotes/`$`/backticks, and the command string is
+		// embedded verbatim into terminal config files (kitty/konsole session files,
+		// AppleScript) that are NOT parsed by a shell. Instead we write a tiny launch
+		// script and run `bash <script>` — the launch line stays a few shlex-safe tokens
+		// while the script feeds the prompt to `claude` via a quoted heredoc, preserving
+		// it literally. Still a standard interactive session (no `--bg`/`-p`).
+		let promptScriptPath: string | undefined;
+		let claudeCommand: string;
+		if (mode === 'attach') {
+			claudeCommand = `claude attach ${sessionId}`;
+		} else if (mode === 'continue') {
+			claudeCommand = 'claude --continue';
+		} else if (prompt) {
+			promptScriptPath = this.writePromptLaunchScript(sessionName, prompt);
+			claudeCommand = `bash ${shellQuoteArg(promptScriptPath)}`;
+		} else {
+			claudeCommand = `claude --name ${quotedName}`;
+		}
 		const failureLabel = mode === 'attach' ? 'attach to' : mode === 'continue' ? 'continue' : 'open';
 
 		try {
@@ -240,13 +310,50 @@ export class SessionLauncherService implements ISessionLauncherService {
 				groveName,
 				worktreeName
 			);
-			return this.launchTerminalSession(terminal!, agentCommand, renderedTemplate, workingDir);
+			const result = this.launchTerminalSession(terminal!, agentCommand, renderedTemplate, workingDir);
+			this.scheduleTempFileCleanup(promptScriptPath);
+			return result;
 		} catch (error) {
+			this.scheduleTempFileCleanup(promptScriptPath);
 			return {
 				success: false,
 				message: `Failed to ${failureLabel} Claude session: ${error instanceof Error ? error.message : String(error)}`,
 			};
 		}
+	}
+
+	/**
+	 * Write a launch script that runs `claude --name <name> "<prompt>"` in a standard
+	 * interactive session, feeding the prompt through a quoted heredoc so its quotes,
+	 * `$`, backticks and newlines are delivered to Claude literally. Returns the path;
+	 * the caller schedules its cleanup once the terminal has had time to read it.
+	 */
+	private writePromptLaunchScript(sessionName: string, prompt: string): string {
+		this.ensureTmpDir();
+		const script = buildClaudePromptLaunchScript(sessionName, prompt);
+		const token = crypto.randomBytes(8).toString('hex');
+		const scriptPath = path.join(this.getTmpDir(), `grove-claude-launch-${token}.sh`);
+		fs.writeFileSync(scriptPath, script, 'utf-8');
+		return scriptPath;
+	}
+
+	/**
+	 * Delete a temp file after a short delay, giving the launched terminal time to
+	 * read it first. No-op when no path is given or the file is already gone.
+	 */
+	private scheduleTempFileCleanup(filePath?: string): void {
+		if (!filePath) {
+			return;
+		}
+		setTimeout(() => {
+			try {
+				if (fs.existsSync(filePath)) {
+					fs.unlinkSync(filePath);
+				}
+			} catch {
+				// Ignore deletion errors
+			}
+		}, 10000);
 	}
 
 	/**

@@ -11,6 +11,15 @@ vi.mock('../../utils/commandExists.js', () => ({
 	commandExists: vi.fn((command: string) => Promise.resolve(commandState.installed.has(command))),
 }));
 
+// Mock the external editor so openSessionWithPrompt's prompt resolution is deterministic.
+const { editorState } = vi.hoisted(() => ({
+	editorState: { available: true, edited: null as string | null },
+}));
+vi.mock('../../utils/externalEditor.js', () => ({
+	hasExternalEditor: vi.fn(() => editorState.available),
+	openExternalEditor: vi.fn(() => editorState.edited),
+}));
+
 describe('SessionLauncherService', () => {
 	let service: SessionLauncherService;
 	let mockTemplateService: ISessionTemplateService;
@@ -65,6 +74,27 @@ describe('SessionLauncherService', () => {
 
 		it('detectTerminal returns null when none are installed', async () => {
 			await expect(service.detectTerminal()).resolves.toBeNull();
+		});
+	});
+
+	describe('openSessionWithPrompt', () => {
+		it('fails without launching when the prompt editor is cancelled', async () => {
+			commandState.installed = new Set(['konsole']);
+			editorState.available = true;
+			editorState.edited = null; // user cancelled the editor
+			vi.mocked(mockTemplateService.getPromptTemplateForRepo).mockReturnValue('Lead: {prompt}');
+
+			const result = await service.openSessionWithPrompt(
+				'/work',
+				'/repos/app',
+				'TASK BODY',
+				undefined,
+				'my-grove',
+				'frontend'
+			);
+
+			expect(result.success).toBe(false);
+			expect(result.message).toContain('No prompt provided');
 		});
 	});
 });
