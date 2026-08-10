@@ -7,6 +7,8 @@ import {
 	addWorktree,
 	adoptWorktree,
 	checkForUpdate,
+	closeGroveCommand,
+	closeWorktreeCommand,
 	createGrove,
 	formatGrovesText,
 	groveStatus,
@@ -156,6 +158,10 @@ if (command.cmd === 'help') {
 	console.log(
 		'  adopt-worktree <grove-id> <path> [name]       Adopt an existing git worktree into a grove'
 	);
+	console.log(
+		'  close <grove> [--force]                       Close a grove and remove all its worktrees'
+	);
+	console.log('  close-worktree <worktree-id> [--force]        Close a single worktree by its id');
 	console.log('  claude [grove-id]                             Open Claude CLI for a grove');
 	console.log(
 		'  claude-asana [worktree-id] [--asana <url>]    Launch background Claude from an Asana task (no editor)'
@@ -278,6 +284,32 @@ if (command.cmd === 'help') {
 		process.exit(0);
 	} else {
 		console.error('✗', result.message);
+		process.exit(1);
+	}
+} else if (command.cmd === 'close-grove') {
+	const result = await closeGroveCommand(command.grove, command.force);
+
+	if (result.success) {
+		console.log('✓', result.message);
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		if (result.details && result.details.length > 0) {
+			result.details.forEach((detail) => console.error('  ', detail));
+		}
+		process.exit(1);
+	}
+} else if (command.cmd === 'close-worktree') {
+	const result = await closeWorktreeCommand(command.worktreeId, command.force);
+
+	if (result.success) {
+		console.log('✓', result.message);
+		process.exit(0);
+	} else {
+		console.error('✗', result.message);
+		if (result.details && result.details.length > 0) {
+			result.details.forEach((detail) => console.error('  ', detail));
+		}
 		process.exit(1);
 	}
 } else if (command.cmd === 'claude') {

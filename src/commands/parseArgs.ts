@@ -44,6 +44,8 @@ export type ParsedCommand =
 			/** Display name; defaults to the worktree folder name */
 			name?: string;
 	  }
+	| { cmd: 'close-grove'; grove: string; force: boolean }
+	| { cmd: 'close-worktree'; worktreeId: string; force: boolean }
 	| { cmd: 'claude'; groveId?: string }
 	| { cmd: 'claude-asana'; worktreeId?: string; asanaUrl?: string }
 	| { cmd: 'list'; json: boolean }
@@ -102,6 +104,14 @@ export function parseArgs(argv: string[]): ParsedCommand {
 
 	if (argv[0] === 'adopt-worktree') {
 		return parseAdoptWorktree(argv.slice(1));
+	}
+
+	if (argv[0] === 'close-worktree') {
+		return parseCloseWorktree(argv.slice(1));
+	}
+
+	if (argv[0] === 'close') {
+		return parseClose(argv.slice(1));
 	}
 
 	if (argv[0] === 'claude-asana') {
@@ -336,6 +346,49 @@ function parseAdoptWorktree(adoptArgs: string[]): ParsedCommand {
 		path: worktreePath,
 		name: nameParts.length > 0 ? nameParts.join(' ') : undefined,
 	};
+}
+
+/**
+ * Parse `close <grove> [--force]`. Closes a whole grove and removes all its
+ * worktrees. `<grove>` is a grove id or (unique) display name, which may contain
+ * spaces, so every non-flag token is joined. `--force`/`-f` skips safety checks.
+ */
+function parseClose(closeArgs: string[]): ParsedCommand {
+	const force = closeArgs.includes('--force') || closeArgs.includes('-f');
+	const rest = closeArgs.filter((a) => a !== '--force' && a !== '-f');
+
+	if (rest.length < 1) {
+		return {
+			cmd: 'error',
+			lines: [
+				'✗ Usage: grove close <grove> [--force]',
+				'  <grove> is a grove id or name (see grove list)',
+			],
+		};
+	}
+
+	return { cmd: 'close-grove', grove: rest.join(' '), force };
+}
+
+/**
+ * Parse `close-worktree <worktree-id> [--force]`. Closes a single worktree by its
+ * globally-unique id (no grove needed). `--force`/`-f` skips safety checks.
+ */
+function parseCloseWorktree(closeArgs: string[]): ParsedCommand {
+	const force = closeArgs.includes('--force') || closeArgs.includes('-f');
+	const rest = closeArgs.filter((a) => a !== '--force' && a !== '-f');
+
+	if (rest.length < 1) {
+		return {
+			cmd: 'error',
+			lines: [
+				'✗ Usage: grove close-worktree <worktree-id> [--force]',
+				'  <worktree-id> is globally unique (see grove list)',
+			],
+		};
+	}
+
+	return { cmd: 'close-worktree', worktreeId: rest[0], force };
 }
 
 /**

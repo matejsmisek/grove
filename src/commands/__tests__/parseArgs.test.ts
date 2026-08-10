@@ -276,6 +276,65 @@ describe('parseArgs', () => {
 		});
 	});
 
+	describe('close', () => {
+		it('parses a grove id', () => {
+			expect(parseArgs(['close', 'grove-1'])).toEqual({
+				cmd: 'close-grove',
+				grove: 'grove-1',
+				force: false,
+			});
+		});
+
+		it('joins a grove name with spaces', () => {
+			expect(parseArgs(['close', 'My', 'Feature', 'Grove'])).toEqual({
+				cmd: 'close-grove',
+				grove: 'My Feature Grove',
+				force: false,
+			});
+		});
+
+		it('parses --force and -f in any position', () => {
+			expect(parseArgs(['close', 'grove-1', '--force'])).toEqual({
+				cmd: 'close-grove',
+				grove: 'grove-1',
+				force: true,
+			});
+			expect(parseArgs(['close', '-f', 'grove-1'])).toEqual({
+				cmd: 'close-grove',
+				grove: 'grove-1',
+				force: true,
+			});
+		});
+
+		it('errors when the grove is missing', () => {
+			expect(parseArgs(['close']).cmd).toBe('error');
+			expect(parseArgs(['close', '--force']).cmd).toBe('error');
+		});
+	});
+
+	describe('close-worktree', () => {
+		it('parses a worktree id', () => {
+			expect(parseArgs(['close-worktree', 'wt-abc'])).toEqual({
+				cmd: 'close-worktree',
+				worktreeId: 'wt-abc',
+				force: false,
+			});
+		});
+
+		it('parses --force', () => {
+			expect(parseArgs(['close-worktree', 'wt-abc', '--force'])).toEqual({
+				cmd: 'close-worktree',
+				worktreeId: 'wt-abc',
+				force: true,
+			});
+		});
+
+		it('errors when the worktree id is missing', () => {
+			expect(parseArgs(['close-worktree']).cmd).toBe('error');
+			expect(parseArgs(['close-worktree', '-f']).cmd).toBe('error');
+		});
+	});
+
 	describe('claude', () => {
 		it('parses claude without a grove id', () => {
 			expect(parseArgs(['claude'])).toEqual({ cmd: 'claude', groveId: undefined });

@@ -3,6 +3,8 @@ export { initWorkspace } from './workspace.js';
 export { createGrove } from './create.js';
 export { addWorktree } from './addWorktree.js';
 export { adoptWorktree } from './adoptWorktree.js';
+export { closeGroveCommand } from './closeGrove.js';
+export { closeWorktreeCommand } from './closeWorktree.js';
 export { openClaude } from './claude.js';
 export { openClaudeFromAsana } from './claudeAsana.js';
 export {
@@ -26,6 +28,8 @@ export type { StatusResult } from './status.js';
 export type { CreateResult } from './create.js';
 export type { AddWorktreeResult } from './addWorktree.js';
 export type { AdoptWorktreeResult } from './adoptWorktree.js';
+export type { CloseGroveCommandResult } from './closeGrove.js';
+export type { CloseWorktreeCommandResult } from './closeWorktree.js';
 export type { ClaudeResult } from './claude.js';
 export type { ClaudeAsanaResult } from './claudeAsana.js';
 export type { SessionCommandResult } from './sessions.js';

@@ -39,6 +39,7 @@ export interface IGitService {
 	revParse(repoPath: string, ref: string): Promise<GitCommandResult>;
 	getBranchUpstreamStatus(repoPath: string): Promise<BranchUpstreamStatus>;
 	getRemoteUrl(repoPath: string, remote?: string): Promise<string | null>;
+	pruneRemote(repoPath: string, remote?: string): Promise<GitCommandResult>;
 }
 
 /**
@@ -431,6 +432,21 @@ export class GitService implements IGitService {
 	 */
 	async fetch(repoPath: string, remote: string = 'origin'): Promise<GitCommandResult> {
 		return this.executeGitCommand(repoPath, ['fetch', remote]);
+	}
+
+	/**
+	 * Fetch from a remote and prune stale remote-tracking refs.
+	 *
+	 * After a branch is merged and its remote branch deleted (the default on many
+	 * remotes), pruning is what lets `getBranchUpstreamStatus` see the upstream as
+	 * `gone` (i.e. merged) rather than still-active. Callers treat this as
+	 * best-effort: a failure (e.g. offline) leaves detection to fall back to
+	 * whatever was last fetched locally.
+	 * @param repoPath - Repository root path
+	 * @param remote - Remote name (defaults to 'origin')
+	 */
+	async pruneRemote(repoPath: string, remote: string = 'origin'): Promise<GitCommandResult> {
+		return this.executeGitCommand(repoPath, ['fetch', '--prune', remote]);
 	}
 
 	/**

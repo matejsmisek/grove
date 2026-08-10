@@ -11,6 +11,7 @@ import type { IGrovesService } from '../storage/GrovesService.js';
 import type { GroveMetadata, Worktree } from '../storage/types.js';
 import { parseAsanaTaskUrl } from '../utils/index.js';
 import { findCurrentWorktree, findGroveForPath } from './claude.js';
+import { findOpenWorktreeById } from './worktreeLookup.js';
 
 /**
  * Result of grove claude-asana command
@@ -50,7 +51,7 @@ export async function openClaudeFromAsana(
 
 		// Resolve the target worktree (and its grove) by id, or from the current directory.
 		const target = worktreeId
-			? findWorktreeById(grovesService, worktreeId)
+			? findOpenWorktreeById(grovesService, worktreeId)
 			: findWorktreeFromCwd(grovesService);
 		if ('error' in target) {
 			return { success: false, message: target.error };
@@ -127,29 +128,6 @@ export async function openClaudeFromAsana(
 }
 
 type WorktreeMatch = { metadata: GroveMetadata; worktree: Worktree };
-
-/**
- * Find an open worktree by its globally-unique id across every grove. Worktree ids are
- * unique, so no grove needs to be specified.
- */
-function findWorktreeById(
-	grovesService: IGrovesService,
-	worktreeId: string
-): WorktreeMatch | { error: string } {
-	for (const groveRef of grovesService.getAllGroves()) {
-		const metadata = grovesService.readGroveMetadata(groveRef.path);
-		if (!metadata) {
-			continue;
-		}
-		const worktree = metadata.worktrees.find((w) => !w.closed && w.id === worktreeId);
-		if (worktree) {
-			return { metadata, worktree };
-		}
-	}
-	return {
-		error: `Worktree with id '${worktreeId}' not found. Run 'grove list' to see worktree ids.`,
-	};
-}
 
 /**
  * Find the target worktree from the current directory: the grove containing cwd, then
