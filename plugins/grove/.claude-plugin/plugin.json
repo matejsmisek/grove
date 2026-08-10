@@ -1,6 +1,6 @@
 {
 	"name": "grove",
-	"version": "1.4.0",
+	"version": "1.4.1",
 	"description": "Grove multi-agent orchestration skill — create groves, add worktrees, and launch parallel Claude agents via the Grove CLI.",
 	"author": {
 		"name": "Matej Smisek",
